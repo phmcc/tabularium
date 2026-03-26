@@ -1,0 +1,636 @@
+#+TITLE: Tabularium Changelog
+#+AUTHOR: Paul H. McClelland
+#+OPTIONS: toc:0 num:nil
+
+All notable changes to ~tabularium~ are documented in this file.
+
+* 0.4.2 (2026-03-18)
+
+** Fixed
+
+*** Entry Side Window Stacking
+- ~tabularium--display-entry-buffer~ now uses ~display-buffer-reuse-window~ as the first action, so navigating between entries with =M-n= / =M-p= reuses the existing side window instead of creating new ones
+
+*** Byte Compilation Warnings (tabularium.el)
+- Unused lexical variables removed or prefixed: ~old-name~ in rename, ~name~ in ~tabularium-entry--get-field-completions~, ~count~ in ~tabularium--reindex-silent~, ~primary-str~ in ~tabularium-view-column-duplicate~, ~consumed~ in ~tabularium--paste-column-batch~, ~skipped~ in ~tabularium--fill-execute~, ~start-id~ in ~tabularium-view-fill-delete~, ~unnamed-count~ in ~tabularium-import--org-list-tables~
+- Scoping bug in ~tabularium-view-column-delete~: ~pre-visible~ moved from inner ~let~ to outer ~let*~ so it is visible at cursor-fallback site
+- Wide docstrings in ~tabularium-define-schema~ and ~tabularium-clear-view~ rewrapped to 80 columns
+- Unescaped single quotes in ~tabularium-clear-view~ docstring fixed
+- Added ~declare-function~ for ~org-table-end~
+
+*** Byte Compilation Warnings (tabularium-modeline.el)
+- Wide docstring for ~tabularium-modeline-icon~ rewrapped
+- Free variable warnings for macro-generated ~tabularium~ symbol suppressed with ~with-no-warnings~ around ~doom-modeline-def-segment~ and ~spaceline-define-segment~ calls
+- Added ~defvar~ for ~tabularium-modeline-powerline-segment~
+
+** Changed
+
+*** Entry Buffer Cursor
+- Removed forced ~cursor-type~ setting from ~tabularium-entry-mode~; the entry buffer now inherits the user's default cursor (respects ~ryo-modal-mode~, ~evil-mode~, etc.)
+
+* 0.4.1 (2026-03-17)
+
+** Added
+
+*** Registry Expunge (=X=)
+- ~tabularium-expunge-database~ — permanently removes a database from the registry *and* deletes associated files (=.db=, =.schema.el=, WAL/SHM)
+- Confirmation prompt lists every file that will be deleted before proceeding
+- Bound to =X= in ~tabularium-registry-mode~ (alongside =D= for non-destructive forget)
+
+*** Multi-Column Sort in Views
+- View =:sort= now accepts a list of cons cells for multi-column sort: =((year . desc) (month . desc))=
+- Single cons cell =(column . direction)= still works (backward compatible)
+- Applies in ~tabularium-apply-view~, ~tabularium--apply-default-view~, and ~tabularium-view-hard-refresh~
+
+*** View Column Ordering
+- View =:columns= list order now determines display column order (sets ~tabularium--column-order~)
+- Previously =:columns= only controlled visibility; now it also controls positioning
+
+** Changed
+
+*** Naming Consistency
+- All visible-scoped functions renamed to consistent ~tabularium-visible-*~ pattern:
+  - ~tabularium-visible-count~ (was ~tabularium-view-count-visible~)
+  - ~tabularium-visible-sum~ (was ~tabularium-sum-visible~)
+  - ~tabularium-visible-min-max~ (was ~tabularium-view-min-max~)
+  - ~tabularium-visible-mean-sd~ (was ~tabularium-view-mean-sd~)
+  - ~tabularium-visible-median-iqr~ (was ~tabularium-view-median-iqr~)
+  - ~tabularium-visible-replace-substring~ (was ~tabularium-view-replace-substring~)
+  - ~tabularium-visible-replace-exact~ (was ~tabularium-view-replace-exact~)
+  - ~tabularium-visible-replace-regexp~ (was ~tabularium-view-replace-regexp~)
+  - ~tabularium-visible-query-replace~ (was ~tabularium-view-query-replace~)
+
+*** Hard Refresh View Re-Application
+- ~tabularium-view-hard-refresh~ now re-applies the active named view after reloading the schema from disk
+- Changes to view definitions (columns, filters, sort) take effect immediately on hard refresh
+- If the active view no longer exists in the updated schema, the view is cleared gracefully
+
+*** Registry Path Portability
+- Registry load and save now normalize all file paths with ~abbreviate-file-name~ (=~/= instead of =/home/user/=)
+- ~tabularium-portability-fix-paths~ also fixes registry entries alongside schema files
+- Database rename uses abbreviated paths for cross-machine portability
+
+*** Section Reorganization
+- Section 7.4 (Find/Replace) split into =7.4.1. Standard= and =7.4.2. Visible=
+- Section 7.5 (Math) split into =7.5.1. Count=, =7.5.2. Basic Statistics=, =7.5.3. Visible Statistics=, =7.5.4. Column Summary=
+- Visible math functions moved after all standard functions (were previously interleaved)
+
+*** Default Adjustments
+- ~tabularium-view-page-size~: 1000 → 500
+- ~tabularium-undo-limit~: 500 → 100
+- ~tabularium-registry-max-recent~: 50 → 100
+
+*** Tagline
+- Package description changed to "Structured data management in Emacs using SQL"
+
+* 0.4.0 (2026-03-15)
+
+** Added
+
+*** Fill-at-Point Commands
+- ~tabularium-view-fill~ (=F F=) — *Fill gap*: scans upward to the nearest non-blank value in the current column and fills the blank stretch between that value and point
+- ~tabularium-view-fill-forward~ (=F f=) — *Fill forward*: if the cell at point is non-blank, fills consecutive blanks below with its value; if blank, finds the nearest value above and fills downward from point
+- ~tabularium-view-fill-up~ (=F p=) — Prompted fill upward from point (counterpart to fill-down)
+- ~tabularium-view-fill-delete~ (=F d=) — *Delete run*: clears consecutive cells that share the same value as the cell at point (undoable)
+- ~tabularium-view-fill-clear~ (=F x=) — *Clear to row*: clears the current column from point to a prompted row ID (undoable)
+- ~tabularium--find-blank-range-up~ — Internal helper that scans upward for blank cells (counterpart to ~tabularium--find-blank-range-down~)
+- Fill-at-point commands require no prompts — they infer both the column and the fill value from context
+
+*** Layered Filter System (=f= prefix)
+- Filters are now *progressive layers* with logical operators, replacing the single-filter model
+- ~tabularium-view-filter~ (=f f=) — Substring filter layer; when layers exist, prompts for join logic (AND, OR, AND NOT, OR NOT)
+- ~tabularium-view-filter-exact~ (=f ==) — Exact-match filter layer (matches whole cell value, not substring)
+- ~tabularium-view-filter-numeric~ (=f #=) — Numeric comparison filter (=>=, =>==, =<=, =<==) for integer/number fields
+- ~tabularium-view-filter-delete~ (=f d=) — Delete a single filter layer (presents numbered layers for selection)
+- ~tabularium-view-filter-toggle~ (=f s=) — Cycle a layer's join logic: AND → OR → AND NOT → OR NOT
+- ~tabularium-view-clear-filter~ (=f x=) — Clear all filter layers
+- ~tabularium-view-filter-across~ (=f @=) — Now adds as a layer instead of replacing the entire filter
+- Modeline shows typed operators: =(genre = Fiction) ∧ (price > 20) ∧¬ (status ~ inactive)=
+- Saved views use ~:raw~ layers to preserve backward compatibility with existing schema filter strings
+- Shared helpers: ~tabularium--filter-prompt-join~ and ~tabularium--filter-add-layer~ (DRY)
+
+*** View-Scoped Replace (=R v= prefix)
+- ~tabularium-visible-replace-substring~ (=R R=) — Replace substring, scoped to visible rows only
+- ~tabularium-visible-replace-exact~ (=R ==) — Replace exact value, scoped to visible rows
+- ~tabularium-visible-replace-regexp~ (=R X=) — Replace regexp, scoped to visible rows
+- ~tabularium-visible-query-replace~ (=R Q=) — Interactive query-replace, scoped to visible rows
+- View-scoped variants respect current filters and range limits; marks are preserved
+- Accessible via =R v= prefix in view mode, or =R= → =v= in the replace hydra
+
+*** Side-Window Entry Display
+- New ~tabularium-entry-display~ customization variable: ~buffer~ (default) or ~side~
+- When set to ~side~, the entry form opens in a right-side window (40% width) instead of replacing the current window
+- All entry buffer display sites use ~tabularium--display-entry-buffer~ for consistent behavior
+
+*** Long-Field Editing (=:long t= property)
+- New ~:long t~ field property for multi-paragraph text (e.g., operative reports, case notes)
+- Fields with ~:long t~ open a dedicated editing buffer instead of the minibuffer
+- ~tabularium-long-field-mode~ customization variable (default ~text-mode~; can be ~org-mode~, ~markdown-mode~, etc.)
+- ~tabularium-long-field-display~ customization variable: ~side~ (default) or ~bottom~ — controls whether the editing buffer opens as a right-side split or a bottom split
+- ~tabularium-long-mode~ minor mode with =C-c C-c= (save) and =C-c C-k= (cancel)
+- Editing buffer opens in a bottom side-window (40% height) with header-line showing field name and keybindings
+- Works in both form-based entry (asynchronous callback) and prompt-based entry (synchronous via ~recursive-edit~)
+- Entry form renderer truncates long values to first line + =[N chars, M lines]= summary
+- Long fields are fully searchable via FTS5 when configured
+
+*** Sort Layer Management (=S= prefix)
+- ~tabularium-view-sort-add~ (=s s=) — Add a sort layer; shows current sort in the prompt and excludes already-sorted columns
+- ~tabularium-view-sort-delete~ (=s d=) — Delete a single sort layer by name (presents current layers with direction arrows for selection)
+- ~tabularium-view-sort-clear~ (=s x= / =s 0=) — Clear all sort layers, return to default order
+- Sort sub-hydra added with =s=, =d=, =x=, and =^= (reverse) bindings
+
+*** Entry Mode Position Restoration
+- Editing an existing entry and submitting now returns to the *same row, column, and scroll position* in the view buffer
+- Submitting a new entry centers the view on the newly created row
+- New buffer-local variables ~tabularium-entry--source-column~ and ~tabularium-entry--source-line-offset~ capture cursor state when the form opens
+
+*** View-Scoped Math Functions (=# v= prefix)
+- ~tabularium-visible-min-max~ (=# M=) — Min/max of a numeric field, scoped to visible rows
+- ~tabularium-visible-mean-sd~ (=# D=) — Mean ± SD, scoped to visible rows
+- ~tabularium-visible-median-iqr~ (=# Q=) — Median [Q1–Q3], scoped to visible rows
+- Shared helpers: ~tabularium--visible-numeric-field~ (prompts for field), ~tabularium--visible-field-values~ (extracts values)
+
+*** Long-Field Edit Mode
+- New ~tabularium-long-edit-mode~ derived from ~text-mode~ with ~visual-line-mode~ and ~outline-minor-mode~ enabled
+- Used automatically when ~tabularium-long-field-mode~ is ~text-mode~ (default); user can still override with ~org-mode~ etc.
+- Header-line uses ~help-key-binding~ face (raised button style) matching other hint displays
+
+** Changed
+
+*** Keybinding Updates
+- Sort: =S= prefix → =s= prefix; reverse sort =s= → =^=; =s 0= added as alias for =s x=
+- Fill: =F F= is now fill gap (was dispatcher); =F f= is fill forward (new); =F d= delete run (new); =F x= clear to row (new); =F n= fill next / =F p= fill previous (was =F f= for fill-down)
+- Filter: =f f= now adds layers (was: replace); =f d= delete layer (new); =f s= toggle join logic (new); =f @= adds as layer (was: replace); =f == exact match (new); =f #= numeric comparison (new); =f 0= added as alias for =f x=
+- Filter: =<CLEAR>= sentinel removed from ~tabularium-view-filter~; use =f x= (~tabularium-view-clear-filter~) instead
+- Views: =v x= added as alias for ~tabularium-clear-view~ (matches =s x=, =F x=, =f x= pattern)
+- Reset aliases: =s 0=, =f 0=, =v 0= all clear their respective subsystem (parallel to numbered view presets)
+- Math: =# v s= / =# v m= / =# v d= / =# v M= prefix replaced by uppercase: =# S= / =# M= / =# D= / =# Q= for view-scoped sum/min-max/mean-sd/median-iqr
+- Math: median changed from =# M= to =# q= (for quartiles); =# Q= is the view-scoped variant
+- Replace: =R v r= / =R v R= / =R v == / =R v x= prefix replaced by uppercase: =R R= / =R Q= / =R X=
+- Replace: query-replace changed from =R R= to =R q= (unscoped); =R Q= is the view-scoped variant
+
+*** Display and Interaction Polish
+- ~tabularium-entry-display~ default changed from ~buffer~ to ~side~ (right-side window)
+- Entry side window uses ~display-buffer-in-direction~ instead of ~display-buffer-in-side-window~ — no longer pushes the main buffer left
+- Sort direction prompt shows "ascending" / "descending" instead of "asc" / "desc"
+- Filter join prompt shows "AND" / "OR" / "AND NOT" / "OR NOT" instead of lowercase
+- Spaces added around operators in display messages: =field ~ value=, =min = X=, =max = Y=
+- Entry form values truncated to 55 characters (fits within 80-char box width) with ellipsis
+- Long-field view truncation in tabulated list: newlines replaced with spaces, capped at 60 characters
+- ~tabularium-view-unmark~ now reports "Unmarked" with remaining mark count instead of misleading "Marked N"
+- ~tabularium-view-refresh~ preserves cursor position, column, and scroll offset across refresh
+- ~tabularium-prompt-entry~ and ~tabularium-quick-entry~ now refresh the view buffer after inserting
+- ~tabularium-visible-sum~ rounds results to match the maximum decimal places of the constituent values
+- Replace functions: "in marked rows" → "(marked rows)" or "(visible rows)" depending on scope
+- View-scoped replace prompts: "Replace in view" → "Replace (visible)"
+- Replace skip summaries now show affected field names: ="Replaced 3, skipped 5 (condition constraint)"=
+- Replace functions pre-filter choice fields: columns whose schema `:choices' reject the replacement value are excluded from the search entirely
+- Centralized scroll-position save/restore in ~tabularium-view--revert~ using ~window-start~/~set-window-start~ (fixes scroll creep near buffer top)
+
+*** Fill Infrastructure Refactoring
+- ~tabularium--fill-down-execute~ generalized to ~tabularium--fill-execute~ with optional DIRECTION argument (=up= or =down=)
+- ~tabularium-view-fill-down~ and ~tabularium-view-fill-up~ both delegate to ~tabularium--fill-execute~
+- Fill dispatcher replaced by the zero-prompt ~tabularium-view-fill~ (fill gap at point)
+
+*** Filter Infrastructure Refactoring
+- ~tabularium--filter~ (raw SQL string) and ~tabularium--filter-desc~ (display string) replaced by ~tabularium--filter-layers~ (list of plists)
+- Each layer carries ~:field~, ~:value~, ~:join~ (logic operator), and optional ~:across~ / ~:raw~ flags
+- SQL generation via ~tabularium--build-filter-clause~; display via ~tabularium--filter-description~
+- All consumers (~tabularium-view--refresh~, ~tabularium-apply-view~, ~tabularium--apply-default-view~, ~tabularium-clear-view~, ~tabularium-visible-count~, hydra/transient menus) updated to use new API
+
+** Fixed
+
+*** Entry Submit Scroll Position
+- Fixed cursor landing at the bottom of the window after editing and resubmitting an entry
+- ~revert-buffer~ was destroying the scroll position; now restored via ~recenter~ with the saved line offset
+- Fixed pre-existing bug where ~tabularium-entry--source-buffer~ was guarded by ~derived-mode-p~ inside the entry buffer (always evaluated to nil); all source variables now captured in the correct buffer context
+
+*** Import/Export Multiline Field Handling
+- Rewrote ~tabularium-import--parse-delimited-file~ as a character-level RFC 4180 parser that handles quoted fields with embedded newlines, escaped quotes, and =\r\n= line endings
+- Old parser split on newlines first, breaking any field containing line breaks (e.g., long-form notes, operative reports)
+- Rewrote ~tabularium-import--into-current-db~ to delegate to the proper file parser instead of line-by-line processing
+- Fixed ~tabularium--escape-field~: TSV export previously replaced newlines with spaces (lossy); now both TSV and CSV use RFC 4180 quoting for fields containing separators, newlines, or quotes
+
+*** Prompt and Quick Entry
+- Fixed ~tabularium-prompt-entry~ showing "Entry added: nil" — the values alist was reversed before the ID lookup
+- Both ~tabularium-prompt-entry~ and ~tabularium-quick-entry~ now refresh the view buffer after inserting
+- Fixed import "0 rows" double-message bug in ~tabularium-import--with-existing-schema~
+
+** Removed
+
+*** Dead Code Cleanup
+- ~tabularium-view-sort~ — Old multi-step sort loop with =<CLEAR>= / =<DONE>= sentinels; replaced by =s s= / =s d= / =s x= layer management
+- ~tabularium-view-sort-remove~ — Renamed to ~tabularium-view-sort-delete~ for consistency with =d= = delete convention
+- ~tabularium--fill-interactive~ — Wrapper for prompted fill; no longer called after dispatcher removal
+- ~tabularium--fill-number-interactive~ — Wrapper for prompted numeric fill series; ~tabularium-view-fill-series~ has its own interactive form
+- ~tabularium--fill-date-interactive~ — Wrapper for prompted date fill series; same reason
+- =<CLEAR>= sentinel from ~tabularium-view-filter~ — Redundant with =f x= (~tabularium-view-clear-filter~)
+- ~tabularium--filter~ and ~tabularium--filter-desc~ variables — Replaced by ~tabularium--filter-layers~
+- ~tabularium-import--parse-delimited-line~ — Line-level parser superseded by file-level RFC 4180 parser
+- ~tabularium--parse-csv-line~ — Redundant CSV line parser superseded by file-level parser
+- ~tabularium-long-mode~ — Minor mode replaced by ~tabularium-long-edit-mode~ (derived major mode)
+
+* 0.3.0 (2026-03-03)
+
+** Added
+
+*** Column Operations (=|= prefix)
+- Full column clipboard: copy (=| c=), cut (=| x=), paste (=| v=) columns
+- Column move (=| M=) and swap (=| W=) with multi-column support
+- Column editor (=| E=) — rename, change prompt/type/default in one command
+  - Fills blank cells when setting a new default value
+  - Undoable (restores old field properties and clears filled values)
+- Column insert (=| I=) — insert blank column at position
+- Paste auto-renames on collision: ~name~ → ~name_copy1~, ~name_copy2~, ...
+- All position selectors use ~<FIRST>~, ~<LAST>~, ~<POINT> colname~ sentinels
+- Point preserved across column operations (stays on same column)
+
+*** Smart Fill Behavior
+- Fill functions now work *without* marks: auto-fills blank cells downward from point until a filled cell
+- With marks: prompts "N of M marked rows have values. Overwrite?" before writing to non-blank cells
+- Removed redundant ~<VALUE>~ and ~<STRING>~ sentinels from fill functions — typing any string that doesn't match a candidate uses it directly
+- ~<ROW>~ remains for copying from a specific row by ID
+
+*** Across-Columns Operations (=@= suffix)
+- Unified =@= suffix for "across columns" variants of commands
+  - =f @= — Filter across columns (was =a=)
+  - =# @= — Count across columns (was =# a=)
+- Consistent naming: ~tabularium-view-filter-across~, ~tabularium-view-count-across~
+- Pattern: any command + =@= means "across columns"
+
+*** Mark Overlay Improvements
+- Face definition changed from inheriting ~dired-marked~ to explicit colors (gold on dark, gold on cream for light themes)
+- Overlay priority set to 100 to win over ~tabulated-list-mode~ overlays
+- ~tabularium-view-debug-marks~ diagnostic command for troubleshooting
+- ~face-spec-set~ forces new spec even if prior session cached a different definition
+
+*** Entry Mode Robustness
+- =<backtab>= (S-TAB) now works reliably to go to previous field even with ~outline-minor-mode~ active
+- Uses ~minibuffer-setup-hook~ to override keybindings in the actual minibuffer local map
+- Added =<S-iso-lefttab>= binding for X11 compatibility
+- Hook is properly cleaned up with ~unwind-protect~
+
+** Changed
+
+*** Sentinel Naming Convention
+- All user-facing sentinels standardized to ~<CAPS>~ format: ~<ALL>~, ~<CLEAR>~, ~<DONE>~, ~<ROW>~, ~<FIRST>~, ~<LAST>~, ~<POINT>~, ~<CSV>~, ~<TSV>~
+- ~<empty>~ (display-only placeholder) intentionally remains lowercase
+
+*** Keybinding Updates
+- =f @= for filter-across (was =a=), freeing =a= for user bindings
+- =# @= for count-across (was =# a=)
+- =. += for add column now calls ~tabularium-view-column-add~ (the undoable version)
+
+*** Function Consolidation
+- ~tabularium-schema-add-field~ removed — ~tabularium-view-column-add~ is the single add-column function (undoable, with position control)
+- ~tabularium-schema-add-field~ and ~tabularium-add-field~ are now aliases to ~tabularium-view-column-add~
+- ~tabularium-filter-across-columns~ → ~tabularium-view-filter-across~
+- ~tabularium-count-across-columns~ → ~tabularium-view-count-across~
+
+** Fixed
+
+*** Column Editor Scoping Bug
+- Fixed ~void-variable filled-ids~ error in ~tabularium-view-column-edit~
+- Variable was bound in inner ~let~ (default-update section) but referenced outside that scope when building undo op
+- Moved ~filled-ids~ to outer ~let*~ binding
+
+*** Statistics Buffer Read-Only Error
+- Fixed "Buffer is read-only" error in ~tabularium-mode-frequency~, ~tabularium-column-stats~, and ~tabularium-full-stats~
+- ~special-mode~ made buffers read-only on first call; ~erase-buffer~ on second call hit the read-only buffer
+- All statistics display functions now use ~inhibit-read-only~ when writing
+
+*** Entry Mode =S-TAB= Conflict
+- Fixed ~outline-before-first-heading~ error when pressing ~<backtab>~ during field entry
+- ~outline-minor-mode~ was intercepting the key via its minor-mode keymap
+- Keybinding strategy changed from pre-building a map copy to using ~minibuffer-setup-hook~
+
+** Removed
+
+*** Dead Code Cleanup
+- ~tabularium-registry--db-file-for-schema~ — never called (inverse of existing function)
+- ~tabularium--find-autofill-sources~ — never called (~tabularium--find-autofill-targets~ is the used version)
+- ~tabularium--field-get~ — trivial wrapper around ~plist-get~, never called
+- ~tabularium--new-with-method~ — dead dispatch function, superseded by direct calls
+- ~tabularium--separator~ — superseded by inline separator logic in export
+
+** Deprecated
+
+- ~tabularium-schema-add-field~ — Use ~tabularium-view-column-add~ instead (alias preserved)
+- ~tabularium-add-field~ — Use ~tabularium-view-column-add~ instead (alias preserved)
+
+* 0.2.0 (2026-02-04)
+
+** Added
+
+*** Filter System Enhancements
+- Filter now works on all field types (text, number, date), not just text
+- ~<clear>~ sentinel at field prompt for quick filter reset (=f RET=)
+- Historical values in filter prompt are stringified for non-text columns
+
+*** Export Format Selection
+- Interactive format menu when exporting (~<TSV>~ / ~<CSV>~)
+- File extension auto-adjusts based on selected format
+- Overwrite confirmation when target file exists
+- Export message shows format used
+
+*** Multi-Sort Improvements
+- ~tabularium-view-sort~ (=S=) — Full interactive multi-sort with per-column direction
+- Loop-based selection: pick column → pick direction → repeat
+- ~<clear>~ at first prompt clears sort (=S RET=)
+- ~<done>~ at subsequent prompts finishes configuration
+- Sort layers display left-to-right in application order
+- Renamed functions for clarity:
+  - ~tabularium-view-sort~ (was ~tabularium-view-sort-by~)
+  - ~tabularium-view-sort-reverse~ (was ~tabularium-view-sort-toggle~)
+
+*** Fill Operations
+- Smart fill dispatcher (=F=) with automatic type detection
+- Source selection for all fill types: ~<from row>~, ~<enter value>~, or pick from history
+- Fill date: auto-detects existing dates, offers manual entry if column empty
+- Fill number: same pattern with numeric detection
+
+*** Mark and Replace
+- Mark and replace functions now search all field types, not just text
+- ~completing-read-multiple~ for column selection with ~<all>~ sentinel
+- =* *= binding for mark-matching (easier than =* m=)
+
+*** Entry Mode Submit from Minibuffer
+- =C-RET= and =C-c C-c= submit form even while editing a field
+- Accepts current input and immediately submits
+- Updated hints: =./C-c C-c/C-RET Submit=
+
+*** Sentinel Aesthetic
+- All sentinels changed from ~* [...]~ to ~<...>~ format
+- Consistent with org-table conventions: ~<all>~, ~<clear>~, ~<done>~, ~<from row>~, ~<enter value>~, ~<enter manually>~
+
+*** Cell-Jump Navigation
+- New navigation commands to jump to cells with different values
+- Useful for quickly navigating grouped or sorted data
+- =M-n= / =M-p= — Jump down/up to next row where column value changes
+- =M-]= / =M-[= — Jump right/left to next column with different value
+- Alternative bindings: =C-<down>=, =C-<up>=, =C-<right>=, =C-<left>=
+- Prefix argument support: =C-u 3 M-n= jumps 3 value transitions
+
+*** Non-Destructive Paste (Emacs-like)
+- =V= (paste) and =A= (paste-append) now keep entries in kill ring by default
+- Allows repeated pastes of the same entries without re-copying
+- =C-u V= and =C-u A= consume the batch from kill ring (old behavior)
+- =y= opens kill ring viewer (was =Y=)
+- Undo behavior tracks whether paste was destructive or not
+
+*** Schema Command Reorganization
+- New =.= prefix for all schema operations in view mode
+- Consistent ~tabularium-schema-*~ naming convention:
+  - ~tabularium-schema-edit~ (=. .=) — Edit schema file
+  - ~tabularium-schema-show~ (=. s=) — Display schema read-only
+  - ~tabularium-schema-reload~ (=. r=) — Reload after external edits
+  - ~tabularium-schema-switch~ (=. w=) — Switch to different database
+  - ~tabularium-schema-add-field~ (=. +=) — Add field via wizard
+- Schema submenu added to both main and view hydras
+- Backwards-compatible aliases for old function names
+
+*** Goto Operations (='= prefix)
+- New ='= prefix for all goto/jump-to operations
+- Intuitive keybindings: "goto column", "goto row", "goto entry"
+  - =' c= — Go to column by name (with completion)
+  - =' r= — Go to row by number (1-indexed)
+  - =' e= — Go to entry by ID
+- Goto submenu added to view hydra
+
+*** First/Last Row Column Preservation
+- ={= (first row) and =}= (last row) now stay in the same column
+- Makes navigating wide databases much easier
+- No need to re-navigate to your column after jumping
+
+*** Cell-Jump Improvements
+- Cell-jump functions now go to edge when no different value found
+  - =M-n= at bottom of same-value group → jumps to last row
+  - =M-p= at top of same-value group → jumps to first row
+  - =M-]= at end of same-value run → jumps to last column
+  - =M-[= at start of same-value run → jumps to first column
+- Messages indicate when edge is reached: "Reached last row", etc.
+
+** Changed
+
+*** Keybinding Updates
+- =e= / =i= for export/import (was =w= / =I=)
+- === for exact operations in mark/replace (was =e=)
+- =F= for fill dispatcher (unified fill operations)
+- =* *= for mark-matching (was =* m=)
+- =S= for multi-sort, =s= for reverse sort
+- =.= now opens schema submenu (was direct edit)
+- =y= for kill ring viewer (was =Y=)
+- =V= / =A= now non-destructive by default (=C-u= to consume)
+- ='= prefix for goto operations: =' c= column, =' r= row, =' e= entry
+- ={= / =}= now preserve column position when jumping to first/last row
+
+*** View Reset (=0=)
+- Now properly resets sort direction to schema default (or global default)
+- Fixes issue where toggled sort direction persisted after reset
+- Message updated to "...default sort"
+
+*** Field Selection
+- Uses ~completing-read-multiple~ for mark/replace column selection
+- Comma-separated multi-select works with completion frameworks
+- ~<all>~ sentinel for "search all columns"
+
+** Fixed
+
+- Sort display order: layers now shown left-to-right matching application order
+- Clear view (=0=) properly resets ~tabularium--sort-ascending~ to schema/global default
+- Filter on numeric columns: candidates stringified for completion
+- Export overwrite: prompts before overwriting existing files
+
+*** Completion System Overhaul
+- Unified completion architecture with 7 new completion methods:
+  - ~historical~ — Values previously entered, ranked by frequency
+  - ~recent~ — Most recently used values
+  - ~vocabulary~ — Load completions from external file
+  - ~related~ — Auto-fill based on another field's value (replaces ~:paired~)
+  - ~filtered~ — Historical values filtered by another field
+  - ~function~ — Custom elisp function for completions
+  - ~union~ — Combine multiple completion sources
+- ~:autofill~ flag for automatic field population from related data
+- Completion sources now support plists for configuration:
+  #+begin_src emacs-lisp
+  :complete (:type related :field procedure :autofill t)
+  #+end_src
+
+*** Saved Views
+- Schema-level view presets with ~:views~ property
+- Views can specify ~:filter~, ~:columns~, and ~:sort~
+- ~:default t~ flag to auto-apply view on database open
+- Numeric keybindings: =0= clears view, =1-9= apply schema views
+- =v= opens view selector with completion
+
+*** Schema Enhancements
+- ~:default-sort~ property (~'asc~ or ~'desc~) for per-database default sort order
+- ~tabularium-reload-schema~ (=~=) to reload schema without reopening database
+- ~tabularium-registry-rename-at-point~ (=R=) to rename databases from registry
+
+*** Undo/Redo System
+- Increased default undo limit from 100 to 500 operations
+- Full undo support for column operations:
+  - ~tabularium-add-column~ now undoable (removes column)
+  - ~tabularium-delete-column~ now undoable (restores column and all data)
+- Full undo support for all replace operations:
+  - ~tabularium-find-replace~
+  - ~tabularium-find-replace-exact~
+  - ~tabularium-find-replace-regexp~
+  - ~tabularium-replace-across-columns~
+  - ~tabularium-query-replace~
+- Renamed functions for clarity (with backwards compatibility aliases):
+  - ~tabularium-undo~ / ~tabularium-redo~ (primary names)
+  - ~tabularium-undo-history~ shows full undo stack
+
+*** Entry Mode Unification
+- Merged ~tabularium-form-mode~ and ~tabularium-entry-mode~ into single unified mode
+- Consistent keybindings across entry contexts:
+  - =n/p= — Navigate between entries
+  - =TAB/S-TAB= — Navigate between fields
+  - =RET= — Edit field at point
+  - =.= or =C-c C-c= — Submit entry
+  - =q= or =C-c C-k= — Cancel (with smart prompts for unsaved changes)
+- ~tabularium-entry-insert~ (=I=) — Insert new entry at specific ID
+- ~tabularium-entry-goto-view~ (=v=) — Jump to view buffer
+
+*** View Mode Enhancements
+- First/last row navigation: ={= / =}=
+- Line beginning/end navigation: =[= / =]=
+- Cell-based navigation with =TAB= / =S-TAB= (bounded to row)
+- Freeze/unfreeze rows (Excel-style pinning):
+  - =z= — Freeze row at point or marked rows
+  - =Z= — Unfreeze all
+  - =C-u z= — Unfreeze row at point or marked rows
+- Query-replace with visual feedback (point moves to each match)
+
+*** Registry Improvements
+- ~tabularium-registry-open-at-point~ (=RET/o=) — Open database
+- ~tabularium-registry-open-and-view-at-point~ (=O=) — Open and view
+- ~tabularium-registry-view-at-point~ (=v=) — View only
+- ~tabularium-registry-edit-schema-at-point~ (=./e=) — Edit schema file
+- ~tabularium-registry-rename-at-point~ (=R=) — Rename database
+- ~tabularium-registry-forget-at-point~ (=f=) — Forget database
+- TAB/S-TAB navigation between entries
+- Confirmation prompts when switching databases
+
+*** Statistics Functions
+- ~tabularium-mean-sd~ — Mean ± standard deviation
+- ~tabularium-median-iqr~ — Median with interquartile range [Q1-Q3]
+- ~tabularium-mode-frequency~ — Most and least common values
+- ~tabularium-full-stats~ — Comprehensive statistics report
+
+*** UI Polish
+- Unicode box-drawing characters for headers/footers:
+  - Double lines (=═=) for entry mode
+  - Single lines (=─=) for view mode
+  - Heavy lines (=━=) for registry mode
+- Aligned colons in entry form fields
+- Modeline format: ~[backend:database]~
+- Summary mode visual improvements with consistent formatting
+
+*** Menu System
+- Reorganized hydra menus with logical column groupings
+- New replace submenu (=R=) with all replace operations
+- Consistent column spacing and alignment
+- Separate "Undo" section in view hydra
+
+** Changed
+
+*** Keybinding Updates
+- View mode: =s= toggles sort, =S= opens multi-sort
+- Entry mode: =.= submits (was only =C-c C-c=)
+- Registry mode: =R= renames (was =$=)
+- Freeze: =z/Z= replace previous freeze bindings
+
+*** Behavior Changes
+- ~tabularium-open~ prompts for confirmation when another database is open
+- ~tabularium-reindex~ uses ROWID-based algorithm (handles duplicates safely)
+- Cancel operations prompt only when there are unsaved changes
+- Default view applied automatically when opening database
+
+** Fixed
+
+*** Reindex System
+- Fixed ~UNIQUE constraint failed~ error after undo/redo operations
+- Fixed large negative IDs appearing after reindex
+- Algorithm now uses ROWID for reliable row identification
+
+*** Summary Mode
+- Fixed ~Invalid format operation %*~ error in frequency display
+- Dynamic format string generation for proper column alignment
+
+*** Import System
+- Fixed ~org-table~ import path handling for relative paths
+- Fixed vocabulary file loading from schema directory
+- Fixed choice field display in entry forms
+
+*** Navigation
+- Fixed =TAB= navigation escaping row bounds
+- Fixed ={= / =}= not moving to actual first/last row
+- Fixed cell navigation with frozen rows
+
+*** Registry
+- Fixed schema path mismatch detection
+- Fixed frozen row display errors
+- Fixed default view not applying on open
+
+*** Entry Mode
+- Fixed form rendering with special characters
+- Fixed buffer management when switching entries
+- Fixed cancel not properly cleaning up
+
+** Deprecated
+
+- ~:paired~ field property — Use ~:complete (:type related :field X)~ instead
+- ~tabularium-undo-row~ / ~tabularium-redo-row~ — Use ~tabularium-undo~ / ~tabularium-redo~
+- ~tabularium-row-history~ — Use ~tabularium-undo-history~
+- ~tabularium-edit-schema~ — Use ~tabularium-schema-edit~
+- ~tabularium-show-schema~ — Use ~tabularium-schema-show~
+- ~tabularium-reload-schema~ — Use ~tabularium-schema-reload~
+- ~tabularium-switch~ — Use ~tabularium-schema-switch~
+- ~tabularium-add-field~ — Use ~tabularium-view-column-add~ instead
+
+* 0.1.0 — Initial Release (2026-01-26)
+
+** Features
+
+*** Core
+- SQLite-backed storage via Emacs 29.1+ built-in support
+- Schema-driven field definitions with types, defaults, and validation
+- Multiple entry modes: form-based, minibuffer prompts, quick entry
+- Rich querying with SQL WHERE clauses
+- Computed fields (SQL expressions or elisp functions)
+- CSV/TSV import and export
+
+*** Spreadsheet-Like Operations
+- Undo/redo for row operations
+- Copy/paste with batch-based kill ring
+- Dired-style marking for bulk operations
+- Multi-column sort
+- Column visibility toggling
+- Column reordering
+- Fill down / fill series
+- Reindex IDs
+
+*** Data Entry
+- Historical completion (frequency-ranked)
+- Choice fields with completion
+- Date fields with ~today~ default
+- Paired fields for auto-fill
+
+*** Interface
+- Hydra and Transient menu support
+- Modeline integration
+- Tabulated list view for browsing
+- Fuzzy search via completion frameworks
+
+*** Database Management
+- Registry for tracking multiple databases
+- Database creation wizard
+- Schema file generation
+- Sync safety (checkpoint/close for Syncthing/Dropbox)
+
+*** Backends
+- SQLite (default, built-in)
+- PostgreSQL (via emacsql, optional)

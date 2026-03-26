@@ -1,0 +1,441 @@
+#+TITLE: tabularium
+#+AUTHOR: Paul H. McClelland
+#+OPTIONS: toc:0 num:nil
+
+*Structured data management in Emacs using SQL*
+
+~tabularium~ provides a scalable data entry and management system within Emacs, using SQLite as its primary backend.  It is designed for datasets with thousands of entries and dozens of columns, in which standard Emacs tools begin to exhibit performance limitations.
+
+* Design and Scope
+
+~tabularium~ uses several built-in tools to create a data management ecosystem within Emacs, including ~tabulated-list-mode~ for row/column display, ~forms-mode~ for data entry, and ~sqlite.el~ for the database backend.  The result is something close in spirit to Microsoft Access or LibreOffice Base, but fully integrated into Emacs—leveraging Emacs's standard completion frameworks, keyboard-driven navigation, and version control support.  Each database can also be extended with custom Elisp in its corresponding schema file, and several useful elements from common spreadsheet software such as Microsoft Excel and LibreOffice Calc are also implemented for ease-of-use.  An EIEIO-based backend abstraction layer supports future extensions to PostgreSQL and other database systems.
+
+This package was developed out of a need to more adeptly handle large datasets within Emacs.  Emacs's built-in tools such as ~org-table~ and ~csv-mode~ handle human-readable tables and flat files well, but neither scales gracefully to thousands of records with rich schemas, field-level completion, or computed entries.  Conversely, packages like ~emacsql~ provide raw database access but lack a data management interface, and ~esqlite~ offers SQLite bindings without a user-facing layer.  ~tabularium~ is designed to occupy the space between these tools and full external database applications.
+
+* Features
+
+- *SQL-backed storage* — SQLite by default, with an extensible backend architecture
+- *Schema-driven data structure* — field types, defaults, choices, validation, and computed fields
+- *Multiple entry modes* — form-based (with per-field completion), minibuffer prompts, and quick entry for high-volume workflows
+- *Rich querying* — filter, search, count, and aggregate across any field type; full-text search via FTS5
+- *Spreadsheet operations* — undo/redo, copy/paste, dired-style marking, multi-column sort, freeze/pin rows, fill, query-replace, column clipboard, and reindexing
+- *Completion system* — historical (frequency-ranked), recent, vocabulary (file or inline), related (contextual co-occurrence), filtered (~SQL WHERE~), custom function, and union sources
+- *Saved views* — named presets for filter, sort, and column configuration
+- *Import/export* — CSV, TSV, and org-table import; CSV/TSV export (RFC 4180-compliant)
+- *Hydra and Transient menus* — discoverable command interface
+- *Version control-friendly* — designed for Git and Syncthing workflows
+
+Default keybindings for all modes are documented in [[file:KEYBINDINGS.org][KEYBINDINGS.org]].
+
+* Installation
+
+~tabularium~ is not yet available in any Emacs package repository.
+
+** With ~elpaca~ or ~straight~
+
+Install directly from the online repository using ~elpaca~ or ~straight~:
+
+#+begin_src emacs-lisp
+(use-package tabularium
+  :ensure (:host codeberg :repo "user/tabularium")
+  :config
+  (require 'tabularium-menu))
+#+end_src
+
+** Manual
+
+Alternatively, clone the repository and put the package in the Emacs load path:
+
+#+begin_src emacs-lisp
+(add-to-list 'load-path "~/path/to/tabularium")
+(require 'tabularium)
+(require 'tabularium-menu)
+#+end_src
+
+* Quick Start
+
+** 1. Create a database
+
+#+begin_example
+M-x tabularium-create-database RET expenses RET ~/Documents/expenses.db RET
+#+end_example
+
+This creates two paired files: =expenses.db= (the SQLite database) and =expenses.schema.el= (the schema definition).  An interactive wizard prompts for field definitions.
+
+** 2. Edit the schema (optional)
+
+The wizard produces a working schema, but the generated =.schema.el= file can be refined further—for instance, to add completion sources, views, or quick-entry fields.  See "Schema Files" below for the full specification.
+
+** 3. Open and use
+
+#+begin_example
+M-x tabularium-open RET expenses RET
+M-x tabularium-view RET
+#+end_example
+
+From the view buffer, entries can be created, edited, sorted, filtered, marked, and exported.  Form-based entry provides per-field completion; quick entry prompts only for selected fields.
+
+* View Mode (~tabularium-view-mode~)
+
+View mode is the primary interface for browsing and manipulating records.  It derives from ~tabulated-list-mode~ and displays entries in a columnar table.
+
+** Navigation
+
+| Command                        | Description                                          |
+|--------------------------------+------------------------------------------------------|
+| ~tabularium-view-forward-cell~       | Move forward to the next cell                        |
+| ~tabularium-view-backward-cell~      | Move backward to the previous cell                   |
+| ~tabularium-view-first-row~          | Jump to the first row, preserving column position    |
+| ~tabularium-view-last-row~           | Jump to the last row, preserving column position     |
+| ~tabularium-view-beginning-of-line~  | Move to the first column of the current row          |
+| ~tabularium-view-end-of-line~        | Move to the end of the current row                   |
+| ~tabularium-view-cell-jump-down~     | Jump to next row where the column value changes      |
+| ~tabularium-view-cell-jump-up~       | Jump to previous row where the column value changes  |
+| ~tabularium-view-cell-jump-forward~  | Jump right to the next column with a different value |
+| ~tabularium-view-cell-jump-backward~ | Jump left to the next column with a different value  |
+| ~tabularium-view-goto-column~        | Go to a column by name (with completion)             |
+| ~tabularium-view-goto-row~           | Go to a row by number                                |
+| ~tabularium-view-goto-entry~         | Go to an entry by ID                                 |
+| ~tabularium-view-entry~              | View the full record at point                        |
+| ~tabularium-find~                    | Fuzzy-find a record using ~completing-read~            |
+
+Cell-jump commands accept a prefix argument to jump across multiple value transitions.
+
+** Entry creation and modification
+
+| Command                  | Description                                          |
+|--------------------------+------------------------------------------------------|
+| ~tabularium-new-entry~         | Open a form for creating a new entry                 |
+| ~tabularium-prompt-entry~      | Create a new entry via sequential minibuffer prompts |
+| ~tabularium-quick-entry~       | Streamlined entry using only quick-entry fields      |
+| ~tabularium-view-edit~         | Edit record at point                                 |
+| ~tabularium-view-insert~       | Insert a new entry, shifting subsequent entries      |
+| ~tabularium-view-delete~       | Delete entry at point or all marked entries          |
+| ~tabularium-view-duplicate~    | Duplicate entry at point or all marked entries       |
+| ~tabularium-view-copy~         | Copy entry (or marked entries) to the kill ring      |
+| ~tabularium-view-cut~          | Cut entry (or marked entries) to the kill ring       |
+| ~tabularium-view-paste~        | Paste from the kill ring at point                    |
+| ~tabularium-view-paste-append~ | Paste from the kill ring at end of table             |
+| ~tabularium-view-move~         | Move entry (or marked entries) to a new position     |
+| ~tabularium-view-swap~         | Swap positions of two entries                        |
+| ~tabularium-reindex~           | Renumber all entry IDs sequentially                  |
+
+** Marking
+
+| Command                   | Description                                           |
+|---------------------------+-------------------------------------------------------|
+| ~tabularium-view-mark~          | Mark entry at point or entries in the active region   |
+| ~tabularium-view-unmark~        | Unmark entry at point or entries in the active region |
+| ~tabularium-view-unmark-all~    | Unmark all entries                                    |
+| ~tabularium-view-toggle-marks~  | Toggle marks on all visible entries                   |
+| ~tabularium-view-mark-matching~ | Mark entries by substring match                       |
+| ~tabularium-view-mark-exact~    | Mark entries by exact match                           |
+| ~tabularium-view-mark-regexp~   | Mark entries by regexp match                          |
+| ~tabularium-view-count-marked~  | Count marked entries                                  |
+| ~tabularium-view-execute~       | Execute an action on marked entries                   |
+
+** Fill and replace
+
+| Command                          | Description                                                         |
+|----------------------------------+---------------------------------------------------------------------|
+| ~tabularium-view-fill~                 | Fill gap: propagate nearest value above into blanks up to point     |
+| ~tabularium-view-fill-forward~         | Fill forward: propagate value at point (or above) into blanks below |
+| ~tabularium-view-fill-down~            | Prompted fill downward: choose field and value                      |
+| ~tabularium-view-fill-up~              | Prompted fill upward: choose field and value                        |
+| ~tabularium-view-fill-series~          | Fill with a numeric or date series                                  |
+| ~tabularium-view-fill-delete~          | Delete run: clear consecutive same-value cells from point           |
+| ~tabularium-view-fill-clear~           | Clear to row: blank the current column from point to a target       |
+| ~tabularium-replace-substring~         | Replace substring across selected fields                            |
+| ~tabularium-replace-exact~             | Replace exact value across selected fields                          |
+| ~tabularium-replace-regexp~            | Replace by regexp across selected fields                            |
+| ~tabularium-query-replace~             | Interactive query-replace with visual feedback                      |
+| ~tabularium-toggle-case-sensitive~     | Toggle case sensitivity for replace and mark operations             |
+| ~tabularium-visible-replace-substring~ | Replace substring in visible rows only                              |
+| ~tabularium-visible-replace-exact~     | Replace exact value in visible rows only                            |
+| ~tabularium-visible-replace-regexp~    | Replace by regexp in visible rows only                              |
+| ~tabularium-visible-query-replace~     | Interactive query-replace in visible rows only                      |
+
+** Sorting, filtering, and views
+
+| Command                    | Description                                                     |
+|----------------------------+-----------------------------------------------------------------|
+| ~tabularium-view-sort-add~       | Add a sort layer with column and direction                      |
+| ~tabularium-view-sort-delete~    | Delete a sort layer                                             |
+| ~tabularium-view-sort-clear~     | Clear all sort layers, return to default order                  |
+| ~tabularium-view-sort-reverse~   | Reverse the current sort order                                  |
+| ~tabularium-view-filter~         | Substring filter layer (prompts for join logic if layers exist) |
+| ~tabularium-view-filter-exact~   | Exact-match filter layer (matches whole cell value)             |
+| ~tabularium-view-filter-numeric~ | Numeric comparison filter (>, >=, <, <=)                        |
+| ~tabularium-view-filter-across~  | Filter-across layer (value in any of several fields)            |
+| ~tabularium-view-filter-delete~  | Delete a single filter layer                                    |
+| ~tabularium-view-filter-toggle~  | Cycle a layer's join logic (AND/OR/AND NOT/OR NOT)              |
+| ~tabularium-view-clear-filter~   | Clear all filter layers                                         |
+| ~tabularium-select-view~         | Select and apply a saved view from the schema                   |
+
+** Column operations
+
+| Command                        | Description                                   |
+|--------------------------------+-----------------------------------------------|
+| ~tabularium-view-column-add~         | Add a new column interactively                |
+| ~tabularium-view-column-delete~      | Delete one or more columns                    |
+| ~tabularium-view-column-edit~        | Edit column properties (name, type, default)  |
+| ~tabularium-view-column-insert~      | Insert a new empty column before a target     |
+| ~tabularium-view-column-duplicate~   | Duplicate a column with its data              |
+| ~tabularium-view-column-move~        | Move columns to a new position                |
+| ~tabularium-view-column-swap~        | Swap two columns                              |
+| ~tabularium-view-column-copy~        | Copy columns to the column kill ring          |
+| ~tabularium-view-column-cut~         | Cut columns (copy then delete)                |
+| ~tabularium-view-column-paste~       | Paste columns from the column kill ring       |
+| ~tabularium-view-toggle-column~      | Toggle visibility of a column                 |
+| ~tabularium-view-hide-columns~       | Hide multiple columns                         |
+| ~tabularium-view-show-only-columns~  | Show only selected columns, hiding all others |
+| ~tabularium-view-show-all-columns~   | Show all columns                              |
+| ~tabularium-view-reorder-columns~    | Interactively reorder columns                 |
+| ~tabularium-view-reset-column-order~ | Reset to schema-defined order                 |
+| ~tabularium-view-move-column-left~   | Move the current column one position left     |
+| ~tabularium-view-move-column-right~  | Move the current column one position right    |
+
+** Math and statistics
+
+| Command                   | Description                            |
+|---------------------------+----------------------------------------|
+| ~tabularium-sum~                | Sum of a numeric field                 |
+| ~tabularium-visible-sum~        | Sum of visible entries only            |
+| ~tabularium-min-max~            | Minimum and maximum values             |
+| ~tabularium-mean-sd~            | Mean ± standard deviation              |
+| ~tabularium-median-iqr~         | Median [Q1, Q3] (interquartile range)  |
+| ~tabularium-column-summary~     | Comprehensive column statistics        |
+| ~tabularium-visible-min-max~    | Min/max of visible entries only        |
+| ~tabularium-visible-mean-sd~    | Mean ± SD of visible entries only      |
+| ~tabularium-visible-median-iqr~ | Median [Q1–Q3] of visible entries only |
+| ~tabularium-count~              | Count records matching a pattern       |
+| ~tabularium-visible-count~      | Count currently visible entries        |
+| ~tabularium-view-count-across~  | Count across multiple columns          |
+
+** View expansion
+
+| Command                 | Description                          |
+|-------------------------+--------------------------------------|
+| ~tabularium-view-show-more~   | Show more rows (default +500)        |
+| ~tabularium-view-show-all~    | Show all entries (remove page limit) |
+| ~tabularium-view-show-range~  | Show entries within an ID range      |
+| ~tabularium-view-reset-limit~ | Reset to default page size           |
+
+** Freeze/pin, undo/redo, and other
+
+| Command                   | Description                                   |
+|---------------------------+-----------------------------------------------|
+| ~tabularium-view-freeze~        | Freeze entry at point (pin to top of view)    |
+| ~tabularium-view-freeze-marked~ | Freeze all marked entries                     |
+| ~tabularium-view-unfreeze-all~  | Unfreeze all frozen entries                   |
+| ~tabularium-undo~               | Undo the last database operation              |
+| ~tabularium-redo~               | Redo the last undone operation                |
+| ~tabularium-kill-ring-view~     | View contents of the kill ring                |
+| ~tabularium-view-refresh~       | Refresh the view buffer and reload the schema |
+| ~tabularium-view-menu~          | Open the hydra or transient menu              |
+
+** Schema access (from view mode)
+
+| Command              | Description                                   |
+|----------------------+-----------------------------------------------|
+| ~tabularium-schema-edit~   | Edit the schema file for the current database |
+| ~tabularium-schema-show~   | Display the schema in a read-only buffer      |
+| ~tabularium-schema-reload~ | Reload the schema after external edits        |
+| ~tabularium-schema-switch~ | Switch to a different database                |
+
+* Entry Mode (~tabularium-entry-mode~)
+
+Entry mode provides a form-based interface for creating and editing individual records.  Each field is displayed on its own line with its prompt label, and completion is available where configured in the schema.
+
+Three entry methods are available:
+
+- *Form entry* — opens a dedicated buffer with all fields laid out vertically; best for complex schemas and careful data entry (based on the built-in ~forms-mode~).
+- *Prompt entry* — prompts for each field sequentially in the minibuffer; suitable for quick keyboard-driven entry.
+- *Quick entry* — prompts only for fields listed in ~:quick-entry-fields~; ideal for high-volume entry with consistent defaults.
+
+The ~tabularium-entry-method~ variable controls the default method; a prefix argument before any entry command invokes the alternative.
+
+** Commands
+
+| Command                  | Description                                         |
+|--------------------------+-----------------------------------------------------|
+| ~tabularium-entry-next-field~  | Move to the next field                              |
+| ~tabularium-entry-prev-field~  | Move to the previous field                          |
+| ~tabularium-entry-edit-field~  | Edit field at point with completion, then advance   |
+| ~tabularium-entry-set-default~ | Set current field to its default value              |
+| ~tabularium-entry-reset-field~ | Reset current field to empty                        |
+| ~tabularium-entry-clear-field~ | Clear field at point                                |
+| ~tabularium-entry-submit~      | Submit the form and save the entry                  |
+| ~tabularium-entry-cancel~      | Cancel the form without saving                      |
+| ~tabularium-entry-new~         | Save current entry and open a new blank form        |
+| ~tabularium-entry-insert~      | Insert a new entry at the current entry's position  |
+| ~tabularium-entry-duplicate~   | Save current entry and open a duplicate for editing |
+| ~tabularium-entry-delete~      | Delete the current entry being edited               |
+| ~tabularium-entry-next-entry~  | Save current entry and move to the next one         |
+| ~tabularium-entry-prev-entry~  | Save current entry and move to the previous one     |
+| ~tabularium-entry-goto-view~   | Save and switch to the view buffer                  |
+
+* Registry Mode (~tabularium-registry-mode~)
+
+The registry tracks all known databases.  ~M-x tabularium-registry~ displays a listing with each database's name, schema status, and file path.  From this buffer, databases can be opened, viewed, created, registered, renamed, deleted (registry entry only), or expunged (registry entry + files).
+
+The registry persists across sessions in =registry.eld= (stored under ~user-emacs-directory~ or ~no-littering-var-directory~ if available).
+
+* Schema Files
+
+Each database is paired with a =.schema.el= file that defines its structure.  This file is an ordinary Elisp file evaluated at database load time.
+
+** Anatomy
+
+#+begin_src emacs-lisp
+(tabularium-define-schema "expenses"
+  :file "~/Documents/expenses.db"
+  :fields
+  '((:name id :type integer :prompt "ID" :primary t :width 5)
+    (:name date :type text :prompt "Date" :default today :width 12)
+    (:name category :type choice :prompt "Category" :width 12
+     :choices ("Food" "Transport" "Utilities" "Entertainment" "Other"))
+    (:name amount :type number :prompt "Amount" :width 10)
+    (:name description :type text :prompt "Description" :width 30
+     :complete historical))
+  :quick-entry-fields '(date category amount description)
+  :default-sort 'asc
+  :views
+  '((:name "Recent"
+     :filter (:field date :op ">=" :value "2024-01-01")
+     :sort ((date . desc)))
+    (:name "High Value"
+     :filter (:field amount :op ">" :value "100")
+     :columns (date category amount)
+     :default t)))
+#+end_src
+
+** Field types
+
+| Type    | Description                               |
+|---------+-------------------------------------------|
+| ~text~    | Free-form text                            |
+| ~integer~ | Whole numbers (auto-increment if primary) |
+| ~number~  | Decimal numbers                           |
+| ~date~    | Date values (YYYY-MM-DD)                  |
+| ~choice~  | Constrained selection from ~:choices~       |
+
+** Field properties
+
+| Property  | Type         | Description                                            |
+|-----------+--------------+--------------------------------------------------------|
+| ~:name~     | symbol       | Field identifier (required)                            |
+| ~:type~     | symbol       | One of the types listed above                          |
+| ~:prompt~   | string       | Display label                                          |
+| ~:primary~  | boolean      | Primary key field                                      |
+| ~:width~    | integer      | Column width in view mode                              |
+| ~:default~  | any          | Default value (~today~, ~now~, a function, or a literal)   |
+| ~:choices~  | list         | Valid options for ~choice~ type                          |
+| ~:computed~ | string/plist | SQL expression or Elisp function                       |
+| ~:complete~ | symbol/plist | Completion source (see below)                          |
+| ~:long~     | boolean      | Open dedicated editing buffer for multi-paragraph text |
+
+** Completion sources
+
+The ~:complete~ property configures intelligent completion during data entry.
+
+| Type       | Syntax                                          | Description                                               |
+|------------+-------------------------------------------------+-----------------------------------------------------------|
+| ~historical~ | ~:complete historical~                            | Frequency-ranked past entries                             |
+| ~recent~     | ~:complete recent~                                | Recency-ranked past entries                               |
+| ~vocabulary~ | ~:complete (:type vocabulary :source "file.txt")~ | External file (one value per line) or inline ~:values~ list |
+| ~related~    | ~:complete (:type related :field surgeon)~        | Values co-occurring with another field's current value    |
+| ~filtered~   | ~:complete (:type filtered :where "active = 1")~  | Historical values filtered by ~SQL WHERE~                   |
+| ~function~   | ~:complete (:type function :fn my-fn)~            | Custom Elisp function receiving field name and context    |
+| ~union~      | ~:complete (:type union :sources (...))~          | Combine multiple sources; duplicates removed              |
+
+All types accept an optional ~:limit N~ to cap the candidate count.  Related completion supports ~:autofill t~ to pre-fill with the most frequent co-occurring value.
+
+A shorthand syntax is also available: ~(:complete (vocabulary "~/codes.txt"))~, ~(:complete (related columnX))~, etc.
+
+** Saved views
+
+Views are defined in the ~:views~ property of the schema as a list of plists.  Each view may specify ~:name~, ~:filter~ (with ~:field~, ~:op~, ~:value~), ~:sort~ (list of =(column . direction)= pairs), ~:columns~ (list of visible columns), and ~:default t~ (applied on open).
+
+** Schema modification
+
+Columns can be added, deleted, or edited interactively from view mode.  These operations update both the SQLite database and the schema file.  The schema file can also be edited directly and reloaded without restarting.
+
+* Import and Export
+
+** Import
+
+The importer automatically detects header rows, infers data types, sanitizes column names, identifies likely primary keys, and adds historical completion for repeated text values.
+
+| Command                          | Description                                      |
+|----------------------------------+--------------------------------------------------|
+| ~tabularium-import~                    | Import from a file (auto-detects TSV/CSV/Org)    |
+| ~tabularium-import-org-table-at-point~ | Import the org-table at point                    |
+| ~tabularium-import-org-select-table~   | Select and import a named table from an org file |
+| ~tabularium-import-org~                | Import an org-table into a specified database    |
+| ~tabularium-import-csv~                | Import from a CSV file                           |
+| ~tabularium-import-tsv~                | Import from a TSV file                           |
+| ~tabularium-import-preview-schema~     | Preview the inferred schema before importing     |
+
+** Export
+
+| Command       | Description                                   |
+|---------------+-----------------------------------------------|
+| ~tabularium-export~ | Export records to a file (prompts for format) |
+
+TSV is recommended for version control, as it avoids the quoting ambiguities inherent to CSV with embedded commas.
+
+* Customization
+
+| Variable                   | Default    | Description                                 |
+|----------------------------+------------+---------------------------------------------|
+| ~tabularium-entry-method~        | ~form~       | Default entry method (~form~ or ~minibuffer~)   |
+| ~tabularium-entry-display~       | ~side~       | Entry form display (~buffer~ or ~side~)         |
+| ~tabularium-long-field-mode~     | ~text-mode~  | Major mode for editing ~:long~ fields         |
+| ~tabularium-long-field-display~  | ~side~       | Long-field window position (~bottom~ or ~side~) |
+| ~tabularium-export-format~       | ~tsv~        | Default export format (~tsv~ or ~csv~)          |
+| ~tabularium-view-page-size~      | ~1000~       | Number of rows displayed per page           |
+| ~tabularium-view-sort-ascending~ | ~nil~        | Default sort direction                      |
+| ~tabularium-undo-limit~          | ~500~        | Maximum undo entries per database           |
+| ~tabularium-schema-file-suffix~  | ~.schema.el~ | Suffix for schema files                     |
+| ~tabularium-registry-file~       | =(varies)=   | Path to the registry file                   |
+| ~tabularium-registry-max-recent~ | ~50~         | Maximum tracked databases                   |
+| ~tabularium-auto-reindex~        | ~nil~        | Reindex automatically on delete             |
+
+Per-schema settings (~:default-sort~, ~:quick-entry-fields~, ~:views~) are specified in the schema file.
+
+* Technical Details
+
+** File structure
+
+| File                    | Description                                                  |
+|-------------------------+--------------------------------------------------------------|
+| ~tabularium.el~               | Core: view mode, entry mode, registry, import/export, wizard |
+| ~tabularium-db.el~            | Database backend interface (EIEIO)                           |
+| ~tabularium-db-postgresql.el~ | PostgreSQL backend (optional, experimental)                  |
+| ~tabularium-menu.el~          | Hydra and Transient menu definitions                         |
+| ~tabularium-modeline.el~      | Mode-line integration                                        |
+
+** Requirements
+
+- Emacs 29.1+ (built-in SQLite support via ~sqlite.el~)
+- SQLite 3.31+
+- Optional: ~hydra~, ~transient~ (for menu interface)
+
+** Syncing (Git, Syncthing, Dropbox)
+
+Database and schema files are designed to travel together.  Before syncing or suspending, ~tabularium-prepare-for-sync~ checkpoints and closes all connections to ensure a clean state.  ~tabularium-checkpoint~ flushes the write-ahead log without disconnecting.  ~tabularium-fix-paths~ converts any absolute home directory paths in schema files to =~/= notation, ensuring portability across machines with different home directories.
+
+TSV export provides human-readable diffs suitable for version control.
+
+** Debugging
+
+~tabularium-completion-debug~ inspects the completion configuration and current candidates for any field.  ~tabularium-debug-related-fields~ displays related field configurations with sample co-occurrence data.
+
+* Contributing
+
+Contributions are welcome.  Please open an issue to discuss major changes, follow existing code style, and update documentation as appropriate.
+
+* License
+
+GPL-3.0-or-later
