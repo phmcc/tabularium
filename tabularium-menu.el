@@ -383,6 +383,7 @@
   ───────────────────────────────────────────────────────────────────────────────
   [_F_] Fill gap ↑       [_f_] Fill forward ↓  [_s_] Fill series
   [_n_] Fill next ↓      [_p_] Fill prev ↑     [_z_] Freeze marked
+  [_,_] To point ↑       [_._] To point ↓
   [_d_] Delete run       [_x_] Clear to row
   ───────────────────────────────────────────────────────────────────────────────
   [_q_] Quit
@@ -391,10 +392,11 @@
     ("f" tabularium-view-fill-forward)
     ("n" tabularium-view-fill-down)
     ("p" tabularium-view-fill-up)
+    ("," tabularium-view-fill-up-to-point)
+    ("." tabularium-view-fill-down-to-point)
     ("s" tabularium-view-fill-series)
     ("d" tabularium-view-fill-delete)
     ("x" tabularium-view-fill-clear)
-    ("s" tabularium-view-fill-series)
     ("z" tabularium-view-freeze-marked)
     ("q" nil))
 
@@ -663,6 +665,8 @@
                              ("F f" "Fill forward ↓" tabularium-view-fill-forward)
                              ("F n" "Fill next ↓" tabularium-view-fill-down)
                              ("F p" "Fill prev ↑" tabularium-view-fill-up)
+                             ("F ," "To point ↑" tabularium-view-fill-up-to-point)
+                             ("F ." "To point ↓" tabularium-view-fill-down-to-point)
                              ("F s" "Fill series" tabularium-view-fill-series)
                              ("F d" "Delete run" tabularium-view-fill-delete)
                              ("F x" "Clear to row" tabularium-view-fill-clear)

@@ -59,7 +59,7 @@
 ;;; ** 1.1. Customization
 
 (defgroup tabularium nil
-  "Fast, scalable data entry with SQL."
+  "Structured data management in Emacs using SQL."
   :group 'applications
   :prefix "tabularium-")
 
@@ -3424,6 +3424,8 @@ See `tabularium-entry-method' to set the default."
     (define-key map (kbd "F f") #'tabularium-view-fill-forward)
     (define-key map (kbd "F n") #'tabularium-view-fill-down)
     (define-key map (kbd "F p") #'tabularium-view-fill-up)
+    (define-key map (kbd "F ,") #'tabularium-view-fill-up-to-point)
+    (define-key map (kbd "F .") #'tabularium-view-fill-down-to-point)
     (define-key map (kbd "F s") #'tabularium-view-fill-series)
     (define-key map (kbd "F d") #'tabularium-view-fill-delete)
     (define-key map (kbd "F x") #'tabularium-view-fill-clear)
@@ -4788,8 +4790,8 @@ Uses current form values for related field completion."
           (insert (propertize "*" 'face 'error)))
         (insert ": ")
         ;; Field value with overlay for highlighting
-        ;; Max value width: 80 - 2 (indent) - 20 (label) - 2 (": ") - 1 (*) = 55
-        (let* ((max-val-width 55)
+        ;; Max value width: 80 - 2 (indent) - 20 (label) - 2 (": ") - 1 (*) - 2 (pad) = 53
+        (let* ((max-val-width 53)
                (start (point))
                (display-value
                 (if (string-empty-p value-str)
@@ -4819,12 +4821,19 @@ Uses current form values for related field completion."
             (overlay-put ov 'tabularium-field name)
             (overlay-put ov 'tabularium-value value)
             (push (cons name ov) tabularium-entry--field-overlays)))
-        ;; Type hint for choice fields
+        ;; Type hint for choice fields (respect right padding)
         (when (and choices (eq type 'choice))
           (let* ((display-choices (if (<= (length choices) 5)
                                       (string-join choices ", ")
-                                    (concat (string-join (seq-take choices 4) ", ") ", …"))))
-            (insert (propertize (format "  [%s]" display-choices) 'face 'shadow))))
+                                    (concat (string-join (seq-take choices 4) ", ") ", …")))
+                 (hint (format "  [%s]" display-choices))
+                 (avail (- 78 (current-column))))
+            (when (> (length hint) avail)
+              (setq hint (if (> avail 6)
+                             (concat (substring hint 0 (- avail 1)) "…")
+                           "")))
+            (unless (string-empty-p hint)
+              (insert (propertize hint 'face 'shadow)))))
         (insert "\n")))
     ;; Footer - double lines to match header
     (insert "\n")
@@ -8862,6 +8871,50 @@ from a row, entering manually, or picking from existing values."
           (value (tabularium--fill-source-choice field)))
      (list field value)))
   (tabularium--fill-execute field source-value 'up))
+
+(defun tabularium-view-fill-down-to-point ()
+  "Fill blanks above point using the nearest non-blank value above.
+Scans upward for the nearest non-blank cell, then fills all blank
+cells between that source and point (inclusive).  Undoable."
+  (interactive)
+  (let* ((col-name (or (tabularium--column-name-at-point)
+                       (user-error "No column at point")))
+         (field (symbol-name col-name))
+         (fill-value
+          (save-excursion
+            (let ((found nil))
+              (while (and (not found) (zerop (forward-line -1)))
+                (when-let ((rid (tabulated-list-get-id)))
+                  (let* ((rec (tabularium--get-record-by-id rid))
+                         (val (alist-get col-name rec)))
+                    (when (and val (not (string-empty-p (format "%s" val))))
+                      (setq found (format "%s" val))))))
+              found))))
+    (unless fill-value
+      (user-error "No value found above to fill from"))
+    (tabularium--fill-execute field fill-value 'up)))
+
+(defun tabularium-view-fill-up-to-point ()
+  "Fill blanks below point using the nearest non-blank value below.
+Scans downward for the nearest non-blank cell, then fills all blank
+cells between point and that source (inclusive).  Undoable."
+  (interactive)
+  (let* ((col-name (or (tabularium--column-name-at-point)
+                       (user-error "No column at point")))
+         (field (symbol-name col-name))
+         (fill-value
+          (save-excursion
+            (let ((found nil))
+              (while (and (not found) (zerop (forward-line 1)))
+                (when-let ((rid (tabulated-list-get-id)))
+                  (let* ((rec (tabularium--get-record-by-id rid))
+                         (val (alist-get col-name rec)))
+                    (when (and val (not (string-empty-p (format "%s" val))))
+                      (setq found (format "%s" val))))))
+              found))))
+    (unless fill-value
+      (user-error "No value found below to fill from"))
+    (tabularium--fill-execute field fill-value 'down)))
 
 (defun tabularium-view-fill-series (field start increment)
   "Fill FIELD with a series starting at START with INCREMENT.

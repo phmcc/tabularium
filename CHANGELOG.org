@@ -1,4 +1,4 @@
-#+TITLE: Tabularium Changelog
+#+TITLE: Changelog
 #+AUTHOR: Paul H. McClelland
 #+OPTIONS: toc:0 num:nil
 
@@ -591,7 +591,9 @@ All notable changes to ~tabularium~ are documented in this file.
 - ~tabularium-switch~ — Use ~tabularium-schema-switch~
 - ~tabularium-add-field~ — Use ~tabularium-view-column-add~ instead
 
-* 0.1.0 — Initial Release (2026-01-26)
+* 0.1.0 (2026-01-26)
+
+Initial release.
 
 ** Features
 
