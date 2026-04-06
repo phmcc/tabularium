@@ -4,7 +4,7 @@
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 ;; Copyright (C) 2026 Paul H. McClelland
 
-;; Version: 0.4.2
+;; Version: 0.4.3
 ;; Package-Requires: ((emacs "29.1"))
 ;; Keywords: data, faces
 ;; URL: https://codeberg.org/phmcc/tabularium

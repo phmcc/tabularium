@@ -4,7 +4,7 @@
 ;; SPDX-License-Identifier: GPL-3.0-or-later
 ;; Copyright (C) 2026 Paul H. McClelland
 
-;; Version: 0.4.2
+;; Version: 0.4.3
 ;; Package-Requires: ((emacs "29.1"))
 ;; Keywords: data, sql, tables
 ;; URL: https://codeberg.org/phmcc/tabularium
@@ -4636,6 +4636,8 @@ when the user saves via `tabularium-long-save'."
     ;; Field navigation
     (define-key map (kbd "TAB") #'tabularium-entry-next-field)
     (define-key map (kbd "<backtab>") #'tabularium-entry-prev-field)
+    (define-key map (kbd "<down>") #'tabularium-entry-next-field)
+    (define-key map (kbd "<up>") #'tabularium-entry-prev-field)
     (define-key map (kbd "M-]") #'tabularium-entry-next-field)
     (define-key map (kbd "M-[") #'tabularium-entry-prev-field)
     (define-key map (kbd "C-c C-n") #'tabularium-entry-next-field)
@@ -4686,6 +4688,13 @@ Provides field navigation, completion, and entry operations.
 \\{tabularium-entry-mode-map}"
   (setq buffer-read-only t)
   (setq-local truncate-lines t))
+
+(defvar tabularium-entry-render-hook nil
+  "Hook run at the end of form buffer rendering.
+Called inside the render function with `inhibit-read-only' bound
+to t, after the standard hint lines but before cursor positioning.
+Plugins can use this to inject additional content such as
+cross-table data or schema-specific hint lines.")
 
 (defun tabularium--compute-default (field)
   "Compute the default value for FIELD."
@@ -4782,12 +4791,16 @@ Uses current form values for related field completion."
         ;; Track first field line
         (unless first-field-line
           (setq first-field-line (line-number-at-pos)))
-        ;; Field label - aligned with entry mode
-        (insert (propertize (format "  %-20s" prompt)
-                            'face 'font-lock-keyword-face
-                            'tabularium-entry-label name))
-        (when required
-          (insert (propertize "*" 'face 'error)))
+        ;; Field label — required star occupies the last padding character
+        ;; so the colon aligns at the same column for all fields
+        (if required
+            (insert (propertize (format "  %-19s" prompt)
+                                'face 'font-lock-keyword-face
+                                'tabularium-entry-label name)
+                    (propertize "*" 'face 'error))
+          (insert (propertize (format "  %-20s" prompt)
+                              'face 'font-lock-keyword-face
+                              'tabularium-entry-label name)))
         (insert ": ")
         ;; Field value with overlay for highlighting
         ;; Max value width: 80 - 2 (indent) - 20 (label) - 2 (": ") - 1 (*) - 2 (pad) = 53
@@ -4808,8 +4821,8 @@ Uses current form values for related field completion."
                                      ""))
                              (avail (- max-val-width (length meta)))
                              (truncated (if (> (length first-line) avail)
-                                           (concat (substring first-line 0 (max 0 (- avail 1))) "…")
-                                         first-line)))
+                                            (concat (substring first-line 0 (max 0 (- avail 1))) "…")
+                                          first-line)))
                         (concat truncated meta))
                     ;; Regular fields: truncate to box width
                     (let ((clean (replace-regexp-in-string "[\n\r]" " " value-str)))
@@ -4839,27 +4852,32 @@ Uses current form values for related field completion."
     (insert "\n")
     (setq footer-start (point))
     (insert (propertize (tabularium--make-box-footer 80 'double) 'face 'shadow) "\n")
-    (insert "  " (propertize "TAB" 'face 'help-key-binding) "/"
-            (propertize "S-TAB" 'face 'help-key-binding) " Navigate   "
-            (propertize "RET" 'face 'help-key-binding) " Edit   "
-            (propertize "x" 'face 'help-key-binding) " Clear   "
-            (propertize "=" 'face 'help-key-binding) " Default   "
-            (propertize "v" 'face 'help-key-binding) " View   "
+    (insert "  "
+            (propertize "TAB" 'face 'help-key-binding) "/"
+            (propertize "S-TAB" 'face 'help-key-binding) " Navigate  "
             (propertize "n" 'face 'help-key-binding) "/"
-            (propertize "p" 'face 'help-key-binding) " Line↓/↑\n")
-    (insert "  " (propertize "N" 'face 'help-key-binding) " New   "
-            (propertize "I" 'face 'help-key-binding) " Insert   "
-            (propertize "d" 'face 'help-key-binding) " Dup   "
-            (propertize "D" 'face 'help-key-binding) " Del   "
+            (propertize "p" 'face 'help-key-binding) " Line ↓/↑  "
+            (propertize "RET" 'face 'help-key-binding) " Edit  "
+            (propertize "x" 'face 'help-key-binding) " Clear  "
+            (propertize "=" 'face 'help-key-binding) " Default  "
+            (propertize "v" 'face 'help-key-binding) " View\n")
+    (insert "  "
             (propertize "M-n" 'face 'help-key-binding) "/"
-            (propertize "M-p" 'face 'help-key-binding) " Entry↓/↑\n")
-    (insert "  " (propertize "q" 'face 'help-key-binding) " Cancel   "
+            (propertize "M-p" 'face 'help-key-binding) " Entry ↓/↑  "
+            (propertize "N" 'face 'help-key-binding) " New  "
+            (propertize "I" 'face 'help-key-binding) " Insert  "
+            (propertize "d" 'face 'help-key-binding) " Dup  "
+            (propertize "D" 'face 'help-key-binding) " Del\n")
+    (insert "  "
+            (propertize "q" 'face 'help-key-binding) " Cancel  "
             (propertize "." 'face 'help-key-binding) "/"
             (propertize "C-c C-c" 'face 'help-key-binding) "/"
             (propertize "C-RET" 'face 'help-key-binding) " Submit")
-    ;; Store bounds for navigation
+    ;; Store bounds — must happen before the hook so plugins can read them
     (setq tabularium-entry--first-field-line (or first-field-line 3))
     (setq tabularium-entry--footer-start footer-start)
+    ;; Plugin hook — inject additional content after standard hints
+    (run-hooks 'tabularium-entry-render-hook)
     ;; Position on current field if set, otherwise first editable field
     (goto-char (point-min))
     (let* ((fields (tabularium-entry--field-list))
@@ -4884,66 +4902,130 @@ Uses current form values for related field completion."
   "Get ordered list of field names."
   (reverse (mapcar #'car tabularium-entry--field-overlays)))
 
+(defun tabularium-entry--all-nav-positions ()
+  "Return a sorted list of navigable positions in the form buffer.
+Each element is (LINE-NUMBER POSITION . FIELD-NAME-OR-NIL).
+Schema field overlays and lines with the `tabularium-navigable'
+text property are both included, enabling plugin content to
+participate in TAB/S-TAB navigation."
+  (let ((positions '()))
+    ;; Field overlays (position is mid-line; normalize to line number)
+    (dolist (pair tabularium-entry--field-overlays)
+      (let ((name (car pair))
+            (ov (cdr pair)))
+        (when (overlay-buffer ov)
+          (let ((pos (overlay-start ov)))
+            (push (list (line-number-at-pos pos) pos name) positions)))))
+    ;; Extra navigable lines (text property set by plugins)
+    (save-excursion
+      (goto-char (point-min))
+      (while (< (point) (point-max))
+        (when (get-text-property (point) 'tabularium-navigable)
+          (let* ((pos (line-beginning-position))
+                 (lnum (line-number-at-pos pos)))
+            (unless (cl-some (lambda (p) (= (car p) lnum)) positions)
+              (push (list lnum pos nil) positions))))
+        (forward-line 1)))
+    ;; Sort by line number
+    (sort positions (lambda (a b) (< (car a) (car b))))))
+
+(defun tabularium-entry--clear-field-highlight ()
+  "Remove field highlighting from all overlays."
+  (dolist (pair tabularium-entry--field-overlays)
+    (overlay-put (cdr pair) 'face nil)))
+
+(defun tabularium-entry--goto-nav (target)
+  "Navigate to TARGET, a (LINE-NUMBER POSITION . FIELD-OR-NIL) entry."
+  (let ((pos (nth 1 target))
+        (field (nth 2 target)))
+    (if field
+        (tabularium-entry--goto-field field)
+      (tabularium-entry--clear-field-highlight)
+      (setq tabularium-entry--current-field nil)
+      (goto-char pos))))
+
 (defun tabularium-entry-next-field ()
-  "Move to the next field."
+  "Move to the next navigable position.
+Wraps to the first position when past the last."
   (interactive)
-  (let* ((fields (tabularium-entry--field-list))
-         (idx (cl-position tabularium-entry--current-field fields))
-         (next-idx (if idx (1+ idx) 0)))
-    (if (< next-idx (length fields))
-        (tabularium-entry--goto-field (nth next-idx fields))
-      (message "Last field"))))
+  (let* ((nav (tabularium-entry--all-nav-positions))
+         (cur-line (line-number-at-pos))
+         (next (cl-find-if (lambda (p) (> (car p) cur-line)) nav))
+         (target (or next (car nav))))
+    (when target
+      (tabularium-entry--goto-nav target))))
 
 (defun tabularium-entry-prev-field ()
-  "Move to the previous field."
+  "Move to the previous navigable position.
+Wraps to the last position when before the first."
   (interactive)
-  (let* ((fields (tabularium-entry--field-list))
-         (idx (cl-position tabularium-entry--current-field fields))
-         (prev-idx (if idx (1- idx) 0)))
-    (if (>= prev-idx 0)
-        (tabularium-entry--goto-field (nth prev-idx fields))
-      (message "First field"))))
+  (let* ((nav (tabularium-entry--all-nav-positions))
+         (cur-line (line-number-at-pos))
+         (prev (car (last (cl-remove-if-not
+                           (lambda (p) (< (car p) cur-line))
+                           nav))))
+         (target (or prev (car (last nav)))))
+    (when target
+      (tabularium-entry--goto-nav target))))
+
+(defun tabularium-entry--filtered-ids ()
+  "Return entry IDs in the current filtered/sorted order.
+Reads filter and sort state from the source view buffer.
+Falls back to primary-key order when no source buffer exists."
+  (tabularium--ensure-db)
+  (let* ((source tabularium-entry--source-buffer)
+         (primary-name (symbol-name (tabularium--primary-field-name)))
+         (filter-clause (when (and source (buffer-live-p source))
+                          (with-current-buffer source
+                            (tabularium--build-filter-clause))))
+         (order-clause (if (and source (buffer-live-p source))
+                           (with-current-buffer source
+                             (tabularium--build-order-clause))
+                         (format "%s DESC" primary-name)))
+         (where (if filter-clause
+                    (format "WHERE %s" filter-clause)
+                  ""))
+         (sql (format "SELECT %s FROM %s %s ORDER BY %s"
+                      primary-name tabularium-table-name
+                      where order-clause)))
+    (mapcar #'car (tabularium-db-query tabularium--db sql))))
 
 (defun tabularium-entry-next-entry ()
-  "Save current entry and move to the next one."
+  "Save current entry and move to the next one in filtered order."
   (interactive)
   (if (not tabularium-entry--editing-id)
       (message "Cannot navigate: this is a new entry")
-    (tabularium--ensure-db)
-    (let* ((current-id tabularium-entry--editing-id)
-           (primary-name (symbol-name (tabularium--primary-field-name)))
-           (sql (format "SELECT %s FROM %s WHERE %s > ? ORDER BY %s ASC LIMIT 1"
-                        primary-name tabularium-table-name primary-name primary-name))
-           (result (tabularium-db-query tabularium--db sql (list current-id)))
-           (next-id (caar result)))
+    (let* ((ids (tabularium-entry--filtered-ids))
+           (pos (cl-position tabularium-entry--editing-id ids))
+           (next-id (when pos (nth (1+ pos) ids)))
+           (source tabularium-entry--source-buffer))
       (if next-id
           (progn
-            ;; Auto-submit if there are changes
             (when (tabularium-entry--has-changes-p)
               (tabularium-entry-submit))
-            ;; Load next entry
-            (tabularium-new-entry next-id))
+            (tabularium-new-entry next-id)
+            ;; Preserve source buffer for subsequent navigation
+            (when (and source (buffer-live-p source))
+              (setq tabularium-entry--source-buffer source)))
         (message "No next entry")))))
 
 (defun tabularium-entry-prev-entry ()
-  "Save current entry and move to the previous one."
+  "Save current entry and move to the previous one in filtered order."
   (interactive)
   (if (not tabularium-entry--editing-id)
       (message "Cannot navigate: this is a new entry")
-    (tabularium--ensure-db)
-    (let* ((current-id tabularium-entry--editing-id)
-           (primary-name (symbol-name (tabularium--primary-field-name)))
-           (sql (format "SELECT %s FROM %s WHERE %s < ? ORDER BY %s DESC LIMIT 1"
-                        primary-name tabularium-table-name primary-name primary-name))
-           (result (tabularium-db-query tabularium--db sql (list current-id)))
-           (prev-id (caar result)))
+    (let* ((ids (tabularium-entry--filtered-ids))
+           (pos (cl-position tabularium-entry--editing-id ids))
+           (prev-id (when (and pos (> pos 0)) (nth (1- pos) ids)))
+           (source tabularium-entry--source-buffer))
       (if prev-id
           (progn
-            ;; Auto-submit if there are changes
             (when (tabularium-entry--has-changes-p)
               (tabularium-entry-submit))
-            ;; Load previous entry
-            (tabularium-new-entry prev-id))
+            (tabularium-new-entry prev-id)
+            ;; Preserve source buffer for subsequent navigation
+            (when (and source (buffer-live-p source))
+              (setq tabularium-entry--source-buffer source)))
         (message "No previous entry")))))
 
 (defun tabularium-entry--field-at-point ()
@@ -5036,50 +5118,50 @@ the minibuffer."
                           (length text))))))
         ;; Normal field: minibuffer prompt
         (let* ((prompt (plist-get field :prompt))
-             (current-value (or (alist-get field-name tabularium-entry--values) ""))
-             ;; Track if field was empty before editing
-             (was-empty (tabularium-entry--field-empty-p field-name))
-             (completions (tabularium-entry--get-field-completions field))
-             (initial (if (stringp current-value)
-                          current-value
-                        (format "%s" current-value)))
-             (new-value (tabularium-entry--read-with-prev-field
-                         (format "%s: " prompt) completions initial)))
-        ;; Check if prior navigation to previous field
-        (if (null new-value)
-            (progn
-              ;; Go to previous field
+               (current-value (or (alist-get field-name tabularium-entry--values) ""))
+               ;; Track if field was empty before editing
+               (was-empty (tabularium-entry--field-empty-p field-name))
+               (completions (tabularium-entry--get-field-completions field))
+               (initial (if (stringp current-value)
+                            current-value
+                          (format "%s" current-value)))
+               (new-value (tabularium-entry--read-with-prev-field
+                           (format "%s: " prompt) completions initial)))
+          ;; Check if prior navigation to previous field
+          (if (null new-value)
+              (progn
+                ;; Go to previous field
+                (let* ((fields (tabularium-entry--field-list))
+                       (idx (cl-position field-name fields))
+                       (prev-field (nth (mod (1- (or idx 0)) (length fields)) fields)))
+                  (setq tabularium-entry--current-field prev-field)
+                  (tabularium-entry--render)
+                  (message "Moved to previous field")))
+            ;; Normal completion - save value and proceed
+            (setf (alist-get field-name tabularium-entry--values) new-value)
+            (when tabularium-debug
+              (message "DEBUG edit-field: edited %s, new-value='%s', was-empty=%s"
+                       field-name new-value was-empty))
+            ;; Check if this field is a source for any paired field
+            (tabularium-entry--maybe-fill-paired field-name new-value)
+            (when tabularium-debug
+              (message "DEBUG edit-field: after maybe-fill-paired, values=%S"
+                       tabularium-entry--values))
+            ;; Check if C-RET or C-c C-c was pressed to submit immediately
+            (if tabularium-entry--submit-after-field
+                (progn
+                  (tabularium-entry--render)
+                  (tabularium-entry-submit))
+              ;; Compute next field and move there
               (let* ((fields (tabularium-entry--field-list))
                      (idx (cl-position field-name fields))
-                     (prev-field (nth (mod (1- (or idx 0)) (length fields)) fields)))
-                (setq tabularium-entry--current-field prev-field)
+                     (next-field (nth (mod (1+ (or idx 0)) (length fields)) fields)))
+                (setq tabularium-entry--current-field next-field)
                 (tabularium-entry--render)
-                (message "Moved to previous field")))
-          ;; Normal completion - save value and proceed
-          (setf (alist-get field-name tabularium-entry--values) new-value)
-          (when tabularium-debug
-            (message "DEBUG edit-field: edited %s, new-value='%s', was-empty=%s"
-                     field-name new-value was-empty))
-          ;; Check if this field is a source for any paired field
-          (tabularium-entry--maybe-fill-paired field-name new-value)
-          (when tabularium-debug
-            (message "DEBUG edit-field: after maybe-fill-paired, values=%S"
-                     tabularium-entry--values))
-          ;; Check if C-RET or C-c C-c was pressed to submit immediately
-          (if tabularium-entry--submit-after-field
-              (progn
-                (tabularium-entry--render)
-                (tabularium-entry-submit))
-            ;; Compute next field and move there
-            (let* ((fields (tabularium-entry--field-list))
-                   (idx (cl-position field-name fields))
-                   (next-field (nth (mod (1+ (or idx 0)) (length fields)) fields)))
-              (setq tabularium-entry--current-field next-field)
-              (tabularium-entry--render)
-              ;; Only auto-enter next field if current field was empty (new data entry)
-              ;; and next field is also empty. Skip if doing touch-up edits.
-              (when (and was-empty (tabularium-entry--field-empty-p next-field))
-                (run-at-time 0 nil #'tabularium-entry-edit-field))))))))))
+                ;; Only auto-enter next field if current field was empty (new data entry)
+                ;; and next field is also empty. Skip if doing touch-up edits.
+                (when (and was-empty (tabularium-entry--field-empty-p next-field))
+                  (run-at-time 0 nil #'tabularium-entry-edit-field))))))))))
 
 (defun tabularium-entry--maybe-fill-paired (source-field-name source-value)
   "If any fields have autofill from SOURCE-FIELD-NAME, fill them.
