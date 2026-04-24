@@ -36,7 +36,7 @@
 (require 'cl-lib)
 (require 'eieio)
 
-;;; * 1. Backend Protocol
+;;; * 1 Backend Protocol
 
 (cl-defgeneric tabularium-db-connect (backend config)
   "Connect BACKEND to a database described by CONFIG plist.")
@@ -95,8 +95,7 @@
 (cl-defgeneric tabularium-db-backend-name (backend)
   "Return human-readable name of BACKEND.")
 
-
-;;; * 2. Backend Base Class
+;;; * 2 Backend Base Class
 
 (defclass tabularium-db-backend ()
   ((name :initarg :name :initform "Unknown" :type string)
@@ -108,8 +107,7 @@
   "Return the backend name."
   (oref backend name))
 
-
-;;; * 3. SQLite Backend
+;;; * 3 SQLite Backend
 
 (defcustom tabularium-db-sqlite-wal-mode t
   "Whether to enable WAL mode for SQLite.
@@ -265,8 +263,7 @@ Merges write-ahead log into the main file for clean syncing."
   "Return SQLite datetime function."
   "datetime('now')")
 
-
-;;; * 4. Backend Registry
+;;; * 4 Backend Registry
 
 (defvar tabularium-db--backend-types
   '((sqlite . tabularium-db-sqlite))
@@ -285,8 +282,7 @@ Merges write-ahead log into the main file for clean syncing."
   "Register backend CLASS for TYPE symbol."
   (setf (alist-get type tabularium-db--backend-types) class))
 
-
-;;; * 5. Connection Manager
+;;; * 5 Connection Manager
 
 (defvar tabularium-db--connections (make-hash-table :test 'equal)
   "Active backend objects keyed by schema name.")
@@ -324,8 +320,7 @@ Merges write-ahead log into the main file for clean syncing."
            tabularium-db--connections)
   (clrhash tabularium-db--connections))
 
-
-;;; * 6. SQL Helpers
+;;; * 6 SQL Helpers
 
 (defun tabularium-db-build-like-clause (column pattern)
   "Build a LIKE clause for COLUMN matching PATTERN."
@@ -374,8 +369,7 @@ Modifies the schema file on disk.  Returns non-nil on success."
       (write-region (point-min) (point-max) schema-file)
       t)))
 
-
-;;; * 7. Sync Safety
+;;; * 7 Sync Safety
 
 (defcustom tabularium-db-close-on-suspend t
   "Whether to close all connections when Emacs suspends."
@@ -425,8 +419,7 @@ Modifies the schema file on disk.  Returns non-nil on success."
   (when tabularium-db-close-on-kill
     (tabularium-db-close-all-connections)))
 
-
-;;; * 8. Provide
+;;; * 8 Provide
 
 (provide 'tabularium-db)
 

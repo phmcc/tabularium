@@ -43,7 +43,7 @@
 
 ;;; Code:
 
-;;; * 0. Prerequisites
+;;; * 0 Prerequisites
 
 (require 'cl-lib)
 (require 'tabulated-list)
@@ -54,9 +54,9 @@
 (declare-function tabularium-view-hydra/body "tabularium-menu" nil)
 (declare-function tabularium-view-transient "tabularium-menu" nil)
 
-;;; * 1. Foundation
+;;; * 1 Foundation
 
-;;; ** 1.1. Customization
+;;; ** 1.1 Customization
 
 (defgroup tabularium nil
   "Structured data management in Emacs using SQL."
@@ -241,7 +241,7 @@ For a database `mydata.db', the schema file would be `mydata.schema.el'."
   :type 'string
   :group 'tabularium)
 
-;;; ** 1.2. Internal Variables
+;;; ** 1.2 Internal Variables
 
 (defvar tabularium--current-schema-name nil
   "Name of the currently active schema.")
@@ -283,10 +283,9 @@ Each layer has :field, :value, :join (logic operator), and optional
 (defvar tabularium-registry--loaded-schemas nil
   "List of schema files that have been loaded this session.")
 
+;;; * 2 Infrastructure
 
-;;; * 2. Infrastructure
-
-;;; ** 2.1. Database Connection
+;;; ** 2.1 Database Connection
 
 (defun tabularium--build-connection-config ()
   "Build connection config from current schema."
@@ -340,7 +339,7 @@ Each layer has :field, :value, :join (logic operator), and optional
                                 tabularium-table-name
                                 (symbol-name (plist-get f :name)))))))
 
-;;; ** 2.2. Undo/Redo System
+;;; ** 2.2 Undo/Redo System
 
 (defvar tabularium--undo-ring (make-hash-table :test 'equal)
   "Hash table mapping schema names to undo lists.
@@ -737,7 +736,7 @@ column operations (add, delete, reorder)."
                    do (princ (format "  %d. %s\n" i (tabularium--describe-op op))))
         (princ "  (empty)\n")))))
 
-;;; ** 2.3. Kill Ring System
+;;; ** 2.3 Kill Ring System
 
 (defvar tabularium--kill-ring nil
   "Kill ring for copied/cut rows and columns.
@@ -970,7 +969,7 @@ of alists.  For columns, ENTRIES is a list of column plists."
 Legacy batches without :type are treated as rows."
   (or (plist-get batch :type) 'rows))
 
-;;; ** 2.4. Display Ornamentation
+;;; ** 2.4 Display Ornamentation
 
 (defun tabularium--make-box-header (title &optional width style)
   "Create a centered box-style header with TITLE.
@@ -1022,10 +1021,9 @@ STYLE can be:
       (_  ; single (default)
        (concat "└" (make-string (- width 2) ?─) "┘")))))
 
+;;; * 3 Registry
 
-;;; * 3. Registry
-
-;;; ** 3.1. Schema File Paths
+;;; ** 3.1 Schema File Paths
 
 (defun tabularium-registry--schema-file-for-db (db-file)
   "Return the schema file path for DB-FILE.
@@ -1037,7 +1035,7 @@ For `/path/to/mydata.db', returns `/path/to/mydata.schema.el'."
   "Return non-nil if a schema file exists for DB-FILE."
   (file-exists-p (tabularium-registry--schema-file-for-db db-file)))
 
-;;; ** 3.2. Persistence
+;;; ** 3.2 Persistence
 
 (defun tabularium-registry--ensure-loaded ()
   "Load registry from disk if not already loaded."
@@ -1089,7 +1087,7 @@ Abbreviates all file paths to use ~/ for portability across machines."
       (insert ";; This file is auto-generated.\n\n")
       (pp portable-list (current-buffer)))))
 
-;;; ** 3.3. Internal Management
+;;; ** 3.3 Internal Management
 
 (defun tabularium-registry--find-entry (name-or-file)
   "Find registry entry by NAME-OR-FILE."
@@ -1140,7 +1138,7 @@ Abbreviates all file paths to use ~/ for portability across machines."
                       tabularium-registry--list))
   (tabularium-registry--save))
 
-;;; ** 3.4. Schema File Loading
+;;; ** 3.4 Schema File Loading
 
 (defun tabularium-registry--load-schema-file (schema-file)
   "Load SCHEMA-FILE and register its schema.
@@ -1174,7 +1172,7 @@ Returns the schema name if found/loaded, nil otherwise."
                                 (expand-file-name db-file)))
                        tabularium-schemas))))))
 
-;;; ** 3.5. Completion Interface
+;;; ** 3.5 Completion Interface
 
 (defun tabularium-registry--all-databases ()
   "Get combined list of all known databases.
@@ -1250,7 +1248,7 @@ Merges registry entries with `tabularium-schemas', deduplicating by file path."
             (annotation-function . tabularium-registry--annotation-function))
         (complete-with-action action names string pred)))))
 
-;;; ** 3.6. Interactive Commands
+;;; ** 3.6 Interactive Commands
 
 ;;;###autoload
 (defun tabularium-register-database (db-file)
@@ -1735,7 +1733,7 @@ SLUG is the filesystem-safe version of the name."
     (write-region (point-min) (point-max) schema-file)
     t))
 
-;;; ** 3.7. Registry Buffer & Mode
+;;; ** 3.7 Registry Buffer & Mode
 
 (defun tabularium-registry--shorten-path (path max-len)
   "Shorten PATH to fit within MAX-LEN characters.
@@ -1975,7 +1973,7 @@ including optional file renames on disk."
 (define-derived-mode tabularium-registry-mode special-mode "Tabularium-Registry"
   "Mode for listing known databases.")
 
-;;; ** 3.8. Open / Close
+;;; ** 3.8 Open / Close
 
 ;;;###autoload
 (defun tabularium-close ()
@@ -2037,7 +2035,7 @@ including optional file renames on disk."
                                nil t)))
     (tabularium-open name)))
 
-;;; ** 3.9. Database Creation Wizard
+;;; ** 3.9 Database Creation Wizard
 
 (defvar tabularium-wizard--field-types
   '(("text" . text)
@@ -2265,7 +2263,7 @@ registers the database, and opens it."
       (when (y-or-n-p "Open schema file for editing? ")
         (find-file schema-file)))))
 
-;;; ** 3.10. Sync Safety
+;;; ** 3.10 Sync Safety
 
 ;;;###autoload
 (defun tabularium-prepare-for-sync ()
@@ -2370,10 +2368,9 @@ Safe to delete when database is closed."
         (message "No orphaned WAL/SHM files found")
       (message "Cleaned up %d file(s)" cleaned))))
 
+;;; * 4 Schema and Field Management
 
-;;; * 4. Schema and Field Management
-
-;;; ** 4.1. Schema Definition
+;;; ** 4.1 Schema Definition
 
 ;;;###autoload
 (defun tabularium-define-schema (name &rest args)
@@ -2522,7 +2519,7 @@ Returns a list of field name strings, or nil meaning all stored fields."
         nil
       selected)))
 
-;;; ** 4.2. Schema File Operations
+;;; ** 4.2 Schema File Operations
 
 (defun tabularium--save-schema-to-file (schema-name)
   "Save the current in-memory schema for SCHEMA-NAME to its schema file.
@@ -2574,7 +2571,7 @@ Creates the file if it does not exist.  Preserves all schema properties."
       (insert ";;; " (file-name-nondirectory schema-file) " ends here\n"))
     (message "Schema saved to %s" schema-file)))
 
-;;; ** 4.3. Schema Commands
+;;; ** 4.3 Schema Commands
 
 ;;;###autoload
 (defun tabularium-schema-edit ()
@@ -2641,7 +2638,7 @@ Useful after editing the schema file externally."
         (revert-buffer)))
     (message "Reloaded schema: %s" schema-name)))
 
-;;; ** 4.4. Computed Fields
+;;; ** 4.4 Computed Fields
 
 ;; Computed fields can be defined in the schema with:
 ;;   :computed EXPRESSION
@@ -2764,7 +2761,7 @@ Signals an error if no field has :primary t."
   "Get the name of the primary key field."
   (plist-get (tabularium--primary-field) :name))
 
-;;; ** 4.5. Completion
+;;; ** 4.5 Completion
 
 ;; Completion types: historical, recent, fixed, vocabulary, related,
 ;; filtered, function, union.  See `tabularium-schemas' docstring for details.
@@ -3060,7 +3057,7 @@ Returns a list of strings."
   (clrhash tabularium--vocabulary-cache)
   (message "Vocabulary cache cleared"))
 
-;;; ** 4.6. Related Field Autofill Support
+;;; ** 4.6 Related Field Autofill Support
 
 (defun tabularium--build-autofill-cache (source-field target-field)
   "Build a frequency-weighted mapping from SOURCE-FIELD to TARGET-FIELD.
@@ -3131,10 +3128,9 @@ Returns a list of field plists that have :complete with :type related,
               (plist-get parsed :autofill))))
      fields)))
 
+;;; * 5 View & Navigation
 
-;;; * 5. View & Navigation
-
-;;; ** 5.1. View Core Functions
+;;; ** 5.1 View Core Functions
 
 (defun tabularium-view--field-visible-p (field)
   "Return non-nil if FIELD should be visible."
@@ -3375,7 +3371,7 @@ See `tabularium-entry-method' to set the default."
     (unless (tabularium--use-form-p use-alt-method)
       (revert-buffer))))
 
-;;; ** 5.2. Tabulated List View
+;;; ** 5.2 Tabulated List View
 
 (defvar tabularium-view-mode-map
   (let ((map (make-sparse-keymap)))
@@ -3692,7 +3688,7 @@ Adds to existing hidden columns rather than replacing."
   (revert-buffer)
   (message "Showing %d columns" (length columns)))
 
-;;; ** 5.3. Row/Column Navigation
+;;; ** 5.3 Row/Column Navigation
 
 (defun tabularium-view-goto-entry (id)
   "Go to entry with ID."
@@ -3757,9 +3753,9 @@ Adds to existing hidden columns rather than replacing."
             (tabularium-new-entry (car result))))
       (message "No records found matching '%s'" pattern))))
 
-;;; ** 5.4. Cell Navigation
+;;; ** 5.4 Cell Navigation
 
-;;; *** 5.4.1. Basic Movement
+;;; *** 5.4.1 Basic Movement
 
 (defun tabularium-view-forward-cell (&optional n)
   "Move forward N cells in the tabulated list."
@@ -3868,7 +3864,7 @@ If already at the last row, move to the end of the line (bottom-right)."
       (tabularium-view-forward-cell)
       (message "Last row"))))
 
-;;; *** 5.4.2. Jump Navigation
+;;; *** 5.4.2 Jump Navigation
 
 (defun tabularium-view--get-cell-value-at-column (col-idx)
   "Get the cell value at column COL-IDX on the current line.
@@ -4030,7 +4026,7 @@ With prefix N, jump N value transitions."
      (t
       (message "Already at first column")))))
 
-;;; ** 5.5. Fuzzy Search
+;;; ** 5.5 Fuzzy Search
 
 (defun tabularium--format-for-search (row fields)
   "Format ROW using FIELDS for search display."
@@ -4076,7 +4072,7 @@ With prefix N, jump N value transitions."
     (when id
       (tabularium-new-entry id))))
 
-;;; ** 5.6. View Window Expansion
+;;; ** 5.6 View Window Expansion
 
 (defvar-local tabularium--view-limit nil
   "Current limit for view, or nil to use `tabularium-view-page-size'.")
@@ -4121,7 +4117,7 @@ With prefix N, jump N value transitions."
   (revert-buffer)
   (message "Reset to default limit (%d)" tabularium-view-page-size))
 
-;;; ** 5.7. Saved View Windows
+;;; ** 5.7 Saved View Windows
 
 (defvar-local tabularium--current-view nil
   "Name of the currently active saved view, if any.")
@@ -4277,7 +4273,7 @@ If called from a view buffer, closes the current buffer first."
   (tabularium-open name)
   (tabularium-view))
 
-;;; ** 5.8. Marking Operations
+;;; ** 5.8 Marking Operations
 
 (defface tabularium-marked-face
   '((((class color) (background dark))
@@ -4508,12 +4504,11 @@ Presents a completion menu of available operations."
     (when fn
       (call-interactively fn))))
 
+;;; * 6 Data Entry
 
-;;; * 6. Data Entry
+;;; ** 6.1 Input Methods
 
-;;; ** 6.1. Input Methods
-
-;;; *** 6.1.1. Form-Based Entry
+;;; *** 6.1.1 Form-Based Entry
 
 (defvar-local tabularium-entry--fields nil
   "List of field definitions for current form.")
@@ -5481,7 +5476,7 @@ With prefix argument, prompts for ID to edit."
       (tabularium-entry--render))
     (tabularium--display-entry-buffer buf)))
 
-;;; *** 6.1.2. Prompt Entry
+;;; *** 6.1.2 Prompt Entry
 
 (defun tabularium--read-field (field &optional initial context)
   "Read a value for FIELD with appropriate completion.
@@ -5597,7 +5592,7 @@ For form-based entry, use `tabularium-new-entry' instead."
         (revert-buffer))
       (message "Entry added: %s" (alist-get primary-name data)))))
 
-;;; *** 6.1.3. Quick Entry
+;;; *** 6.1.3 Quick Entry
 
 (defun tabularium--get-recent-record ()
   "Get the most recent record as an alist."
@@ -5644,7 +5639,7 @@ For form-based entry, use `tabularium-new-entry' instead."
       (revert-buffer))
     (message "Entry added")))
 
-;;; ** 6.2. Duplicate Entry
+;;; ** 6.2 Duplicate Entry
 
 (defun tabularium--duplicate-with-method (id &optional use-alt-method)
   "Duplicate entry ID using preferred or alternative method.
@@ -5713,7 +5708,7 @@ With USE-ALT-METHOD non-nil, use the alternative entry method."
       (tabularium--invalidate-cache)
       (message "Duplicated from %s" id))))
 
-;;; ** 6.3. Edit Entry
+;;; ** 6.3 Edit Entry
 
 (defun tabularium--edit-with-method (id &optional use-alt-method)
   "Edit entry ID using preferred or alternative method.
@@ -5735,7 +5730,7 @@ With USE-ALT-METHOD non-nil, use the alternative entry method."
     (let ((updates '()))
       ;; Prompt for each field (skip computed fields)
       (dolist (field (cl-remove-if #'tabularium--computed-field-p
-                                    (tabularium--schema-fields)))
+                                   (tabularium--schema-fields)))
         (let* ((name (plist-get field :name))
                (current (alist-get name record-data))
                (new-value (tabularium--read-field field current)))
@@ -5744,16 +5739,15 @@ With USE-ALT-METHOD non-nil, use the alternative entry method."
       ;; Apply updates
       (when updates
         (tabularium-db-update tabularium--db tabularium-table-name
-                          (nreverse updates) primary-name id)
+                              (nreverse updates) primary-name id)
         (tabularium--invalidate-cache)
         (message "Record %s updated." id)))))
 
+;;; * 7 Data Manipulation
 
-;;; * 7. Data Manipulation
+;;; ** 7.1 Row Operations
 
-;;; ** 7.1. Row Operations
-
-;;; *** 7.1.1. Index Management
+;;; *** 7.1.1 Index Management
 
 (defcustom tabularium-auto-reindex nil
   "If non-nil, automatically reindex after operations that modify row count.
@@ -5816,7 +5810,7 @@ Fixes gaps and duplicates in the primary key column."
         (revert-buffer))
       (message "Reindexed %d entries (1 to %d)" count count))))
 
-;;; *** 7.1.2. Multi-Column Sort
+;;; *** 7.1.2 Multi-Column Sort
 
 (defvar-local tabularium--sort-columns nil
   "List of (COLUMN . DIRECTION) for multi-column sorting.
@@ -5908,7 +5902,7 @@ Otherwise, toggles the default primary-key sort direction."
             (tabularium--primary-field-name)
             (if tabularium--sort-ascending "ASC" "DESC"))))
 
-;;; *** 7.1.3. Creative/Destructive Operations
+;;; *** 7.1.3 Creative/Destructive Operations
 
 (defun tabularium-view-copy ()
   "Copy entry at point, or all marked entries as a batch.
@@ -6338,7 +6332,7 @@ Otherwise swaps entry at point with another.  Undoable."
     (revert-buffer)
     (message "Swapped entries %d and %d" id1 id2)))
 
-;;; *** 7.1.4. Freeze/Pin Rows
+;;; *** 7.1.4 Freeze/Pin Rows
 
 (defvar-local tabularium--frozen-ids nil
   "List of entry IDs to keep at top of view (frozen/pinned rows).")
@@ -6407,9 +6401,9 @@ Otherwise, operates on the entry at point."
     (user-error "No marked entries"))
   (tabularium-view-freeze))
 
-;;; ** 7.2. Column Operations
+;;; ** 7.2 Column Operations
 
-;;; *** 7.2.1. Column Reordering
+;;; *** 7.2.1 Column Reordering
 
 (defvar-local tabularium--column-order nil
   "Custom column order as list of field names, or nil for schema order.")
@@ -6492,7 +6486,7 @@ Otherwise, operates on the entry at point."
           (setq pos (+ pos width))))
       idx)))
 
-;;; *** 7.2.2. Creative/Destructive Operations
+;;; *** 7.2.2 Creative/Destructive Operations
 
 (defun tabularium--column-name-at-point ()
   "Return the column name (symbol) at point in view mode, or nil."
@@ -7456,7 +7450,7 @@ Like `tabularium-view-column-add' but inserts before rather than after."
           (tabularium-view-column-add name type prompt default '__first__)
         (tabularium-view-column-add name type prompt default after))))))
 
-;;; ** 7.3. Filter
+;;; ** 7.3 Filter
 
 (defun tabularium--filter-layer-sql (layer)
   "Return the SQL condition for a single filter LAYER."
@@ -7709,9 +7703,9 @@ prompts for a join operator."
   (let ((search-fields (or fields (tabularium--stored-field-names))))
     (tabularium--filter-add-layer (list :fields search-fields :value value :across t))))
 
-;;; ** 7.4. Find/Replace
+;;; ** 7.4 Find/Replace
 
-;;; *** 7.4.1. Standard
+;;; *** 7.4.1 Standard
 
 (defvar tabularium--replace-scope nil
   "Scope description for replace messages: nil, \"marked\", or \"visible\".")
@@ -8217,7 +8211,7 @@ Returns the overlay, or nil if not in view mode or not found."
   "Remove all query-replace highlight overlays."
   (remove-overlays (point-min) (point-max) 'tabularium-qr t))
 
-;;; *** 7.4.2. Visible
+;;; *** 7.4.2 Visible
 
 (defun tabularium--visible-row-ids ()
   "Return list of row IDs currently visible in the tabulated list."
@@ -8272,9 +8266,9 @@ Like `tabularium-query-replace' but scoped to the current view."
         (tabularium--replace-scope "visible"))
     (tabularium-query-replace old-value new-value fields)))
 
-;;; ** 7.5. Math Operations
+;;; ** 7.5 Math Operations
 
-;;; *** 7.5.1. Count
+;;; *** 7.5.1 Count
 
 (defun tabularium-count (field pattern &optional extra-field extra-value)
   "Count records where FIELD matches PATTERN.
@@ -8322,7 +8316,7 @@ If FIELDS is nil, searches all fields."
                (string-join search-fields ", "))
              count)))
 
-;;; *** 7.5.2. Basic Statistics
+;;; *** 7.5.2 Basic Statistics
 
 (defun tabularium-sum (field &optional filter-field filter-value)
   "Calculate sum of FIELD values.
@@ -8486,7 +8480,7 @@ Optionally filter by FILTER-FIELD matching FILTER-VALUE."
         (message "%s%s: %.2f [%.2f - %.2f] (n = %d)" field filter-info median q1 q3 n)))))
 
 
-;;; *** 7.5.3. Visible Statistics
+;;; *** 7.5.3 Visible Statistics
 
 (defun tabularium-visible-sum ()
   "Calculate sum of a numeric field for currently visible entries."
@@ -8593,7 +8587,7 @@ Returns (PROMPT FIELD-IDX FIELD-TYPE)."
           (message "%s (visible): %.2f [%.2f – %.2f] (n = %d)"
                    name median q1 q3 n))))))
 
-;;; *** 7.5.4. Column Summary
+;;; *** 7.5.4 Column Summary
 
 (defun tabularium-column-summary (field)
   "Show comprehensive column summary for FIELD.
@@ -8749,7 +8743,7 @@ top 10 and bottom 5)."
                                       (match-string 1)))))
                   (tabularium-column-summary field)))))
 
-;;; ** 7.6. Fill Operations
+;;; ** 7.6 Fill Operations
 
 (defun tabularium--find-blank-range-down (field-name)
   "Find consecutive blank row IDs downward from point for FIELD-NAME.
@@ -9242,13 +9236,13 @@ column in marked rows instead.  Undoable."
                           :old old-value :new "")
                     ops)
               (tabularium-db-update tabularium--db tabularium-table-name
-                                (list (cons col-name ""))
-                                (tabularium--primary-field-name) id)
+                                    (list (cons col-name ""))
+                                    (tabularium--primary-field-name) id)
               (cl-incf cleared))))
         (when ops
           (tabularium--undo-push (if (= 1 (length ops))
-                                 (car ops)
-                               (list :type 'multi :ops (nreverse ops))))))
+                                     (car ops)
+                                   (list :type 'multi :ops (nreverse ops))))))
       (tabularium--invalidate-cache)
       (when has-marks
         (setq tabularium--marked-entries nil)
@@ -9256,10 +9250,9 @@ column in marked rows instead.  Undoable."
       (revert-buffer)
       (message "Cleared %d rows" (length ids)))))
 
+;;; * 8 Import & Export
 
-;;; * 8. Import & Export
-
-;;; ** 8.1. Basic Import/Export
+;;; ** 8.1 Basic Import/Export
 
 ;;;###autoload
 (defun tabularium-import (file)
@@ -9282,24 +9275,24 @@ If no database is open, prompts for database file and schema handling
      ((string= ext "org")
       (let ((default-db (concat (file-name-sans-extension file) ".db")))
         (tabularium-import-org file
-                           (read-file-name "Database file: "
-                                           (file-name-directory file)
-                                           default-db nil
-                                           (file-name-nondirectory default-db)))))
+                               (read-file-name "Database file: "
+                                               (file-name-directory file)
+                                               default-db nil
+                                               (file-name-nondirectory default-db)))))
      ((string= ext "tsv")
       (let ((default-db (concat (file-name-sans-extension file) ".db")))
         (tabularium-import-tsv file
-                           (read-file-name "Database file: "
-                                           (file-name-directory file)
-                                           default-db nil
-                                           (file-name-nondirectory default-db)))))
+                               (read-file-name "Database file: "
+                                               (file-name-directory file)
+                                               default-db nil
+                                               (file-name-nondirectory default-db)))))
      (t  ; csv or unknown - treat as CSV
       (let ((default-db (concat (file-name-sans-extension file) ".db")))
         (tabularium-import-csv file
-                           (read-file-name "Database file: "
-                                           (file-name-directory file)
-                                           default-db nil
-                                           (file-name-nondirectory default-db))))))))
+                               (read-file-name "Database file: "
+                                               (file-name-directory file)
+                                               default-db nil
+                                               (file-name-nondirectory default-db))))))))
 
 (defun tabularium-import--into-current-db (file)
   "Import records from FILE into the currently open database."
@@ -9412,9 +9405,9 @@ Exports marked rows if any, otherwise all records."
              file
              (upcase (symbol-name fmt)))))
 
-;;; ** 8.2. Advanced Import
+;;; ** 8.2 Advanced Import
 
-;;; *** 8.2.1. Data Type Inference
+;;; *** 8.2.1 Data Type Inference
 
 ;; Forward declarations for org functions (loaded on demand)
 (declare-function org-at-table-p "org-table" (&optional table-type))
@@ -9488,7 +9481,7 @@ If no primary column is specified, an `id' column is prepended automatically."
             fields))
     fields))
 
-;;; *** 8.2.2. Database Creation
+;;; *** 8.2.2 Database Creation
 
 (defun tabularium-import--create-database (db-file schema-name fields)
   "Create a new Tabularium database at DB-FILE with SCHEMA-NAME and FIELDS."
@@ -9550,7 +9543,7 @@ If no primary column is specified, an `id' column is prepended automatically."
       (message "Import: %d succeeded, %d failed" imported errors))
     imported))
 
-;;; *** 8.2.3. Org-Table
+;;; *** 8.2.3 Org-Table
 
 (defun tabularium-import--org-parse-table-at-point ()
   "Parse the org-table at point.  Returns (HEADERS . ROWS)."
@@ -9830,7 +9823,7 @@ Prompts for schema handling: create new from data, or use existing schema file."
             (message "Imported %d rows into %s\nSchema saved to %s"
                      imported db-file created-schema)))))))
 
-;;; *** 8.2.4. CSV/TSV with Schema Generation
+;;; *** 8.2.4 CSV/TSV with Schema Generation
 
 (defun tabularium-import--parse-delimited-file (file &optional separator)
   "Parse a delimited FILE into (HEADERS . ROWS).
@@ -10049,7 +10042,7 @@ SCHEMA-NAME is used to look up the schema after loading."
                            (abbreviate-file-name db-file))
                  "")))))
 
-;;; *** 8.2.5. Schema Preview
+;;; *** 8.2.5 Schema Preview
 
 ;;;###autoload
 (defun tabularium-import-preview-schema (file)
@@ -10101,10 +10094,9 @@ FILE can be .org, .csv, or .tsv."
       (goto-char (point-min))
       (display-buffer (current-buffer)))))
 
+;;; * 9 UI Integration
 
-;;; * 9. UI Integration
-
-;;; ** 9.1. Module Autoloads
+;;; ** 9.1 Module Autoloads
 
 ;; These autoload declarations allow users to call functions from optional
 ;; modules without explicitly requiring them.  The modules are loaded on-demand
@@ -10115,7 +10107,7 @@ FILE can be .org, .csv, or .tsv."
 ;;;###autoload (autoload 'tabularium-modeline-mode "tabularium-modeline" "Toggle Tabularium modeline indicator." t)
 ;;;###autoload (autoload 'tabularium-modeline-setup "tabularium-modeline" "Set up modeline for a specific package.")
 
-;;; ** 9.2. Menu Entry Points
+;;; ** 9.2 Menu Entry Points
 
 ;; These wrapper functions provide stable entry points for keybindings.
 ;; They work regardless of whether hydra/transient has loaded yet.
@@ -10147,8 +10139,7 @@ FILE can be .org, .csv, or .tsv."
   (interactive)
   (tabularium--dispatch-menu 'tabularium-view-hydra/body 'tabularium-view-transient))
 
-
-;;; * 10. Provide
+;;; * 10 Provide
 
 (provide 'tabularium)
 

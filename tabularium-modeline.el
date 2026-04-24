@@ -100,7 +100,7 @@
 (declare-function defpowerline "powerline" (name &rest body))
 (declare-function spaceline-define-segment "spaceline" (name &rest args))
 
-;;; * 1. Customization
+;;; * 1 Customization
 
 (defgroup tabularium-modeline nil
   "Modeline integration for Tabularium."
@@ -158,8 +158,7 @@ When nil and using icons: [<icon> DatabaseName]"
   :type 'boolean
   :group 'tabularium-modeline)
 
-
-;;; * 2. Faces
+;;; * 2 Faces
 
 (defface tabularium-modeline-database
   '((t (:inherit font-lock-constant-face :weight bold)))
@@ -181,8 +180,7 @@ When nil and using icons: [<icon> DatabaseName]"
   "Face for brackets in modeline."
   :group 'tabularium-modeline)
 
-
-;;; * 3. Core Functions
+;;; * 3 Core Functions
 
 (defun tabularium-modeline--backend-name ()
   "Get the current backend name (e.g., SQLite, PostgreSQL)."
@@ -268,10 +266,9 @@ Returns nil if no database is active."
                                              (call-interactively #'tabularium-view))))
                              map))))
 
+;;; * 4 Mode Line Formats
 
-;;; * 4. Mode Line Formats
-
-;;; ** 4.1. Standard Mode Line
+;;; ** 4.1 Standard Mode Line
 
 (defvar tabularium-modeline--standard-construct
   '(:eval (tabularium-modeline-string-with-props))
@@ -288,7 +285,7 @@ Returns nil if no database is active."
   (setq global-mode-string
         (delete tabularium-modeline--standard-construct global-mode-string)))
 
-;;; ** 4.2. Telephone Line
+;;; ** 4.2 Telephone Line
 
 ;; NOTE: telephone-line requires segments to be defined BEFORE the layout is set,
 ;; which creates complex load-order issues with use-package. For telephone-line,
@@ -312,7 +309,7 @@ Returns nil if no database is active."
 See the commentary in tabularium-modeline.el for inline setup instructions."
   (message "Tabularium: For telephone-line, define the segment inline in your config. See tabularium-modeline.el for example."))
 
-;;; ** 4.3. Doom Modeline
+;;; ** 4.3 Doom Modeline
 
 (defun tabularium-modeline--doom-setup ()
   "Set up Tabularium segment for doom-modeline."
@@ -320,38 +317,38 @@ See the commentary in tabularium-modeline.el for inline setup instructions."
     ;; doom-modeline-def-segment generates a variable named `tabularium'
     (with-no-warnings
       (doom-modeline-def-segment tabularium
-                               "Display current Tabularium database."
-                               (when (tabularium-modeline--active-p)
-                                 (let ((backend (tabularium-modeline--backend-name)))
-                                   (concat
-                                    (doom-modeline-spc)
-                                    (if tabularium-modeline-use-icon
-                                        ;; Icon mode: try doom icon, then user icon, then text
-                                        (let ((icon (or (doom-modeline-icon 'faicon "database" nil nil
-                                                                            :face 'tabularium-modeline-icon)
-                                                        (tabularium-modeline--icon))))
-                                          (if icon
-                                              (concat icon " |")
-                                            (propertize (format "%s |" (or backend "Tab"))
-                                                        'face 'tabularium-modeline-icon)))
-                                      ;; Text mode: "SQLite |"
-                                      (propertize (format "%s |" (or backend "Tab"))
-                                                  'face 'tabularium-modeline-icon))
-                                    (doom-modeline-spc)
-                                    (propertize tabularium--current-schema-name
-                                                'face 'tabularium-modeline-database
-                                                'help-echo (format "Tabularium: %s" tabularium--current-schema-name))
-                                    (when (and tabularium-modeline-show-schema
-                                               (boundp 'tabularium-table-name)
-                                               tabularium-table-name)
-                                      (concat
-                                       (propertize ":" 'face 'tabularium-modeline-bracket)
-                                       (propertize tabularium-table-name 'face 'tabularium-modeline-schema)))
-                                    (doom-modeline-spc))))))
+                                 "Display current Tabularium database."
+                                 (when (tabularium-modeline--active-p)
+                                   (let ((backend (tabularium-modeline--backend-name)))
+                                     (concat
+                                      (doom-modeline-spc)
+                                      (if tabularium-modeline-use-icon
+                                          ;; Icon mode: try doom icon, then user icon, then text
+                                          (let ((icon (or (doom-modeline-icon 'faicon "database" nil nil
+                                                                              :face 'tabularium-modeline-icon)
+                                                          (tabularium-modeline--icon))))
+                                            (if icon
+                                                (concat icon " |")
+                                              (propertize (format "%s |" (or backend "Tab"))
+                                                          'face 'tabularium-modeline-icon)))
+                                        ;; Text mode: "SQLite |"
+                                        (propertize (format "%s |" (or backend "Tab"))
+                                                    'face 'tabularium-modeline-icon))
+                                      (doom-modeline-spc)
+                                      (propertize tabularium--current-schema-name
+                                                  'face 'tabularium-modeline-database
+                                                  'help-echo (format "Tabularium: %s" tabularium--current-schema-name))
+                                      (when (and tabularium-modeline-show-schema
+                                                 (boundp 'tabularium-table-name)
+                                                 tabularium-table-name)
+                                        (concat
+                                         (propertize ":" 'face 'tabularium-modeline-bracket)
+                                         (propertize tabularium-table-name 'face 'tabularium-modeline-schema)))
+                                      (doom-modeline-spc))))))
 
     (message "Tabularium: doom-modeline segment defined. Add `tabularium' to your doom-modeline format.")))
 
-;;; ** 4.4. Powerline / Spaceline
+;;; ** 4.4 Powerline / Spaceline
 
 (defun tabularium-modeline--powerline-setup ()
   "Set up Tabularium segment for powerline/spaceline."
@@ -371,7 +368,7 @@ See the commentary in tabularium-modeline.el for inline setup instructions."
                                 :when (tabularium-modeline--active-p)))
     (message "Tabularium: spaceline segment defined. Add `tabularium' to your spaceline.")))
 
-;;; ** 4.5. Mood Line
+;;; ** 4.5 Mood Line
 
 (defun tabularium-modeline--mood-line-setup ()
   "Set up Tabularium segment for mood-line."
@@ -382,7 +379,7 @@ See the commentary in tabularium-modeline.el for inline setup instructions."
         (concat " " (tabularium-modeline-string) " ")))
     (message "Tabularium: mood-line segment defined. Add `mood-line-segment-tabularium' to your format.")))
 
-;;; ** 4.6. Simple Modeline
+;;; ** 4.6 Simple Modeline
 
 (defun tabularium-modeline--simple-modeline-setup ()
   "Set up Tabularium segment for simple-modeline."
@@ -392,7 +389,7 @@ See the commentary in tabularium-modeline.el for inline setup instructions."
       (tabularium-modeline-string-with-props))
     (message "Tabularium: simple-modeline segment defined.")))
 
-;;; ** 4.7. Awesome Tray
+;;; ** 4.7 Awesome Tray
 
 (defun tabularium-modeline--awesome-tray-setup ()
   "Set up Tabularium module for awesome-tray."
@@ -402,11 +399,10 @@ See the commentary in tabularium-modeline.el for inline setup instructions."
       (or (tabularium-modeline-string) ""))
     (add-to-list 'awesome-tray-module-alist
                  '("tabularium" . (awesome-tray-module-tabularium-info
-                               tabularium-modeline-database)))
+                                   tabularium-modeline-database)))
     (message "Tabularium: awesome-tray module defined. Add \"tabularium\" to `awesome-tray-active-modules'.")))
 
-
-;;; * 5. Auto-Detection and Minor Mode
+;;; * 5 Auto-Detection and Minor Mode
 
 (defun tabularium-modeline-setup (&optional modeline)
   "Set up Tabularium segment for MODELINE package.
@@ -464,8 +460,7 @@ When enabled, shows the current database in the mode line."
       (tabularium-modeline-setup 'all)
     (tabularium-modeline--standard-disable)))
 
-
-;;; * 6. Provide
+;;; * 6 Provide
 
 (provide 'tabularium-modeline)
 

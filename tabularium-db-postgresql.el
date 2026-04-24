@@ -38,7 +38,7 @@
 (declare-function emacsql-pg "emacsql-pg" (database &rest args))
 (declare-function emacsql-live-p "emacsql" (connection))
 
-;;; * 1. PostgreSQL Backend
+;;; * 1 PostgreSQL Backend
 
 ;; Only define when emacsql-pg is available
 (when (require 'emacsql-pg nil t)
@@ -220,7 +220,7 @@
   (tabularium-db-register-backend 'postgresql 'tabularium-db-postgresql))
 
 
-;;; * 2. Provide
+;;; * 2 Provide
 
 (provide 'tabularium-db-postgresql)
 

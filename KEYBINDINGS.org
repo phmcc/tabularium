@@ -8,26 +8,26 @@ This file documents the default keybindings for ~tabularium~.  All bindings can 
 
 ** Navigation
 
-| Key                   | Command                        |
-|-----------------------+--------------------------------|
-| =n= / =p=             | Next / previous row            |
-| =TAB= / =S-TAB=       | Next / previous cell           |
-| ={= / =}=             | First / last row (same column) |
-| =[= / =]=             | Line beginning / end           |
-| =M-n= / =M-p=         | Jump to different value ↓ / ↑  |
-| =M-]= / =M-[=         | Jump to different value → / ←  |
-| =C-<up>= / =C-<down>= | Jump to different value ↑ / ↓  |
-| =C-<left>= / =C-<right>= | Jump to different value ← / → |
-| =RET=                 | View entry details             |
-| =/=                   | Fuzzy find                     |
-| =g=                   | Refresh                        |
+| Key                  | Command                        |
+|----------------------+--------------------------------|
+| =n= / =p=                | Next / previous row            |
+| =TAB= / =S-TAB=          | Next / previous cell           |
+| ={= / =}=                | First / last row (same column) |
+| =[= / =]=                | Line beginning / end           |
+| =M-n= / =M-p=            | Jump to different value ↓ / ↑  |
+| =M-]= / =M-[=            | Jump to different value → / ←  |
+| =C-<up>= / =C-<down>=    | Jump to different value ↑ / ↓  |
+| =C-<left>= / =C-<right>= | Jump to different value ← / →  |
+| =RET=                  | View entry details             |
+| =/=                    | Fuzzy find                     |
+| =g=                    | Refresh                        |
 
 Cell-jump navigation (=M-n=, =M-p=, =M-]=, =M-[=) moves to the next cell with a different value, useful for grouped or sorted data.  A prefix argument (e.g., =C-u 3 M-n=) jumps multiple value transitions.
 
 ** Goto (='= prefix)
 
-| Key   | Command              |
-|-------+----------------------|
+| Key | Command              |
+|-----+----------------------|
 | =' c= | Go to column by name |
 | =' r= | Go to row by number  |
 | =' e= | Go to entry by ID    |
@@ -35,41 +35,41 @@ Cell-jump navigation (=M-n=, =M-p=, =M-]=, =M-[=) moves to the next cell with a 
 
 ** Entry creation and modification
 
-| Key | Command                               |
-|-----+---------------------------------------|
-| =N= | New entry (form)                      |
-| =P= | Prompt entry (minibuffer)             |
-| =Q= | Quick entry (subset of fields)        |
-| =I= | Insert at position (=C-u= for prompt) |
-| =E= | Edit entry (form)                     |
-| =d= | Duplicate entry                       |
-| =D= | Delete entry                          |
-| =C= | Copy entry                            |
-| =V= | Paste (=C-u= to consume from ring)    |
-| =A= | Paste append (=C-u= to consume)       |
-| =X= | Cut entry                             |
-| =M= | Move entry                            |
-| =W= | Swap entries (exactly 2)              |
-| =T= | Reindex IDs                           |
+| Key | Command                             |
+|-----+-------------------------------------|
+| =N=   | New entry (form)                    |
+| =P=   | Prompt entry (minibuffer)           |
+| =Q=   | Quick entry (subset of fields)      |
+| =I=   | Insert at position (=C-u= for prompt) |
+| =E=   | Edit entry (form)                   |
+| =d=   | Duplicate entry                     |
+| =D=   | Delete entry                        |
+| =C=   | Copy entry                          |
+| =V=   | Paste (=C-u= to consume from ring)    |
+| =A=   | Paste append (=C-u= to consume)       |
+| =X=   | Cut entry                           |
+| =M=   | Move entry                          |
+| =W=   | Swap entries (exactly 2)            |
+| =T=   | Reindex IDs                         |
 
 ** Marking (dired-style)
 
-| Key   | Command                  |
-|-------+--------------------------|
+| Key | Command                   |
+|-----+---------------------------|
 | =m=   | Mark entry (region-aware) |
-| =u=   | Unmark entry             |
-| =U=   | Unmark all               |
-| =t=   | Toggle all marks         |
-| =x=   | Execute on marked        |
+| =u=   | Unmark entry              |
+| =U=   | Unmark all                |
+| =t=   | Toggle all marks          |
+| =x=   | Execute on marked         |
 | =* *= | Mark matching (substring) |
-| =* == | Mark exact               |
-| =* x= | Mark regexp              |
-| =* #= | Count marked             |
+| =* == | Mark exact                |
+| =* x= | Mark regexp               |
+| =* #= | Count marked              |
 
 ** Replace (=R= prefix)
 
-| Key   | Command                               |
-|-------+---------------------------------------|
+| Key | Command                               |
+|-----+---------------------------------------|
 | =R r= | Replace substring                     |
 | =R R= | Replace substring (visible rows only) |
 | =R == | Replace exact                         |
@@ -84,27 +84,27 @@ Uppercase variants scope to visible rows only.  Lowercase variants act on marked
 
 ** Sort (=s= prefix)
 
-| Key   | Command                       |
-|-------+-------------------------------|
-| =^=   | Reverse sort                  |
-| =s s= | Add sort layer                |
-| =s d= | Delete sort layer             |
+| Key | Command                        |
+|-----+--------------------------------|
+| =^=   | Reverse sort                   |
+| =s s= | Add sort layer                 |
+| =s d= | Delete sort layer              |
 | =s x= | Clear all sort (default order) |
-| =s 0= | Clear all sort (same as =s x=) |
+| =s 0= | Clear all sort (same as =s x=)   |
 
 Sort layers are additive: each =s s= adds a new column to the sort.  Already-sorted columns are excluded from the prompt.
 
 ** Fill (=F= prefix)
 
-| Key   | Command                               |
-|-------+---------------------------------------|
+| Key | Command                                |
+|-----+----------------------------------------|
 | =F F= | Fill gap ↑ (value from above to point) |
 | =F f= | Fill forward ↓ (value from point down) |
-| =F n= | Fill next ↓ (prompted)                |
-| =F p= | Fill prev ↑ (prompted)                |
-| =F s= | Fill series (number or date)          |
-| =F d= | Delete run (clear same-value cells)   |
-| =F x= | Clear to row (prompted target)        |
+| =F n= | Fill next ↓ (prompted)                 |
+| =F p= | Fill prev ↑ (prompted)                 |
+| =F s= | Fill series (number or date)           |
+| =F d= | Delete run (clear same-value cells)    |
+| =F x= | Clear to row (prompted target)         |
 
 =F F= and =F f= are zero-prompt: they infer the column and fill value from context.  =F n= and =F p= prompt for field and value.  =F d= clears the same-value run from point; =F x= clears to a prompted row ID.
 
@@ -112,27 +112,27 @@ Without marks, fill operations auto-detect blank ranges from point.  With marks,
 
 ** Filter (=f= prefix)
 
-| Key   | Command                            |
-|-------+------------------------------------|
-| =f f= | Substring filter                   |
-| =f == | Exact match filter                 |
-| =f #= | Numeric comparison (> >= < <=)     |
-| =f @= | Filter across columns              |
-| =f d= | Delete filter layer                |
-| =f s= | Toggle join logic (∧/∨/∧¬/∨¬)     |
-| =f x= | Clear all filters                  |
+| Key | Command                         |
+|-----+---------------------------------|
+| =f f= | Substring filter                |
+| =f == | Exact match filter              |
+| =f #= | Numeric comparison (> >= < <=)  |
+| =f @= | Filter across columns           |
+| =f d= | Delete filter layer             |
+| =f s= | Toggle join logic (∧/∨/∧¬/∨¬)   |
+| =f x= | Clear all filters               |
 | =f 0= | Clear all filters (same as =f x=) |
 
 Filters are progressive layers with logical operators.  The first filter sets the base layer; subsequent calls prompt for a join operator (AND, OR, AND NOT, OR NOT).  The modeline shows the filter stack: =(genre = Fiction) ∧ (price > 20) ∧¬ (status ~ inactive)=.
 
 ** Views
 
-| Key     | Command                            |
-|---------+------------------------------------|
-| =v v=   | Select saved view                  |
-| =v x=   | Clear all (filter/sort/cols)       |
-| =0=     | Reset view (same as =v x=)         |
-| =1=–=9= | Apply schema view by number        |
+| Key   | Command                      |
+|-------+------------------------------|
+| =v v=   | Select saved view            |
+| =v x=   | Clear all (filter/sort/cols) |
+| =0=     | Reset view (same as =v x=)     |
+| =1=–=9= | Apply schema view by number  |
 
 ** Freeze/pin rows
 
@@ -165,8 +165,8 @@ Filters are progressive layers with logical operators.  The first filter sets th
 
 ** View expansion (=>= prefix)
 
-| Key   | Command               |
-|-------+-----------------------|
+| Key | Command               |
+|-----+-----------------------|
 | => >= | Show more rows (+500) |
 | => a= | Show all rows         |
 | => r= | Show ID range         |
@@ -174,24 +174,24 @@ Filters are progressive layers with logical operators.  The first filter sets th
 
 ** Math (=#= prefix)
 
-| Key   | Command                             |
-|-------+-------------------------------------|
-| =# s= | Sum                                 |
-| =# S= | Sum (visible rows only)             |
-| =# m= | Min / max                           |
-| =# M= | Min / max (visible rows only)       |
-| =# d= | Mean ± standard deviation           |
-| =# D= | Mean ± SD (visible rows only)       |
-| =# q= | Median [Q1–Q3] (IQR)               |
-| =# Q= | Median [IQR] (visible rows only)    |
-| =# #= | Column summary                      |
+| Key | Command                          |
+|-----+----------------------------------|
+| =# s= | Sum                              |
+| =# S= | Sum (visible rows only)          |
+| =# m= | Min / max                        |
+| =# M= | Min / max (visible rows only)    |
+| =# d= | Mean ± standard deviation        |
+| =# D= | Mean ± SD (visible rows only)    |
+| =# q= | Median [Q1–Q3] (IQR)             |
+| =# Q= | Median [IQR] (visible rows only) |
+| =# #= | Column summary                   |
 
 Uppercase variants scope to visible rows only.
 
 ** Count (=#= prefix)
 
-| Key   | Command           |
-|-------+-------------------|
+| Key | Command           |
+|-----+-------------------|
 | =# c= | Count with query  |
 | =# V= | Count visible     |
 | =# *= | Count marked      |
@@ -199,8 +199,8 @@ Uppercase variants scope to visible rows only.
 
 ** Schema (=.= prefix)
 
-| Key   | Command               |
-|-------+-----------------------|
+| Key | Command               |
+|-----+-----------------------|
 | =. .= | Edit schema file      |
 | =. s= | Show schema           |
 | =. r= | Reload schema         |
@@ -209,85 +209,85 @@ Uppercase variants scope to visible rows only.
 
 ** Undo / redo
 
-| Key               | Command        |
-|-------------------+----------------|
-| =C-/= / =C-_=     | Undo           |
-| =C-?= / =C-S-/=   | Redo           |
-| =y=               | View kill ring |
+| Key         | Command        |
+|-------------+----------------|
+| =C-/= / =C-_=   | Undo           |
+| =C-?= / =C-S-/= | Redo           |
+| =y=           | View kill ring |
 
 ** Other
 
 | Key | Command                        |
 |-----+--------------------------------|
-| =e= | Export (prompts for TSV / CSV) |
-| =i= | Import                         |
-| =o= | Open another database          |
-| =O= | Open and view                  |
-| =?= | Help hydra                     |
-| =h= | Transient menu                 |
-| =q= | Quit                           |
+| =e=   | Export (prompts for TSV / CSV) |
+| =i=   | Import                         |
+| =o=   | Open another database          |
+| =O=   | Open and view                  |
+| =?=   | Help hydra                     |
+| =h=   | Transient menu                 |
+| =q=   | Quit                           |
 
 * Entry Mode (~tabularium-entry-mode~)
 
 ** Field navigation
 
-| Key                           | Command           |
-|-------------------------------+-------------------|
-| =TAB= / =S-TAB=               | Next / previous field |
-| =M-]= / =M-[=                 | Next / previous field |
-| =C-c C-n= / =C-c C-p=         | Next / previous field |
-| =n= / =p=                     | Next / previous line |
-| =M-n= / =M-p=                 | Next / previous entry |
+| Key               | Command               |
+|-------------------+-----------------------|
+| =TAB= / =S-TAB=       | Next / previous field |
+| =M-]= / =M-[=         | Next / previous field |
+| =C-c C-n= / =C-c C-p= | Next / previous field |
+| =n= / =p=             | Next / previous line  |
+| =M-n= / =M-p=         | Next / previous entry |
 
 ** Field editing
 
-| Key                       | Command              |
-|---------------------------+----------------------|
-| =RET= / =C-c C-e=         | Edit field at point  |
-| === / =C-c C-d=           | Set field to default |
-| =DEL= / =x=               | Clear field          |
-| =C-c C-r=                 | Reset field          |
+| Key           | Command              |
+|---------------+----------------------|
+| =RET= / =C-c C-e= | Edit field at point  |
+| === / =C-c C-d=   | Set field to default |
+| =DEL= / =x=       | Clear field          |
+| =C-c C-r=       | Reset field          |
 
 Fields with ~:long t~ open a dedicated editing buffer instead of the minibuffer.  The default mode is ~tabularium-long-edit-mode~ (derived from ~text-mode~ with ~visual-line-mode~ and ~outline-minor-mode~).  Configurable via ~tabularium-long-field-mode~; window position via ~tabularium-long-field-display~ (~side~ or ~bottom~).
 
 ** Submit / cancel
 
-| Key                                   | Command |
-|---------------------------------------+---------|
+| Key                                     | Command |
+|-----------------------------------------+---------|
 | =.= / =C-c C-c= / =C-c C-s= / =C-RET= / =C-x C-s= | Submit  |
-| =C-c C-k= / =q=                       | Cancel  |
+| =C-c C-k= / =q=                             | Cancel  |
 
 ** Entry operations
 
-| Key | Command              |
-|-----+----------------------|
-| =N= | New entry            |
-| =I= | Insert at position   |
-| =d= | Duplicate current    |
-| =D= | Delete current       |
-| =v= | Return to view       |
+| Key | Command            |
+|-----+--------------------|
+| =N=   | New entry          |
+| =I=   | Insert at position |
+| =d=   | Duplicate current  |
+| =D=   | Delete current     |
+| =v=   | Return to view     |
 
 ** Undo / redo
 
-| Key             | Command |
-|-----------------+---------|
+| Key         | Command |
+|-------------+---------|
 | =C-/= / =C-_=   | Undo    |
 | =C-?= / =C-S-/= | Redo    |
 
 * Registry Mode (~tabularium-registry-mode~)
 
-| Key                 | Command                 |
-|---------------------+-------------------------|
-| =RET= / =o=         | Open database at point  |
-| =O=                 | Open and view           |
-| =v=                 | View database at point  |
-| =C=                 | Create new database     |
-| =+=                 | Register existing database |
-| =$= / =R=           | Rename database         |
-| =D=                 | Forget database (keep files) |
-| =X=                 | Expunge (delete files too)   |
-| =.= / =e=           | Edit schema file        |
-| =g= / ===           | Refresh listing         |
-| =n= / =TAB=         | Next entry              |
-| =p= / =S-TAB=       | Previous entry          |
-| =q=                 | Quit                    |
+| Key       | Command                      |
+|-----------+------------------------------|
+| =RET= / =o=   | Open database at point       |
+| =O=         | Open and view                |
+| =v=         | View database at point       |
+| =C=         | Create new database          |
+| =+=         | Register existing database   |
+| =$= / =R=     | Rename database              |
+| =D=         | Forget database (keep files) |
+| =X=         | Expunge (delete files too)   |
+| =.= / =e=     | Edit schema file             |
+| =g= / ===     | Refresh listing              |
+| =n= / =TAB=   | Next entry                   |
+| =p= / =S-TAB= | Previous entry               |
+| =q=         | Quit                         |

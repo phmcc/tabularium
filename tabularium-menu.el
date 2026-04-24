@@ -49,7 +49,7 @@
 
 (require 'tabularium)
 
-;;; * 1. Helper Functions for Dynamic Display
+;;; * 1 Helper Functions for Dynamic Display
 
 (defun tabularium--hydra-db-info ()
   "Return database info string for hydra display."
@@ -74,8 +74,7 @@
   "Return sort info for hydra display."
   (format "Sort: %s" (or (tabularium--sort-description) "default")))
 
-
-;;; * 2. Hydra
+;;; * 2 Hydra
 
 ;;; ** 2.1. Main Menu
 
@@ -527,8 +526,7 @@
     ("=" tabularium-view-reset-limit)
     ("q" nil)))
 
-
-;;; * 3. Transient
+;;; * 3 Transient
 
 ;;; ** 3.1. Main Menu
 
@@ -588,12 +586,12 @@
                            [:description
                             (lambda () (let ((fdesc (tabularium--filter-description)))
                                          (format "Tabularium View: %s%s  |  Marked: %d  Frozen: %d"
-                                               (or tabularium--current-schema-name "<none>")
-                                               (if fdesc
-                                                   (format " [%s]" fdesc)
-                                                 "")
-                                               (length tabularium--marked-entries)
-                                               (length tabularium--frozen-ids))))
+                                                 (or tabularium--current-schema-name "<none>")
+                                                 (if fdesc
+                                                     (format " [%s]" fdesc)
+                                                   "")
+                                                 (length tabularium--marked-entries)
+                                                 (length tabularium--frozen-ids))))
                             ["Navigate"
                              ("RET" "View entry" tabularium-view-entry)
                              ("g" "Refresh" tabularium-view-refresh)
@@ -727,8 +725,7 @@
                              ("r" "Row" tabularium-view-goto-row)
                              ("e" "Entry" tabularium-view-goto-entry)]]))
 
-
-;;; * 4. Provide
+;;; * 4 Provide
 
 (provide 'tabularium-menu)
 
