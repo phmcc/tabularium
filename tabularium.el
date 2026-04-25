@@ -1,13 +1,14 @@
 ;;; tabularium.el --- Structured data management in Emacs using SQL -*- lexical-binding: t; -*-
 
-;; Author: Paul H. McClelland
-;; SPDX-License-Identifier: GPL-3.0-or-later
 ;; Copyright (C) 2026 Paul H. McClelland
 
-;; Version: 0.4.3
+;; Author: Paul H. McClelland <paulhmcclelland@protonmail.com>
+;; Maintainer: Paul H. McClelland <paulhmcclelland@protonmail.com>
+;; Version: 0.4.4
 ;; Package-Requires: ((emacs "29.1"))
 ;; Keywords: data, sql, tables
 ;; URL: https://codeberg.org/phmcc/tabularium
+;; SPDX-License-Identifier: GPL-3.0-or-later
 
 ;; This program is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -46,11 +47,13 @@
 ;;; * 0 Prerequisites
 
 (require 'cl-lib)
+(require 'subr-x)
 (require 'tabulated-list)
 (require 'tabularium-db)
 
 ;; Forward declarations for functions defined in tabularium-menu.el
 (declare-function tabularium-hydra/body "tabularium-menu" nil)
+(declare-function tabularium-transient "tabularium-menu" nil)
 (declare-function tabularium-view-hydra/body "tabularium-menu" nil)
 (declare-function tabularium-view-transient "tabularium-menu" nil)
 
@@ -85,14 +88,19 @@ Each field in :fields is a plist with:
   :name     - Symbol, the column name
   :prompt   - String, shown to user during entry
   :type     - One of: text, number, integer, date, choice
-  :complete - (optional) One of: historical, fixed, nil
-  :choices  - (for type=choice or complete=fixed) Valid choices
+  :primary  - Exactly one field MUST have :primary t
   :default  - (optional) Default value, symbol, or function
   :required - (optional) If non-nil, field cannot be empty
+  :choices  - (for type=choice) Valid choice values
   :width    - (optional) Display width in list view
-  :hidden   - (optional) If non-nil, hide from list view
+  :hidden   - (optional) If non-nil, hide from list view by default
+  :long     - (optional) If non-nil, edit in a dedicated buffer
   :computed - (optional) SQL string or elisp function for virtual fields
-  :primary  - Exactly one field MUST have :primary t
+  :complete - (optional) Completion source, one of:
+              historical, recent, fixed, or a plist of the form
+              (:type TYPE ...) where TYPE is one of
+              historical, recent, vocabulary, related, filtered,
+              function, or union.  See the README for details.
 
 Example with SQLite (default):
 
@@ -273,6 +281,31 @@ Each layer has :field, :value, :join (logic operator), and optional
 (defvar-local tabularium--sort-ascending nil
   "Buffer-local sort order.  Overrides `tabularium-view-sort-ascending'.")
 
+(defvar-local tabularium--marked-entries nil
+  "List of marked entry IDs.")
+
+(defvar-local tabularium--view-limit nil
+  "Current limit for view, or nil to use `tabularium-view-page-size'.")
+
+(defvar-local tabularium--view-id-range nil
+  "Current ID range filter as (MIN . MAX), or nil for no range filter.")
+
+(defvar-local tabularium--current-view nil
+  "Name of the currently active saved view, if any.")
+
+(defvar-local tabularium--sort-columns nil
+  "List of (COLUMN . DIRECTION) for multi-column sorting.
+DIRECTION is \\='asc or \\='desc.  First element is primary sort.")
+
+(defvar-local tabularium--frozen-ids nil
+  "List of entry IDs to keep at top of view (frozen rows).")
+
+(defvar-local tabularium--column-order nil
+  "Custom column order as list of field names, or nil for schema order.")
+
+(defvar-local tabularium--hidden-columns nil
+  "List of column names (symbols) to hide in view mode.")
+
 ;; Registry internal variables
 (defvar tabularium-registry--list nil
   "List of known databases (plists with :name :file :schema-file :last-used).")
@@ -340,6 +373,11 @@ Each layer has :field, :value, :join (logic operator), and optional
                                 (symbol-name (plist-get f :name)))))))
 
 ;;; ** 2.2 Undo/Redo System
+
+;; Forward declaration for kill ring (defined in section 2.3 because the
+;; full machinery and customization belong with the kill-ring system, but
+;; the undo/redo code references the variable from inside its own body).
+(defvar tabularium--kill-ring)
 
 (defvar tabularium--undo-ring (make-hash-table :test 'equal)
   "Hash table mapping schema names to undo lists.
@@ -1325,7 +1363,7 @@ On success, copies the validated schema to SCHEMA-FILE."
                                      nil t nil
                                      (lambda (f)
                                        (or (file-directory-p f)
-                                           (string-suffix-p ".schema.el" f)
+                                           (string-suffix-p tabularium-schema-file-suffix f)
                                            (string-suffix-p ".el" f))))))
     (unless (file-exists-p found-file)
       (user-error "File not found: %s" found-file))
@@ -1618,7 +1656,7 @@ Updates in-memory schema, registry, and optionally files on disk."
                          (file-name-directory old-db-file))))
     (when old-schema-file
       (setq new-schema-file (expand-file-name
-                             (concat slug ".schema.el")
+                             (concat slug tabularium-schema-file-suffix)
                              (file-name-directory old-schema-file))))
 
     ;; Step 1: Update in-memory tabularium-schemas
@@ -2271,15 +2309,16 @@ registers the database, and opens it."
 This checkpoints and closes all connections, ensuring a clean state.
 Call this before suspending your laptop or when you're done working."
   (interactive)
-  (tabularium-db-prepare-for-sync)
+  (tabularium-db--prepare-for-sync)
   (setq tabularium--current-schema-name nil)
   (setq tabularium--db nil))
 
+;;;###autoload
 (defun tabularium-checkpoint ()
   "Checkpoint all databases without closing connections.
 This flushes the write-ahead log to the main database file."
   (interactive)
-  (tabularium-db-checkpoint-all))
+  (tabularium-db--checkpoint-all))
 
 ;;;###autoload
 (defun tabularium-fix-paths ()
@@ -2349,21 +2388,13 @@ contains a fully expanded home directory path."
                reg-fixed (if (= reg-fixed 1) "y" "ies")
                skipped))))
 
-
 (defun tabularium-cleanup-wal-files ()
   "Delete orphaned WAL and SHM files for all known databases.
 Safe to delete when database is closed."
   (interactive)
-  (let ((cleaned 0))
-    (dolist (schema tabularium-schemas)
-      (let ((db-file (plist-get (cdr schema) :file)))
-        (when db-file
-          (dolist (suffix '("-wal" "-shm"))
-            (let ((f (concat db-file suffix)))
-              (when (file-exists-p f)
-                (delete-file f)
-                (cl-incf cleaned)
-                (message "Deleted: %s" f)))))))
+  (let* ((files (delq nil (mapcar (lambda (s) (plist-get (cdr s) :file))
+                                  tabularium-schemas)))
+         (cleaned (tabularium-db-cleanup-wal-files files)))
     (if (zerop cleaned)
         (message "No orphaned WAL/SHM files found")
       (message "Cleaned up %d file(s)" cleaned))))
@@ -2466,7 +2497,6 @@ Returns \\='asc (default) or \\='desc."
   (or (plist-get (tabularium--current-schema) :quick-entry-fields)
       (mapcar (lambda (f) (plist-get f :name)) (tabularium--schema-fields))))
 
-
 (defun tabularium--field-by-name (name)
   "Get field definition for NAME."
   (cl-find-if (lambda (f) (eq (plist-get f :name) name))
@@ -2527,7 +2557,7 @@ Creates the file if it does not exist.  Preserves all schema properties."
   (let* ((schema (assoc schema-name tabularium-schemas))
          (plist (cdr schema))
          (db-file (plist-get plist :file))
-         (schema-file (concat (file-name-sans-extension db-file) ".schema.el"))
+         (schema-file (tabularium-registry--schema-file-for-db db-file))
          (fields (plist-get plist :fields))
          ;; Collect all extra properties beyond :file and :fields
          (extra-keys '())
@@ -3160,11 +3190,11 @@ Returns a list of field plists that have :complete with :type related,
                           (or (plist-get field :width) 15)
                           t))
                   visible-fields))
-         ;; Add frozen indicator column if there are frozen rows
+         ;; Add freeze indicator column if there are frozen rows
          (format-spec
           (vconcat
            (if tabularium--frozen-ids
-               (cons (list "❄" 1 nil) base-columns)
+               (cons (list "∙" 1 nil) base-columns)
              base-columns))))
     (setq tabulated-list-format format-spec)
     (setq tabulated-list-sort-key nil)  ; We handle sorting ourselves
@@ -3269,7 +3299,7 @@ Returns a list of field plists that have :complete with :type related,
            (mapcar (lambda (row)
                      (list (car row)
                            (vconcat
-                            (cons (propertize "❄" 'face 'font-lock-constant-face)
+                            (cons (propertize "∙" 'face 'font-lock-constant-face)
                                   (format-cells row)))))
                    (nreverse frozen-rows))
            ;; Regular rows (with empty indicator column if there are frozen rows)
@@ -3406,6 +3436,10 @@ See `tabularium-entry-method' to set the default."
     (define-key map (kbd "M-<up>") #'tabularium-view-cell-jump-up)
     (define-key map (kbd "M-<right>") #'tabularium-view-cell-jump-forward)
     (define-key map (kbd "M-<left>") #'tabularium-view-cell-jump-backward)
+    (define-key map (kbd "C-<down>") #'tabularium-view-page-down)
+    (define-key map (kbd "C-<up>") #'tabularium-view-page-up)
+    (define-key map (kbd "C-<right>") #'tabularium-view-scroll-column-right)
+    (define-key map (kbd "C-<left>") #'tabularium-view-scroll-column-left)
     ;; Filter
     (define-key map (kbd "f f") #'tabularium-view-filter)
     (define-key map (kbd "f =") #'tabularium-view-filter-exact)
@@ -3449,9 +3483,12 @@ See `tabularium-entry-method' to set the default."
     (define-key map (kbd "* p") #'tabularium-view-mark-pattern)
     (define-key map (kbd "* x") #'tabularium-view-mark-regexp)
     (define-key map (kbd "* #") #'tabularium-view-count-marked)
-    ;; Freeze/Pin
-    (define-key map (kbd "z") #'tabularium-view-freeze)
-    (define-key map (kbd "Z") #'tabularium-view-unfreeze-all)
+    ;; Freeze
+    (define-key map (kbd "z z") #'tabularium-view-freeze)
+    (define-key map (kbd "z *") #'tabularium-view-freeze-marked)
+    (define-key map (kbd "z u") #'tabularium-view-unfreeze)
+    (define-key map (kbd "z U") #'tabularium-view-unfreeze-marked)
+    (define-key map (kbd "z x") #'tabularium-view-unfreeze-all)
 
     ;; === Constructive/Destructive ===
     ;; Create
@@ -3476,12 +3513,13 @@ See `tabularium-entry-method' to set the default."
     ;; Replace (R prefix)
     (define-key map (kbd "R r") #'tabularium-replace-substring)
     (define-key map (kbd "R R") #'tabularium-visible-replace-substring)
-    (define-key map (kbd "R =") #'tabularium-replace-exact)
+    (define-key map (kbd "R e") #'tabularium-replace-exact)
+    (define-key map (kbd "R E") #'tabularium-visible-replace-exact)
     (define-key map (kbd "R p") #'tabularium-replace-pattern)
     (define-key map (kbd "R x") #'tabularium-replace-regexp)
     (define-key map (kbd "R X") #'tabularium-visible-replace-regexp)
-    (define-key map (kbd "R q") #'tabularium-query-replace)
-    (define-key map (kbd "R Q") #'tabularium-visible-query-replace)
+    (define-key map (kbd "R /") #'tabularium-query-replace)
+    (define-key map (kbd "R ?") #'tabularium-visible-query-replace)
     (define-key map (kbd "R c") #'tabularium-toggle-case-sensitive)
     ;; Sort (S prefix)
     (define-key map (kbd "s s") #'tabularium-view-sort-add)
@@ -3537,8 +3575,8 @@ See `tabularium-entry-method' to set the default."
     (define-key map (kbd "# M") #'tabularium-visible-min-max)
     (define-key map (kbd "# d") #'tabularium-mean-sd)
     (define-key map (kbd "# D") #'tabularium-visible-mean-sd)
-    (define-key map (kbd "# q") #'tabularium-median-iqr)
-    (define-key map (kbd "# Q") #'tabularium-visible-median-iqr)
+    (define-key map (kbd "# i") #'tabularium-median-iqr)
+    (define-key map (kbd "# I") #'tabularium-visible-median-iqr)
     (define-key map (kbd "# #") #'tabularium-column-summary)
     ;; View expansion
     (define-key map (kbd "v >") #'tabularium-view-show-more)
@@ -3557,9 +3595,6 @@ See `tabularium-entry-method' to set the default."
     (define-key map (kbd "q") #'quit-window)
     map)
   "Keymap for `tabularium-view-mode'.")
-
-(defvar-local tabularium--marked-entries nil
-  "List of marked entry IDs.")
 
 (define-derived-mode tabularium-view-mode tabulated-list-mode "Tabularium"
   "Major mode for browsing records.
@@ -3620,7 +3655,7 @@ go to the beginning of the row."
                            (plist-get f :hidden))))
                    order))
          (target-idx (cl-position column-name visible))
-         ;; Account for frozen indicator column
+         ;; Account for freeze indicator column
          (actual-idx (if tabularium--frozen-ids
                          (when target-idx (1+ target-idx))
                        target-idx)))
@@ -3753,9 +3788,63 @@ Adds to existing hidden columns rather than replacing."
             (tabularium-new-entry (car result))))
       (message "No records found matching '%s'" pattern))))
 
-;;; ** 5.4 Cell Navigation
+;;; ** 5.4 Page Navigation
 
 ;;; *** 5.4.1 Basic Movement
+
+(defun tabularium-view-page-down ()
+  "Move forward by `tabularium-view-page-size' rows."
+  (interactive)
+  (forward-line tabularium-view-page-size))
+
+(defun tabularium-view-page-up ()
+  "Move backward by `tabularium-view-page-size' rows."
+  (interactive)
+  (forward-line (- tabularium-view-page-size)))
+
+;;; *** 5.4.2 Column Scroll
+
+(defun tabularium-view--column-width (col-idx)
+  "Return display width of column COL-IDX (including separator)."
+  (when (< col-idx (length tabulated-list-format))
+    (1+ (cadr (aref tabulated-list-format col-idx)))))
+
+(defun tabularium-view-scroll-column-right ()
+  "Scroll the view one column to the right.
+Useful for wide tables where columns overflow the window."
+  (interactive)
+  (let* ((current (window-hscroll))
+         (cumulative 0)
+         (target nil))
+    (catch 'found
+      (dotimes (i (length tabulated-list-format))
+        (let ((width (tabularium-view--column-width i)))
+          (when (and width (> (+ cumulative width) current))
+            (setq target (+ cumulative width))
+            (throw 'found nil))
+          (setq cumulative (+ cumulative (or width 0))))))
+    (if target
+        (set-window-hscroll (selected-window) target)
+      (message "Already at last column"))))
+
+(defun tabularium-view-scroll-column-left ()
+  "Scroll the view one column to the left."
+  (interactive)
+  (let* ((current (window-hscroll))
+         (cumulative 0)
+         (prev 0))
+    (if (zerop current)
+        (message "Already at first column")
+      (dotimes (i (length tabulated-list-format))
+        (let ((width (tabularium-view--column-width i)))
+          (when (and width (< cumulative current))
+            (setq prev cumulative)
+            (setq cumulative (+ cumulative width)))))
+      (set-window-hscroll (selected-window) prev))))
+
+;;; ** 5.5 Cell Navigation
+
+;;; *** 5.5.1 Basic Movement
 
 (defun tabularium-view-forward-cell (&optional n)
   "Move forward N cells in the tabulated list."
@@ -3864,7 +3953,7 @@ If already at the last row, move to the end of the line (bottom-right)."
       (tabularium-view-forward-cell)
       (message "Last row"))))
 
-;;; *** 5.4.2 Jump Navigation
+;;; *** 5.5.2 Jump Navigation
 
 (defun tabularium-view--get-cell-value-at-column (col-idx)
   "Get the cell value at column COL-IDX on the current line.
@@ -4026,7 +4115,7 @@ With prefix N, jump N value transitions."
      (t
       (message "Already at first column")))))
 
-;;; ** 5.5 Fuzzy Search
+;;; ** 5.6 Fuzzy Search
 
 (defun tabularium--format-for-search (row fields)
   "Format ROW using FIELDS for search display."
@@ -4072,13 +4161,7 @@ With prefix N, jump N value transitions."
     (when id
       (tabularium-new-entry id))))
 
-;;; ** 5.6 View Window Expansion
-
-(defvar-local tabularium--view-limit nil
-  "Current limit for view, or nil to use `tabularium-view-page-size'.")
-
-(defvar-local tabularium--view-id-range nil
-  "Current ID range filter as (MIN . MAX), or nil for no range filter.")
+;;; ** 5.7 View Window Expansion
 
 (defun tabularium-view-show-all ()
   "Show all entries (remove page limit)."
@@ -4101,9 +4184,10 @@ With prefix N, jump N value transitions."
   (message "Showing entries %d-%d" (car tabularium--view-id-range) (cdr tabularium--view-id-range)))
 
 (defun tabularium-view-show-more (&optional count)
-  "Increase the number of visible entries by COUNT (default 500)."
+  "Increase the number of visible entries by COUNT.
+COUNT defaults to `tabularium-view-page-size'."
   (interactive "P")
-  (let ((increase (or count 500)))
+  (let ((increase (or count tabularium-view-page-size)))
     (setq tabularium--view-limit
           (+ (or tabularium--view-limit tabularium-view-page-size) increase))
     (revert-buffer)
@@ -4117,10 +4201,7 @@ With prefix N, jump N value transitions."
   (revert-buffer)
   (message "Reset to default limit (%d)" tabularium-view-page-size))
 
-;;; ** 5.7 Saved View Windows
-
-(defvar-local tabularium--current-view nil
-  "Name of the currently active saved view, if any.")
+;;; ** 5.8 Saved View Windows
 
 (defun tabularium-apply-view (view)
   "Apply saved VIEW preset to the current buffer.
@@ -4273,7 +4354,7 @@ If called from a view buffer, closes the current buffer first."
   (tabularium-open name)
   (tabularium-view))
 
-;;; ** 5.8 Marking Operations
+;;; ** 5.9 Marking Operations
 
 (defface tabularium-marked-face
   '((((class color) (background dark))
@@ -4283,7 +4364,6 @@ If called from a view buffer, closes the current buffer first."
     (t :weight bold :extend t))
   "Face for marked entries in Tabularium view."
   :group 'tabularium)
-
 
 (defface tabularium-query-replace-face
   '((t :inherit isearch))
@@ -4495,7 +4575,7 @@ Presents a completion menu of available operations."
                     ("edit"         . tabularium-view-edit)
                     ("export"       . tabularium-export)
                     ("fill"         . tabularium-view-fill)
-                    ("freeze"       . tabularium-view-freeze)
+                    ("freeze"          . tabularium-view-freeze)
                     ("move"         . tabularium-view-move)
                     ("swap"         . tabularium-view-swap)))
          (choice (completing-read (format "Action on %s: " target)
@@ -4520,7 +4600,7 @@ Presents a completion menu of available operations."
   "Alist of original field values when form was opened.
   Used to determine if changes have been made.")
 
-(defvar-local tabularium-entry--editing-id nil
+(defvar-local tabularium-entry-editing-id nil
   "ID of record being edited, or nil for new entry.")
 
 (defvar-local tabularium-entry--field-overlays nil
@@ -4529,7 +4609,7 @@ Presents a completion menu of available operations."
 (defvar-local tabularium-entry--current-field nil
   "Currently selected field name.")
 
-(defvar-local tabularium-entry--schema-name nil
+(defvar-local tabularium-entry-schema-name nil
   "Schema name for this form buffer.")
 
 (defvar-local tabularium-entry--source-buffer nil
@@ -4625,6 +4705,15 @@ when the user saves via `tabularium-long-save'."
       buf (if (eq tabularium-long-field-display 'side)
               '((side . right) (window-width . 0.4))
             '((side . bottom) (window-height . 0.4)))))))
+
+(defface tabularium-entry-current-field
+  '((((class color) (background dark))
+     :background "#3a3a5a" :extend t)
+    (((class color) (background light))
+     :background "#dce4f8" :extend t)
+    (t :inherit highlight :extend t))
+  "Face for the currently selected field in entry mode."
+  :group 'tabularium)
 
 (defvar tabularium-entry-mode-map
   (let ((map (make-sparse-keymap)))
@@ -4753,13 +4842,13 @@ Uses current form values for related field completion."
      ;; No completion
      (t nil))))
 
-(defvar-local tabularium-entry--first-field-line nil
+(defvar-local tabularium-entry-first-field-line nil
   "Line number of first field in form buffer.")
 
-(defvar-local tabularium-entry--footer-start nil
+(defvar-local tabularium-entry-footer-start nil
   "Position where footer starts in form buffer.")
 
-(defun tabularium-entry--render ()
+(defun tabularium-entry-render ()
   "Render the form buffer."
   (let ((inhibit-read-only t)
         (first-field-line nil)
@@ -4768,9 +4857,9 @@ Uses current form values for related field completion."
     (setq tabularium-entry--field-overlays nil)
     ;; Header - double lines for edit mode emphasis
     (let ((title (format "%s: %s"
-                         tabularium-entry--schema-name
-                         (if tabularium-entry--editing-id
-                             (format "Edit #%s" tabularium-entry--editing-id)
+                         tabularium-entry-schema-name
+                         (if tabularium-entry-editing-id
+                             (format "Edit #%s" tabularium-entry-editing-id)
                            "New Entry"))))
       (insert (tabularium--make-box-header title 80 'double) "\n"))
     (insert "\n")
@@ -4869,8 +4958,8 @@ Uses current form values for related field completion."
             (propertize "C-c C-c" 'face 'help-key-binding) "/"
             (propertize "C-RET" 'face 'help-key-binding) " Submit")
     ;; Store bounds — must happen before the hook so plugins can read them
-    (setq tabularium-entry--first-field-line (or first-field-line 3))
-    (setq tabularium-entry--footer-start footer-start)
+    (setq tabularium-entry-first-field-line (or first-field-line 3))
+    (setq tabularium-entry-footer-start footer-start)
     ;; Plugin hook — inject additional content after standard hints
     (run-hooks 'tabularium-entry-render-hook)
     ;; Position on current field if set, otherwise first editable field
@@ -4889,7 +4978,7 @@ Uses current form values for related field completion."
     (dolist (pair tabularium-entry--field-overlays)
       (overlay-put (cdr pair) 'face nil))
     ;; Highlight current
-    (overlay-put ov 'face '(:background "#3a3a5a" :extend t))
+    (overlay-put ov 'face 'tabularium-entry-current-field)
     (goto-char (overlay-start ov))
     (setq tabularium-entry--current-field field-name)))
 
@@ -4897,12 +4986,12 @@ Uses current form values for related field completion."
   "Get ordered list of field names."
   (reverse (mapcar #'car tabularium-entry--field-overlays)))
 
-(defun tabularium-entry--all-nav-positions ()
+(defun tabularium-entry-all-nav-positions ()
   "Return a sorted list of navigable positions in the form buffer.
 Each element is (LINE-NUMBER POSITION . FIELD-NAME-OR-NIL).
 Schema field overlays and lines with the `tabularium-navigable'
 text property are both included, enabling plugin content to
-participate in TAB/S-TAB navigation."
+participate in field navigation."
   (let ((positions '()))
     ;; Field overlays (position is mid-line; normalize to line number)
     (dolist (pair tabularium-entry--field-overlays)
@@ -4943,7 +5032,7 @@ participate in TAB/S-TAB navigation."
   "Move to the next navigable position.
 Wraps to the first position when past the last."
   (interactive)
-  (let* ((nav (tabularium-entry--all-nav-positions))
+  (let* ((nav (tabularium-entry-all-nav-positions))
          (cur-line (line-number-at-pos))
          (next (cl-find-if (lambda (p) (> (car p) cur-line)) nav))
          (target (or next (car nav))))
@@ -4954,7 +5043,7 @@ Wraps to the first position when past the last."
   "Move to the previous navigable position.
 Wraps to the last position when before the first."
   (interactive)
-  (let* ((nav (tabularium-entry--all-nav-positions))
+  (let* ((nav (tabularium-entry-all-nav-positions))
          (cur-line (line-number-at-pos))
          (prev (car (last (cl-remove-if-not
                            (lambda (p) (< (car p) cur-line))
@@ -4988,10 +5077,10 @@ Falls back to primary-key order when no source buffer exists."
 (defun tabularium-entry-next-entry ()
   "Save current entry and move to the next one in filtered order."
   (interactive)
-  (if (not tabularium-entry--editing-id)
+  (if (not tabularium-entry-editing-id)
       (message "Cannot navigate: this is a new entry")
     (let* ((ids (tabularium-entry--filtered-ids))
-           (pos (cl-position tabularium-entry--editing-id ids))
+           (pos (cl-position tabularium-entry-editing-id ids))
            (next-id (when pos (nth (1+ pos) ids)))
            (source tabularium-entry--source-buffer))
       (if next-id
@@ -5007,10 +5096,10 @@ Falls back to primary-key order when no source buffer exists."
 (defun tabularium-entry-prev-entry ()
   "Save current entry and move to the previous one in filtered order."
   (interactive)
-  (if (not tabularium-entry--editing-id)
+  (if (not tabularium-entry-editing-id)
       (message "Cannot navigate: this is a new entry")
     (let* ((ids (tabularium-entry--filtered-ids))
-           (pos (cl-position tabularium-entry--editing-id ids))
+           (pos (cl-position tabularium-entry-editing-id ids))
            (prev-id (when (and pos (> pos 0)) (nth (1- pos) ids)))
            (source tabularium-entry--source-buffer))
       (if prev-id
@@ -5107,7 +5196,7 @@ the minibuffer."
              (lambda (text)
                (with-current-buffer entry-buf
                  (setf (alist-get field-name tabularium-entry--values) text)
-                 (tabularium-entry--render)
+                 (tabularium-entry-render)
                  (tabularium-entry--goto-field field-name)
                  (message "Saved %s (%d chars)" (plist-get field :prompt)
                           (length text))))))
@@ -5130,7 +5219,7 @@ the minibuffer."
                        (idx (cl-position field-name fields))
                        (prev-field (nth (mod (1- (or idx 0)) (length fields)) fields)))
                   (setq tabularium-entry--current-field prev-field)
-                  (tabularium-entry--render)
+                  (tabularium-entry-render)
                   (message "Moved to previous field")))
             ;; Normal completion - save value and proceed
             (setf (alist-get field-name tabularium-entry--values) new-value)
@@ -5145,14 +5234,14 @@ the minibuffer."
             ;; Check if C-RET or C-c C-c was pressed to submit immediately
             (if tabularium-entry--submit-after-field
                 (progn
-                  (tabularium-entry--render)
+                  (tabularium-entry-render)
                   (tabularium-entry-submit))
               ;; Compute next field and move there
               (let* ((fields (tabularium-entry--field-list))
                      (idx (cl-position field-name fields))
                      (next-field (nth (mod (1+ (or idx 0)) (length fields)) fields)))
                 (setq tabularium-entry--current-field next-field)
-                (tabularium-entry--render)
+                (tabularium-entry-render)
                 ;; Only auto-enter next field if current field was empty (new data entry)
                 ;; and next field is also empty. Skip if doing touch-up edits.
                 (when (and was-empty (tabularium-entry--field-empty-p next-field))
@@ -5190,7 +5279,7 @@ co-occurrence exists for SOURCE-VALUE."
                                  tabularium-entry--fields))
               (default (tabularium--compute-default field)))
     (setf (alist-get field-name tabularium-entry--values) default)
-    (tabularium-entry--render)
+    (tabularium-entry-render)
     (tabularium-entry--goto-field field-name)
     (message "Set %s to default: %s" (plist-get field :prompt) default)))
 
@@ -5202,7 +5291,7 @@ co-occurrence exists for SOURCE-VALUE."
     (when field-name
       (setf (alist-get field-name tabularium-entry--values) "")
       (setq tabularium-entry--current-field field-name)
-      (tabularium-entry--render)
+      (tabularium-entry-render)
       (message "Cleared %s" field-name))))
 
 (defun tabularium-entry-submit ()
@@ -5218,10 +5307,10 @@ co-occurrence exists for SOURCE-VALUE."
             (tabularium-entry--goto-field name)
             (user-error "Required field '%s' is empty" (plist-get field :prompt))))))
     ;; Save
-    (if tabularium-entry--editing-id
+    (if tabularium-entry-editing-id
         ;; Update existing, and record old values for undo
         (let* ((primary-name (tabularium--primary-field-name))
-               (old-data (tabularium--get-record-by-id tabularium-entry--editing-id))
+               (old-data (tabularium--get-record-by-id tabularium-entry-editing-id))
                (changed-fields (cl-remove-if (lambda (x) (eq (car x) primary-name)) values))
                (update-ops '()))
           ;; Build undo ops for each changed field
@@ -5230,7 +5319,7 @@ co-occurrence exists for SOURCE-VALUE."
                   (new-val (cdr pair)))
               (unless (equal new-val (alist-get field old-data))
                 (push (list :type 'update
-                            :id tabularium-entry--editing-id
+                            :id tabularium-entry-editing-id
                             :field field
                             :old (alist-get field old-data)
                             :new new-val)
@@ -5242,9 +5331,9 @@ co-occurrence exists for SOURCE-VALUE."
                (list :type 'multi :ops update-ops))))
           (tabularium-db-update tabularium--db tabularium-table-name
                             changed-fields
-                            primary-name tabularium-entry--editing-id)
+                            primary-name tabularium-entry-editing-id)
           (tabularium--invalidate-cache)
-          (message "Entry %s updated." tabularium-entry--editing-id))
+          (message "Entry %s updated." tabularium-entry-editing-id))
       ;; Insert new
       (let ((new-id (alist-get (tabularium--primary-field-name) values)))
         (tabularium-db-insert tabularium--db tabularium-table-name values)
@@ -5255,9 +5344,9 @@ co-occurrence exists for SOURCE-VALUE."
     (let ((source-buf tabularium-entry--source-buffer)
           (source-col tabularium-entry--source-column)
           (line-offset tabularium-entry--source-line-offset)
-          (schema-name tabularium-entry--schema-name)
-          (edit-id tabularium-entry--editing-id)
-          (new-id (unless tabularium-entry--editing-id
+          (schema-name tabularium-entry-schema-name)
+          (edit-id tabularium-entry-editing-id)
+          (new-id (unless tabularium-entry-editing-id
                     (alist-get (tabularium--primary-field-name) values))))
       (quit-window t)
       ;; Switch to and refresh view buffer
@@ -5310,7 +5399,7 @@ Only prompts for confirmation if changes have been made."
          (new-values (cl-remove-if (lambda (pair) (eq (car pair) primary-name))
                                    values)))
     ;; Submit current if editing
-    (when tabularium-entry--editing-id
+    (when tabularium-entry-editing-id
       (tabularium-entry-submit))
     ;; Create duplicate
     (tabularium--ensure-db)
@@ -5322,24 +5411,24 @@ Only prompts for confirmation if changes have been made."
       (push (cons primary-name new-id) new-values)
       (with-current-buffer buf
         (tabularium-entry-mode)
-        (setq tabularium-entry--schema-name schema-name)
+        (setq tabularium-entry-schema-name schema-name)
         (setq tabularium-entry--fields fields)
         (setq tabularium-entry--values new-values)
         (setq tabularium-entry--original-values (copy-alist new-values))
-        (setq tabularium-entry--editing-id nil)  ; new entry
+        (setq tabularium-entry-editing-id nil)  ; new entry
         (setq tabularium-entry--source-buffer nil)
-        (tabularium-entry--render))
+        (tabularium-entry-render))
       (tabularium--display-entry-buffer buf)
       (message "Duplicated entry - edit and submit to save as new"))))
 
 (defun tabularium-entry-delete ()
   "Delete the current entry being edited."
   (interactive)
-  (if (not tabularium-entry--editing-id)
+  (if (not tabularium-entry-editing-id)
       (message "Cannot delete: this is a new entry (not yet saved)")
-    (when (yes-or-no-p (format "Delete entry %s? " tabularium-entry--editing-id))
-      (let ((id tabularium-entry--editing-id)
-            (schema-name tabularium-entry--schema-name))
+    (when (yes-or-no-p (format "Delete entry %s? " tabularium-entry-editing-id))
+      (let ((id tabularium-entry-editing-id)
+            (schema-name tabularium-entry-schema-name))
         (tabularium--ensure-db)
         ;; Record for undo
         (let ((old-data (tabularium--get-record-by-id id)))
@@ -5360,10 +5449,10 @@ Only prompts for confirmation if changes have been made."
 Shifts the current entry and all subsequent entries up by 1.
 Only works when editing an existing entry (not a new one)."
   (interactive)
-  (if (not tabularium-entry--editing-id)
+  (if (not tabularium-entry-editing-id)
       (message "Cannot insert: this is a new entry")
-    (let ((position tabularium-entry--editing-id)
-          (schema-name tabularium-entry--schema-name))
+    (let ((position tabularium-entry-editing-id)
+          (schema-name tabularium-entry-schema-name))
       ;; Submit current entry if there are changes
       (when (tabularium-entry--has-changes-p)
         (tabularium-entry-submit))
@@ -5398,12 +5487,12 @@ Only works when editing an existing entry (not a new one)."
                         fields)))
           (with-current-buffer buf
             (tabularium-entry-mode)
-            (setq tabularium-entry--schema-name schema-name)
+            (setq tabularium-entry-schema-name schema-name)
             (setq tabularium-entry--fields fields)
             (setq tabularium-entry--values initial-values)
             (setq tabularium-entry--original-values (copy-alist initial-values))
-            (setq tabularium-entry--editing-id nil)  ; This is a NEW entry
-            (tabularium-entry--render))
+            (setq tabularium-entry-editing-id nil)  ; This is a NEW entry
+            (tabularium-entry-render))
           (tabularium--display-entry-buffer buf)
           (message "Inserted new entry at position %s (shifted %d entries)"
                    position (length ids-to-shift)))))))
@@ -5411,10 +5500,10 @@ Only works when editing an existing entry (not a new one)."
 (defun tabularium-entry-goto-view ()
   "Save and switch to the view buffer, centering on current entry."
   (interactive)
-  (let ((schema-name tabularium-entry--schema-name)
-        (editing-id tabularium-entry--editing-id))
+  (let ((schema-name tabularium-entry-schema-name)
+        (editing-id tabularium-entry-editing-id))
     ;; Submit if there are changes
-    (when (and tabularium-entry--editing-id
+    (when (and tabularium-entry-editing-id
                (tabularium-entry--has-changes-p))
       (tabularium-entry-submit))
     ;; Switch to view
@@ -5464,16 +5553,16 @@ With prefix argument, prompts for ID to edit."
                     fields))))
     (with-current-buffer buf
       (tabularium-entry-mode)
-      (setq tabularium-entry--schema-name schema-name)
+      (setq tabularium-entry-schema-name schema-name)
       (setq tabularium-entry--fields fields)
       (setq tabularium-entry--values initial-values)
       (setq tabularium-entry--original-values (copy-alist initial-values))
-      (setq tabularium-entry--editing-id id)
+      (setq tabularium-entry-editing-id id)
       ;; Track where we came from (captured in outer let*)
       (setq tabularium-entry--source-buffer source-buffer)
       (setq tabularium-entry--source-column source-column)
       (setq tabularium-entry--source-line-offset source-line-offset)
-      (tabularium-entry--render))
+      (tabularium-entry-render))
     (tabularium--display-entry-buffer buf)))
 
 ;;; *** 6.1.2 Prompt Entry
@@ -5646,7 +5735,7 @@ For form-based entry, use `tabularium-new-entry' instead."
 With USE-ALT-METHOD non-nil, use the alternative entry method."
   (if (tabularium--use-form-p use-alt-method)
       (tabularium--duplicate-form id)
-    (tabularium-duplicate id)))
+    (tabularium--duplicate id)))
 
 (defun tabularium--duplicate-form (id)
   "Duplicate entry ID using form mode."
@@ -5668,17 +5757,17 @@ With USE-ALT-METHOD non-nil, use the alternative entry method."
     (push (cons primary-name (tabularium--next-id)) record-data)
     (with-current-buffer buf
       (tabularium-entry-mode)
-      (setq tabularium-entry--schema-name schema-name)
+      (setq tabularium-entry-schema-name schema-name)
       (setq tabularium-entry--fields fields)
       (setq tabularium-entry--values record-data)
       (setq tabularium-entry--original-values (copy-alist record-data))
-      (setq tabularium-entry--editing-id nil)  ; new entry
+      (setq tabularium-entry-editing-id nil)  ; new entry
       (setq tabularium-entry--source-buffer nil)
-      (tabularium-entry--render))
+      (tabularium-entry-render))
     (tabularium--display-entry-buffer buf)
     (message "Duplicated from %s - edit and submit to save" id)))
 
-(defun tabularium-duplicate (id)
+(defun tabularium--duplicate (id)
   "Duplicate record with ID and allow modifications."
   (interactive
    (list (or (tabularium--id-at-point)
@@ -5715,9 +5804,9 @@ With USE-ALT-METHOD non-nil, use the alternative entry method."
 With USE-ALT-METHOD non-nil, use the alternative entry method."
   (if (tabularium--use-form-p use-alt-method)
       (tabularium-new-entry id)
-    (tabularium-edit id)))
+    (tabularium--edit id)))
 
-(defun tabularium-edit (id)
+(defun tabularium--edit (id)
   "Edit record ID, prompting for each field."
   (interactive
    (list (or (tabularium--id-at-point)
@@ -5811,10 +5900,6 @@ Fixes gaps and duplicates in the primary key column."
       (message "Reindexed %d entries (1 to %d)" count count))))
 
 ;;; *** 7.1.2 Multi-Column Sort
-
-(defvar-local tabularium--sort-columns nil
-  "List of (COLUMN . DIRECTION) for multi-column sorting.
-DIRECTION is \\='asc or \\='desc.  First element is primary sort.")
 
 (defun tabularium-view-sort-reverse ()
   "Reverse the current sort order.
@@ -6274,14 +6359,14 @@ Opens form for data entry."
                     fields)))
       (with-current-buffer buf
         (tabularium-entry-mode)
-        (setq tabularium-entry--schema-name schema-name)
+        (setq tabularium-entry-schema-name schema-name)
         (setq tabularium-entry--fields fields)
         (setq tabularium-entry--values initial-values)
         (setq tabularium-entry--original-values (copy-alist initial-values))
-        (setq tabularium-entry--editing-id nil)
+        (setq tabularium-entry-editing-id nil)
         (setq tabularium-entry--source-buffer
               (when (derived-mode-p 'tabularium-view-mode) source-buffer))
-        (tabularium-entry--render))
+        (tabularium-entry-render))
       (tabularium--display-entry-buffer buf)
       (message "Inserting new entry at position %d" position))))
 
@@ -6332,57 +6417,64 @@ Otherwise swaps entry at point with another.  Undoable."
     (revert-buffer)
     (message "Swapped entries %d and %d" id1 id2)))
 
-;;; *** 7.1.4 Freeze/Pin Rows
+;;; *** 7.1.4 Freeze Rows
 
-(defvar-local tabularium--frozen-ids nil
-  "List of entry IDs to keep at top of view (frozen/pinned rows).")
+(defun tabularium-view-freeze ()
+  "Freeze entry at point or all marked entries to the top of view.
+If entries are marked, freezes all marked entries and clears marks.
+Otherwise, freezes the entry at point."
+  (interactive)
+  (if tabularium--marked-entries
+      (tabularium-view-freeze-marked)
+    (when-let ((id (tabularium--id-at-point)))
+      (if (member id tabularium--frozen-ids)
+          (message "Entry #%s is already frozen" id)
+        (push id tabularium--frozen-ids)
+        (revert-buffer)
+        (message "Frozen entry #%s (%d frozen)" id (length tabularium--frozen-ids))))))
 
-(defun tabularium-view-freeze (&optional unfreeze)
-  "Freeze/pin entry at point or all marked entries to top of view.
-With prefix argument UNFREEZE, unfreeze instead of freeze.
-If entries are marked, operates on all marked entries and clears marks.
-Otherwise, operates on the entry at point."
-  (interactive "P")
-  (if unfreeze
-      ;; Unfreeze mode (C-u z)
-      (if tabularium--marked-entries
-          ;; Unfreeze marked entries
-          (let ((count 0))
-            (dolist (id tabularium--marked-entries)
-              (when (member id tabularium--frozen-ids)
-                (setq tabularium--frozen-ids (delete id tabularium--frozen-ids))
-                (cl-incf count)))
-            (setq tabularium--marked-entries nil)
-            (tabularium-view--update-mark-display)
-            (revert-buffer)
-            (message "Unfroze %d marked entries (%d still frozen)" count (length tabularium--frozen-ids)))
-        ;; Unfreeze single entry at point
-        (when-let ((id (tabularium--id-at-point)))
-          (if (member id tabularium--frozen-ids)
-              (progn
-                (setq tabularium--frozen-ids (delete id tabularium--frozen-ids))
-                (revert-buffer)
-                (message "Unfroze entry #%s (%d still frozen)" id (length tabularium--frozen-ids)))
-            (message "Entry #%s is not frozen" id))))
-    ;; Freeze mode (z)
-    (if tabularium--marked-entries
-        ;; Freeze marked entries
-        (let ((count 0))
-          (dolist (id tabularium--marked-entries)
-            (unless (member id tabularium--frozen-ids)
-              (push id tabularium--frozen-ids)
-              (cl-incf count)))
-          (setq tabularium--marked-entries nil)
-          (tabularium-view--update-mark-display)
+(defun tabularium-view-freeze-marked ()
+  "Freeze all marked entries to the top of the view.
+Clears marks after pinning."
+  (interactive)
+  (unless tabularium--marked-entries
+    (user-error "No marked entries"))
+  (let ((count 0))
+    (dolist (id tabularium--marked-entries)
+      (unless (member id tabularium--frozen-ids)
+        (push id tabularium--frozen-ids)
+        (cl-incf count)))
+    (setq tabularium--marked-entries nil)
+    (tabularium-view--update-mark-display)
+    (revert-buffer)
+    (message "Frozen %d marked entries (%d total frozen)" count (length tabularium--frozen-ids))))
+
+(defun tabularium-view-unfreeze ()
+  "Unfreeze entry at point."
+  (interactive)
+  (when-let ((id (tabularium--id-at-point)))
+    (if (member id tabularium--frozen-ids)
+        (progn
+          (setq tabularium--frozen-ids (delete id tabularium--frozen-ids))
           (revert-buffer)
-          (message "Froze %d marked entries (%d total frozen)" count (length tabularium--frozen-ids)))
-      ;; Freeze single entry at point
-      (when-let ((id (tabularium--id-at-point)))
-        (if (member id tabularium--frozen-ids)
-            (message "Entry #%s is already frozen" id)
-          (push id tabularium--frozen-ids)
-          (revert-buffer)
-          (message "Froze entry #%s (%d frozen)" id (length tabularium--frozen-ids)))))))
+          (message "Unfroze entry #%s (%d still frozen)" id (length tabularium--frozen-ids)))
+      (message "Entry #%s is not frozen" id))))
+
+(defun tabularium-view-unfreeze-marked ()
+  "Unfreeze all marked entries.
+Clears marks after unpinning."
+  (interactive)
+  (unless tabularium--marked-entries
+    (user-error "No marked entries"))
+  (let ((count 0))
+    (dolist (id tabularium--marked-entries)
+      (when (member id tabularium--frozen-ids)
+        (setq tabularium--frozen-ids (delete id tabularium--frozen-ids))
+        (cl-incf count)))
+    (setq tabularium--marked-entries nil)
+    (tabularium-view--update-mark-display)
+    (revert-buffer)
+    (message "Unfroze %d marked entries (%d still frozen)" count (length tabularium--frozen-ids))))
 
 (defun tabularium-view-unfreeze-all ()
   "Unfreeze all frozen entries."
@@ -6394,22 +6486,9 @@ Otherwise, operates on the entry at point."
       (revert-buffer)
       (message "Unfroze all %d entries" count))))
 
-(defun tabularium-view-freeze-marked ()
-  "Freeze all marked entries to the top of the view."
-  (interactive)
-  (unless tabularium--marked-entries
-    (user-error "No marked entries"))
-  (tabularium-view-freeze))
-
 ;;; ** 7.2 Column Operations
 
 ;;; *** 7.2.1 Column Reordering
-
-(defvar-local tabularium--column-order nil
-  "Custom column order as list of field names, or nil for schema order.")
-
-(defvar-local tabularium--hidden-columns nil
-  "List of column names (symbols) to hide in view mode.")
 
 (defun tabularium-view-reorder-columns ()
   "Interactively reorder columns."
@@ -6502,7 +6581,7 @@ Otherwise, operates on the entry at point."
                              (let ((f (tabularium--field-by-name name)))
                                (plist-get f :hidden))))
                        order))
-             ;; Account for frozen indicator column offset
+             ;; Account for freeze indicator column offset
              (adjusted-idx (if tabularium--frozen-ids (1- idx) idx)))
         (when (and (>= adjusted-idx 0) (< adjusted-idx (length visible)))
           (nth adjusted-idx visible))))))
@@ -6725,7 +6804,6 @@ The primary key column cannot be deleted.  Undoable."
                                           saved-col))))
     (message "Deleted %d column%s" (length names)
              (if (= 1 (length names)) "" "s"))))
-
 
 (defun tabularium-view-column-move (columns target)
   "Move COLUMNS (list of symbols) to be before TARGET column.
@@ -8479,7 +8557,6 @@ Optionally filter by FILTER-FIELD matching FILTER-VALUE."
                             "")))
         (message "%s%s: %.2f [%.2f - %.2f] (n = %d)" field filter-info median q1 q3 n)))))
 
-
 ;;; *** 7.5.3 Visible Statistics
 
 (defun tabularium-visible-sum ()
@@ -8848,13 +8925,13 @@ When no marks are set, fills blank cells from point in DIRECTION
       (when ops
         (tabularium--undo-push (if (= 1 (length ops))
                                    (car ops)
-                                 (list :type 'multi :ops (nreverse ops))))))
-    (tabularium--invalidate-cache)
-    (when has-marks
-      (setq tabularium--marked-entries nil)
-      (tabularium-view--update-mark-display))
-    (revert-buffer)
-    (message "Filled %d rows" (length ids))))
+                                 (list :type 'multi :ops (nreverse ops)))))
+      (tabularium--invalidate-cache)
+      (when has-marks
+        (setq tabularium--marked-entries nil)
+        (tabularium-view--update-mark-display))
+      (revert-buffer)
+      (message "Filled %d row%s" filled (if (= filled 1) "" "s")))))
 
 (defun tabularium-view-fill ()
   "Fill the blank gap above point in the current column.
@@ -8949,9 +9026,11 @@ from a row, entering manually, or picking from existing values."
   (tabularium--fill-execute field source-value 'up))
 
 (defun tabularium-view-fill-down-to-point ()
-  "Fill blanks above point using the nearest non-blank value above.
-Scans upward for the nearest non-blank cell, then fills all blank
-cells between that source and point (inclusive).  Undoable."
+  "Fill the blank gap that ends at point, downward from a source above.
+Scans upward to find the nearest non-blank cell in the current column,
+then fills every blank cell from that source down to point (inclusive)
+with that value.  The fill direction is downward; point is the bottom
+of the filled range.  Undoable."
   (interactive)
   (let* ((col-name (or (tabularium--column-name-at-point)
                        (user-error "No column at point")))
@@ -8971,9 +9050,11 @@ cells between that source and point (inclusive).  Undoable."
     (tabularium--fill-execute field fill-value 'up)))
 
 (defun tabularium-view-fill-up-to-point ()
-  "Fill blanks below point using the nearest non-blank value below.
-Scans downward for the nearest non-blank cell, then fills all blank
-cells between point and that source (inclusive).  Undoable."
+  "Fill the blank gap that starts at point, upward from a source below.
+Scans downward to find the nearest non-blank cell in the current column,
+then fills every blank cell from that source up to point (inclusive)
+with that value.  The fill direction is upward; point is the top of
+the filled range.  Undoable."
   (interactive)
   (let* ((col-name (or (tabularium--column-name-at-point)
                        (user-error "No column at point")))
@@ -9160,7 +9241,8 @@ current column in marked rows instead.  Undoable."
                   (user-error "No filled cells to delete from point"))
                 (nreverse run))))))
     (when (yes-or-no-p (format "Clear '%s' in %d rows? " field (length ids)))
-      (let ((ops '()))
+      (let ((ops '())
+            (cleared 0))
         (dolist (id ids)
           (let* ((record (tabularium--get-record-by-id id))
                  (old-value (alist-get col-name record)))
@@ -9170,17 +9252,18 @@ current column in marked rows instead.  Undoable."
                     ops)
               (tabularium-db-update tabularium--db tabularium-table-name
                                 (list (cons col-name ""))
-                                (tabularium--primary-field-name) id))))
+                                (tabularium--primary-field-name) id)
+              (cl-incf cleared))))
         (when ops
           (tabularium--undo-push (if (= 1 (length ops))
                                  (car ops)
-                               (list :type 'multi :ops (nreverse ops))))))
-      (tabularium--invalidate-cache)
-      (when has-marks
-        (setq tabularium--marked-entries nil)
-        (tabularium-view--update-mark-display))
-      (revert-buffer)
-      (message "Cleared %d rows" (length ids)))))
+                               (list :type 'multi :ops (nreverse ops)))))
+        (tabularium--invalidate-cache)
+        (when has-marks
+          (setq tabularium--marked-entries nil)
+          (tabularium-view--update-mark-display))
+        (revert-buffer)
+        (message "Cleared %d row%s" cleared (if (= cleared 1) "" "s"))))))
 
 (defun tabularium-view-fill-clear (target-id)
   "Clear the current column from point to TARGET-ID (inclusive).
@@ -9242,13 +9325,13 @@ column in marked rows instead.  Undoable."
         (when ops
           (tabularium--undo-push (if (= 1 (length ops))
                                      (car ops)
-                                   (list :type 'multi :ops (nreverse ops))))))
-      (tabularium--invalidate-cache)
-      (when has-marks
-        (setq tabularium--marked-entries nil)
-        (tabularium-view--update-mark-display))
-      (revert-buffer)
-      (message "Cleared %d rows" (length ids)))))
+                                   (list :type 'multi :ops (nreverse ops)))))
+        (tabularium--invalidate-cache)
+        (when has-marks
+          (setq tabularium--marked-entries nil)
+          (tabularium-view--update-mark-display))
+        (revert-buffer)
+        (message "Cleared %d row%s" cleared (if (= cleared 1) "" "s"))))))
 
 ;;; * 8 Import & Export
 
@@ -9486,7 +9569,7 @@ If no primary column is specified, an `id' column is prepended automatically."
 (defun tabularium-import--create-database (db-file schema-name fields)
   "Create a new Tabularium database at DB-FILE with SCHEMA-NAME and FIELDS."
   (let* ((db-file (expand-file-name db-file))
-         (schema-file (concat (file-name-sans-extension db-file) ".schema.el"))
+         (schema-file (tabularium-registry--schema-file-for-db db-file))
          (schema-content
           (format ";;; %s --- Tabularium schema -*- lexical-binding: t; -*-\n\n%s\n\n;;; %s ends here\n"
                   (file-name-nondirectory schema-file)

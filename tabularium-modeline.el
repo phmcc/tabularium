@@ -1,13 +1,14 @@
 ;;; tabularium-modeline.el --- Modeline integration for Tabularium -*- lexical-binding: t; -*-
 
-;; Author: Paul H. McClelland
-;; SPDX-License-Identifier: GPL-3.0-or-later
 ;; Copyright (C) 2026 Paul H. McClelland
 
-;; Version: 0.4.3
+;; Author: Paul H. McClelland <paulhmcclelland@protonmail.com>
+;; Maintainer: Paul H. McClelland <paulhmcclelland@protonmail.com>
+;; Version: 0.4.4
 ;; Package-Requires: ((emacs "29.1"))
 ;; Keywords: data, faces
 ;; URL: https://codeberg.org/phmcc/tabularium
+;; SPDX-License-Identifier: GPL-3.0-or-later
 
 ;;
 ;; This program is free software: you can redistribute it and/or modify
@@ -170,7 +171,7 @@ When nil and using icons: [<icon> DatabaseName]"
   "Face for schema/table name in modeline."
   :group 'tabularium-modeline)
 
-(defface tabularium-modeline-icon
+(defface tabularium-modeline-icon-face
   '((t (:inherit font-lock-keyword-face)))
   "Face for icon in modeline."
   :group 'tabularium-modeline)
@@ -197,11 +198,11 @@ loaded, then falls back to `tabularium-modeline-icon'."
          (or (featurep 'nerd-icons)
              (featurep 'all-the-icons-nerd-fonts)))
     (propertize tabularium-modeline-nerd-font-icon
-                'face 'tabularium-modeline-icon))
+                'face 'tabularium-modeline-icon-face))
    ;; Use user-configured icon string
    (tabularium-modeline-icon
     (propertize tabularium-modeline-icon
-                'face 'tabularium-modeline-icon))))
+                'face 'tabularium-modeline-icon-face))))
 
 (defun tabularium-modeline--in-context-p ()
   "Return non-nil if we should show the segment based on context."
@@ -210,8 +211,13 @@ loaded, then falls back to `tabularium-modeline-icon'."
       (derived-mode-p 'tabularium-entry-mode)))
 
 (defun tabularium-modeline--active-p ()
-  "Return non-nil if Tabularium has an active database."
-  (and (boundp 'tabularium--current-schema-name)
+  "Return non-nil if Tabularium should display in the modeline.
+The Tabularium minor mode must be enabled, a database must be
+open, and the current buffer must satisfy the configured context
+predicate."
+  (and (boundp 'tabularium-modeline-mode)
+       tabularium-modeline-mode
+       (boundp 'tabularium--current-schema-name)
        tabularium--current-schema-name
        (tabularium-modeline--in-context-p)))
 
@@ -244,7 +250,7 @@ Returns nil if no database is active."
                 (concat icon
                         (propertize " | " 'face 'tabularium-modeline-bracket))
               ;; Text mode: [SQLite | Database]
-              (concat (propertize (or backend "Tab") 'face 'tabularium-modeline-icon)
+              (concat (propertize (or backend "Tab") 'face 'tabularium-modeline-icon-face)
                       (propertize " | " 'face 'tabularium-modeline-bracket)))
             (propertize db-name 'face 'tabularium-modeline-database)
             (propertize "]" 'face 'tabularium-modeline-bracket))))
@@ -261,8 +267,8 @@ Returns nil if no database is active."
                              (define-key map [mode-line mouse-1]
                                          (lambda ()
                                            (interactive)
-                                           (if (fboundp 'tabularium-hydra/body)
-                                               (tabularium-hydra/body)
+                                           (if (fboundp 'tabularium-menu)
+                                               (call-interactively #'tabularium-menu)
                                              (call-interactively #'tabularium-view))))
                              map))))
 
@@ -325,15 +331,15 @@ See the commentary in tabularium-modeline.el for inline setup instructions."
                                       (if tabularium-modeline-use-icon
                                           ;; Icon mode: try doom icon, then user icon, then text
                                           (let ((icon (or (doom-modeline-icon 'faicon "database" nil nil
-                                                                              :face 'tabularium-modeline-icon)
+                                                                              :face 'tabularium-modeline-icon-face)
                                                           (tabularium-modeline--icon))))
                                             (if icon
                                                 (concat icon " |")
                                               (propertize (format "%s |" (or backend "Tab"))
-                                                          'face 'tabularium-modeline-icon)))
+                                                          'face 'tabularium-modeline-icon-face)))
                                         ;; Text mode: "SQLite |"
                                         (propertize (format "%s |" (or backend "Tab"))
-                                                    'face 'tabularium-modeline-icon))
+                                                    'face 'tabularium-modeline-icon-face))
                                       (doom-modeline-spc)
                                       (propertize tabularium--current-schema-name
                                                   'face 'tabularium-modeline-database
@@ -402,6 +408,12 @@ See the commentary in tabularium-modeline.el for inline setup instructions."
                                    tabularium-modeline-database)))
     (message "Tabularium: awesome-tray module defined. Add \"tabularium\" to `awesome-tray-active-modules'.")))
 
+(defun tabularium-modeline--awesome-tray-disable ()
+  "Remove Tabularium entry from awesome-tray's module alist."
+  (when (boundp 'awesome-tray-module-alist)
+    (setq awesome-tray-module-alist
+          (assoc-delete-all "tabularium" awesome-tray-module-alist))))
+
 ;;; * 5 Auto-Detection and Minor Mode
 
 (defun tabularium-modeline-setup (&optional modeline)
@@ -453,12 +465,21 @@ MODELINE can be one of:
 ;;;###autoload
 (define-minor-mode tabularium-modeline-mode
   "Toggle Tabularium modeline indicator.
-When enabled, shows the current database in the mode line."
+When enabled, shows the current database in the mode line.
+Third-party modeline segments (doom-modeline, telephone-line,
+powerline, spaceline, mood-line, simple-modeline) deactivate
+automatically because their content is gated by
+`tabularium-modeline--active-p', which now requires this mode
+to be enabled."
   :global t
   :group 'tabularium-modeline
-  (if tabularium-modeline-mode
-      (tabularium-modeline-setup 'all)
-    (tabularium-modeline--standard-disable)))
+  (cond
+   (tabularium-modeline-mode
+    (tabularium-modeline-setup 'all))
+   (t
+    (tabularium-modeline--standard-disable)
+    (tabularium-modeline--awesome-tray-disable)))
+  (force-mode-line-update t))
 
 ;;; * 6 Provide
 

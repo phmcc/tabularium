@@ -1,13 +1,14 @@
 ;;; tabularium-db-postgresql.el --- PostgreSQL backend for Tabularium -*- lexical-binding: t; no-byte-compile: t; -*-
 
-;; Author: Paul H. McClelland
-;; SPDX-License-Identifier: GPL-3.0-or-later
 ;; Copyright (C) 2026 Paul H. McClelland
 
-;; Version: 0.4.3
+;; Author: Paul H. McClelland <paulhmcclelland@protonmail.com>
+;; Maintainer: Paul H. McClelland <paulhmcclelland@protonmail.com>
+;; Version: 0.4.4
 ;; Package-Requires: ((emacs "29.1") (emacsql "4.0") (emacsql-pg "1.0"))
 ;; Keywords: data
 ;; URL: https://codeberg.org/phmcc/tabularium
+;; SPDX-License-Identifier: GPL-3.0-or-later
 
 ;;
 ;; This program is free software: you can redistribute it and/or modify
@@ -219,6 +220,10 @@
   ;; Register the backend
   (tabularium-db-register-backend 'postgresql 'tabularium-db-postgresql))
 
+(unless (featurep 'emacsql-pg)
+  (message "tabularium-db-postgresql: emacsql-pg not available; \
+PostgreSQL backend disabled.  Install emacsql and emacsql-pg \
+to enable."))
 
 ;;; * 2 Provide
 

@@ -4,6 +4,47 @@
 
 All notable changes to ~tabularium~ are documented in this file.
 
+* 0.4.4 (2026-04-24)
+
+** Added
+
+- Fill-to-point commands =F ,= / =F .= (~tabularium-view-fill-up-to-point~ / ~-down-to-point~)
+- Page navigation: =C-<down>= / =C-<up>= jump by ~tabularium-view-page-size~ rows
+- Column scroll: =C-<right>= / =C-<left>= shift the viewport one column at a time
+- ~tabularium-visible-replace-exact~ bound to =R E=
+- ~tabularium-entry-current-field~ face (theme-aware light/dark variants)
+- Plugin API expanded: ~tabularium-entry-editing-id~, ~tabularium-entry-schema-name~, ~tabularium-entry-render~ promoted to public
+- README sections for the plugin API and computed-field helpers (~tabularium-if~, ~tabularium-case~, ~tabularium-sum-fields~, ~tabularium-concat-fields~)
+
+** Changed
+
+- Freeze keybindings restructured to a =z= prefix: =z z= / =z *= / =z u= / =z U= / =z x=; the prefix-arg toggle on ~tabularium-view-freeze~ replaced by separate ~-unfreeze~ and ~-unfreeze-marked~ commands; indicator changed from =❄= to =∙=
+- =q= reserved for "quit" in all hydras: query-replace moved to =R /= / =R ?=, median[IQR] moved to =# i= / =# I=
+- ~tabularium-replace-exact~ moved from =R == to =R e= for consistency with other replace commands
+- Plugin API rename (single-dash public): ~tabularium-entry-all-nav-positions~, ~tabularium-entry-first-field-line~, ~tabularium-entry-footer-start~ (formerly ~tabularium-entry--*~)
+- Internal API: ~tabularium-duplicate~ / ~tabularium-edit~ → ~tabularium--duplicate~ / ~tabularium--edit~; ~tabularium-db-checkpoint-all~ / ~tabularium-db-prepare-for-sync~ → ~tabularium-db--*~
+- Schema-section keys in main transient use two-key sequences (=. .=, =. s=, =. r=, =. w=, =. +=) to match the keymap
+- View transient filter-clear changed from =f c= to =f x= to match keymap and hydra
+- View-mode buffer-local variables consolidated into Section 1.2 of ~tabularium.el~
+- WAL/SHM cleanup moved to ~tabularium-db.el~ (~tabularium-db-cleanup-wal-files~) with thin wrapper in main file
+- Modeline icon ~defface~ renamed to ~tabularium-modeline-icon-face~ (resolves collision with ~defcustom~ of same name)
+- Modeline mouse-1 click now calls ~tabularium-menu~ (honours ~tabularium-menu-system~)
+- ~tabularium-modeline-mode~ disable also tears down the awesome-tray module entry; segments self-deactivate via ~tabularium-modeline--active-p~, which now requires the mode to be enabled
+- ~tabularium-view-show-more~ default increment is ~tabularium-view-page-size~ (was hard-coded 500)
+- File headers reordered to FSF/GNU convention; ~Maintainer:~ and email added
+- Hardcoded ~.schema.el~ replaced with ~tabularium-schema-file-suffix~ throughout
+- Hardcoded ~#3a3a5a~ overlay color replaced with the new ~tabularium-entry-current-field~ face
+
+** Fixed
+
+- ~tabularium-schemas~ docstring covers all eight ~:complete~ types and the previously-undocumented field properties
+- Fill commands report the actual count of cells changed (the ~filled~ / ~cleared~ counters were tracked but not reported)
+- ~tabularium-checkpoint~ now autoloaded; matching ~tabularium-prepare-for-sync~
+- ~(require 'subr-x)~ added; forward declarations added for ~tabularium-transient~ and ~tabularium--kill-ring~
+- PostgreSQL backend emits a one-time message when ~emacsql-pg~ is unavailable (was silent)
+- README and KEYBINDINGS corrections: customization defaults, removed bindings that don't exist (=G=, =T=, =h=, =>=), added =* p= / =R E=, fixed column-clipboard key casing
+- Six double-blank-line instances and trailing whitespace cleaned up; section numbering normalized in ~tabularium-menu.el~
+
 * 0.4.3 (2026-04-06)
 
 ** Added
@@ -45,7 +86,7 @@ All notable changes to ~tabularium~ are documented in this file.
 ** Changed
 
 - All visible-scoped functions renamed to ~tabularium-visible-*~
-- ~tabularium-view-hard-refresh~ re-applies the active named view
+- ~tabularium-view-refresh~ re-applies the active named view
 - Registry paths normalized with ~abbreviate-file-name~ for cross-machine portability
 - Section reorganization: Find/Replace and Math subsections split into Standard and Visible groups
 - Default adjustments: page size 500, undo limit 100, max recent 100

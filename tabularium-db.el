@@ -1,13 +1,14 @@
 ;;; tabularium-db.el --- Database backend abstraction for Tabularium -*- lexical-binding: t; -*-
 
-;; Author: Paul H. McClelland
-;; SPDX-License-Identifier: GPL-3.0-or-later
 ;; Copyright (C) 2026 Paul H. McClelland
 
-;; Version: 0.4.3
+;; Author: Paul H. McClelland <paulhmcclelland@protonmail.com>
+;; Maintainer: Paul H. McClelland <paulhmcclelland@protonmail.com>
+;; Version: 0.4.4
 ;; Package-Requires: ((emacs "29.1"))
 ;; Keywords: data
 ;; URL: https://codeberg.org/phmcc/tabularium
+;; SPDX-License-Identifier: GPL-3.0-or-later
 
 ;;
 ;; This program is free software: you can redistribute it and/or modify
@@ -381,9 +382,9 @@ Modifies the schema file on disk.  Returns non-nil on success."
   :type 'boolean
   :group 'tabularium)
 
-(defun tabularium-db-checkpoint-all ()
-  "Checkpoint all open SQLite WALs without closing connections."
-  (interactive)
+(defun tabularium-db--checkpoint-all ()
+  "Checkpoint all open SQLite WALs without closing connections.
+Internal; called by `tabularium-checkpoint'."
   (let ((count 0) (errors 0))
     (maphash (lambda (_name backend)
                (when (and backend
@@ -403,11 +404,25 @@ Modifies the schema file on disk.  Returns non-nil on success."
         (message "Checkpointed %d database(s), %d error(s)" count errors)
       (message "Checkpointed %d database(s)" count))))
 
-(defun tabularium-db-prepare-for-sync ()
-  "Close all connections for clean sync state."
-  (interactive)
+(defun tabularium-db--prepare-for-sync ()
+  "Close all connections for clean sync state.
+Internal; called by `tabularium-prepare-for-sync'."
   (tabularium-db-close-all-connections)
   (message "All databases closed and ready for sync"))
+
+(defun tabularium-db-cleanup-wal-files (db-files)
+  "Delete orphaned SQLite WAL and SHM files for DB-FILES.
+DB-FILES is a list of database file paths.  Returns the number
+of files deleted.  Safe to call when databases are closed."
+  (let ((cleaned 0))
+    (dolist (db-file db-files)
+      (when db-file
+        (dolist (suffix '("-wal" "-shm"))
+          (let ((f (concat db-file suffix)))
+            (when (file-exists-p f)
+              (delete-file f)
+              (cl-incf cleaned))))))
+    cleaned))
 
 (defun tabularium-db--suspend-hook ()
   "Close databases on suspend if configured."

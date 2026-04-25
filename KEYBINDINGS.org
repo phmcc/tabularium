@@ -8,21 +8,25 @@ This file documents the default keybindings for ~tabularium~.  All bindings can 
 
 ** Navigation
 
-| Key                  | Command                        |
-|----------------------+--------------------------------|
-| =n= / =p=                | Next / previous row            |
-| =TAB= / =S-TAB=          | Next / previous cell           |
-| ={= / =}=                | First / last row (same column) |
-| =[= / =]=                | Line beginning / end           |
-| =M-n= / =M-p=            | Jump to different value ↓ / ↑  |
-| =M-]= / =M-[=            | Jump to different value → / ←  |
-| =C-<up>= / =C-<down>=    | Jump to different value ↑ / ↓  |
-| =C-<left>= / =C-<right>= | Jump to different value ← / →  |
-| =RET=                  | View entry details             |
-| =/=                    | Fuzzy find                     |
-| =g=                    | Refresh                        |
+| Key                  | Command                                         |
+|----------------------+-------------------------------------------------|
+| =n= / =p=                | Next / previous row                             |
+| =TAB= / =S-TAB=          | Next / previous cell                            |
+| ={= / =}=                | First / last row (same column)                  |
+| =[= / =]=                | Line beginning / end                            |
+| =M-n= / =M-p=            | Jump to different value ↓ / ↑                   |
+| =M-<down>= / =M-<up>=    | Jump to different value ↓ / ↑                   |
+| =M-]= / =M-[=            | Jump to different value → / ←                   |
+| =M-<right>= / =M-<left>= | Jump to different value → / ←                   |
+| =C-<down>= / =C-<up>=    | Page down / up (by ~tabularium-view-page-size~)   |
+| =C-<right>= / =C-<left>= | Scroll viewport one column right / left        |
+| =RET=                  | View entry details                              |
+| =/=                    | Fuzzy find                                      |
+| =g=                    | Refresh                                         |
 
-Cell-jump navigation (=M-n=, =M-p=, =M-]=, =M-[=) moves to the next cell with a different value, useful for grouped or sorted data.  A prefix argument (e.g., =C-u 3 M-n=) jumps multiple value transitions.
+Cell-jump navigation (=M-n=, =M-p=, =M-]=, =M-[=, and the =M-<arrow>= variants) moves to the next cell with a different value, useful for grouped or sorted data.  A prefix argument (e.g., =C-u 3 M-n=) jumps multiple value transitions.
+
+Page navigation (=C-<down>= / =C-<up>=) jumps by the configured page size in either direction.  Column scroll (=C-<right>= / =C-<left>=) shifts the visible portion of the buffer one column at a time, useful when columns overflow the window.
 
 ** Goto (='= prefix)
 
@@ -31,7 +35,6 @@ Cell-jump navigation (=M-n=, =M-p=, =M-]=, =M-[=) moves to the next cell with a 
 | =' c= | Go to column by name |
 | =' r= | Go to row by number  |
 | =' e= | Go to entry by ID    |
-| =G=   | Go to entry (legacy) |
 
 ** Entry creation and modification
 
@@ -50,7 +53,7 @@ Cell-jump navigation (=M-n=, =M-p=, =M-]=, =M-[=) moves to the next cell with a 
 | =X=   | Cut entry                           |
 | =M=   | Move entry                          |
 | =W=   | Swap entries (exactly 2)            |
-| =T=   | Reindex IDs                         |
+| =`=   | Reindex IDs                         |
 
 ** Marking (dired-style)
 
@@ -63,6 +66,7 @@ Cell-jump navigation (=M-n=, =M-p=, =M-]=, =M-[=) moves to the next cell with a 
 | =x=   | Execute on marked         |
 | =* *= | Mark matching (substring) |
 | =* == | Mark exact                |
+| =* p= | Mark pattern (SQL LIKE)   |
 | =* x= | Mark regexp               |
 | =* #= | Count marked              |
 
@@ -72,12 +76,13 @@ Cell-jump navigation (=M-n=, =M-p=, =M-]=, =M-[=) moves to the next cell with a 
 |-----+---------------------------------------|
 | =R r= | Replace substring                     |
 | =R R= | Replace substring (visible rows only) |
-| =R == | Replace exact                         |
+| =R e= | Replace exact                         |
+| =R E= | Replace exact (visible rows only)     |
 | =R p= | Replace pattern (SQL LIKE)            |
 | =R x= | Replace regexp                        |
 | =R X= | Replace regexp (visible rows only)    |
-| =R q= | Query-replace (interactive)           |
-| =R Q= | Query-replace (visible rows only)     |
+| =R /= | Query-replace (interactive)           |
+| =R ?= | Query-replace (visible rows only)     |
 | =R c= | Toggle case-sensitivity               |
 
 Uppercase variants scope to visible rows only.  Lowercase variants act on marked rows (if any) or all rows.  Choice fields (those with =:choices= in the schema) are automatically excluded when the replacement value is not in the allowed set.
@@ -134,43 +139,52 @@ Filters are progressive layers with logical operators.  The first filter sets th
 | =0=     | Reset view (same as =v x=)     |
 | =1=–=9= | Apply schema view by number  |
 
-** Freeze/pin rows
+** Freeze rows (=z= prefix)
 
-| Key | Command      |
-|-----+--------------|
-| =z= | Freeze row   |
-| =Z= | Unfreeze row |
+| Key   | Command                                  |
+|-------+------------------------------------------|
+| =z z= | Freeze row at point (or all marked rows) |
+| =z *= | Freeze all marked rows                   |
+| =z u= | Unfreeze row at point                    |
+| =z U= | Unfreeze all marked rows                 |
+| =z x= | Unfreeze all frozen rows                 |
+
+Frozen rows always render at the top of the view, marked with a =∙= indicator.
 
 ** Column operations (=|= prefix)
 
-| Key   | Command            |
-|-------+--------------------|
-| =| t= | Toggle column      |
-| =| h= | Hide columns       |
-| =| o= | Show only selected |
-| =| a= | Show all columns   |
-| =| r= | Reorder columns    |
-| =| <= | Move column left   |
-| =| >= | Move column right  |
-| =| == | Reset order        |
-| =| += | Add column         |
-| =| -= | Delete column      |
-| =| E= | Edit column        |
-| =| I= | Insert column      |
-| =| M= | Move column        |
-| =| W= | Swap columns       |
-| =| c= | Copy column        |
-| =| x= | Cut column         |
-| =| v= | Paste column       |
+| Key   | Command                  |
+|-------+--------------------------|
+| =| t= | Toggle column visibility |
+| =| h= | Hide columns             |
+| =| o= | Show only selected       |
+| =| a= | Show all columns         |
+| =| r= | Reorder columns          |
+| =| <= | Move column left         |
+| =| >= | Move column right        |
+| =| == | Reset order              |
+| =| N= | Add column               |
+| =| I= | Insert column            |
+| =| D= | Delete column            |
+| =| E= | Edit column              |
+| =| d= | Duplicate column         |
+| =| M= | Move columns             |
+| =| W= | Swap columns             |
+| =| C= | Copy columns             |
+| =| X= | Cut columns              |
+| =| V= | Paste columns            |
 
-** View expansion (=>= prefix)
+** View expansion (=v= prefix)
 
-| Key | Command               |
-|-----+-----------------------|
-| => >= | Show more rows (+500) |
-| => a= | Show all rows         |
-| => r= | Show ID range         |
-| => == | Reset to default      |
+| Key   | Command          |
+|-------+------------------|
+| =v v= | Select view      |
+| =v 0= | Reset views      |
+| =v x= | Clear all views  |
+| =v >= | Show more rows   |
+| =v a= | Show all rows    |
+| =v r= | Show ID range    |
+| =v == | Reset to default |
 
 ** Math (=#= prefix)
 
@@ -182,8 +196,8 @@ Filters are progressive layers with logical operators.  The first filter sets th
 | =# M= | Min / max (visible rows only)    |
 | =# d= | Mean ± standard deviation        |
 | =# D= | Mean ± SD (visible rows only)    |
-| =# q= | Median [Q1–Q3] (IQR)             |
-| =# Q= | Median [IQR] (visible rows only) |
+| =# i= | Median [Q1–Q3] (IQR)             |
+| =# I= | Median [IQR] (visible rows only) |
 | =# #= | Column summary                   |
 
 Uppercase variants scope to visible rows only.
@@ -217,15 +231,14 @@ Uppercase variants scope to visible rows only.
 
 ** Other
 
-| Key | Command                        |
-|-----+--------------------------------|
-| =e=   | Export (prompts for TSV / CSV) |
-| =i=   | Import                         |
-| =o=   | Open another database          |
-| =O=   | Open and view                  |
-| =?=   | Help hydra                     |
-| =h=   | Transient menu                 |
-| =q=   | Quit                           |
+| Key     | Command                        |
+|---------+--------------------------------|
+| =e=       | Export (prompts for TSV / CSV) |
+| =i=       | Import                         |
+| =o=       | Open another database          |
+| =O=       | Open and view                  |
+| =?= / =SPC= | Open menu                      |
+| =q=       | Quit                           |
 
 * Entry Mode (~tabularium-entry-mode~)
 

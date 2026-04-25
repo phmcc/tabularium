@@ -8,7 +8,7 @@
 
 * Design and Scope
 
-~tabularium~ uses several built-in tools to create a data management ecosystem within Emacs, including ~tabulated-list-mode~ for row/column display, ~forms-mode~ for data entry, and ~sqlite.el~ for the database backend.  The result is something close in spirit to Microsoft Access or LibreOffice Base, but fully integrated into Emacs—leveraging Emacs's standard completion frameworks, keyboard-driven navigation, and version control support.  Each database can also be extended with custom Elisp in its corresponding schema file, and several useful elements from common spreadsheet software such as Microsoft Excel and LibreOffice Calc are also implemented for ease-of-use.  An EIEIO-based backend abstraction layer supports future extensions to PostgreSQL and other database systems.
+~tabularium~ uses several built-in tools to create a data management ecosystem within Emacs, including ~tabulated-list-mode~ for row/column display and ~sqlite.el~ for the database backend.  The result is something close in spirit to Microsoft Access or LibreOffice Base, but fully integrated into Emacs—leveraging Emacs's standard completion frameworks, keyboard-driven navigation, and version control support.  Each database can also be extended with custom Elisp in its corresponding schema file, and several useful elements from common spreadsheet software such as Microsoft Excel and LibreOffice Calc are also implemented for ease-of-use.  An EIEIO-based backend abstraction layer supports future extensions to PostgreSQL and other database systems.
 
 This package was developed out of a need to more adeptly handle large datasets within Emacs.  Emacs's built-in tools such as ~org-table~ and ~csv-mode~ handle human-readable tables and flat files well, but neither scales gracefully to thousands of records with rich schemas, field-level completion, or computed entries.  Conversely, packages like ~emacsql~ provide raw database access but lack a data management interface, and ~esqlite~ offers SQLite bindings without a user-facing layer.  ~tabularium~ is designed to occupy the space between these tools and full external database applications.
 
@@ -17,8 +17,8 @@ This package was developed out of a need to more adeptly handle large datasets w
 - *SQL-backed storage* — SQLite by default, with an extensible backend architecture
 - *Schema-driven data structure* — field types, defaults, choices, validation, and computed fields
 - *Multiple entry modes* — form-based (with per-field completion), minibuffer prompts, and quick entry for high-volume workflows
-- *Rich querying* — filter, search, count, and aggregate across any field type; full-text search via FTS5
-- *Spreadsheet operations* — undo/redo, copy/paste, dired-style marking, multi-column sort, freeze/pin rows, fill, query-replace, column clipboard, and reindexing
+- *Rich querying* — filter, search, count, and aggregate across any field type; fuzzy find via ~completing-read~
+- *Spreadsheet operations* — undo/redo, copy/paste, dired-style marking, multi-column sort, freeze rows, fill, query-replace, column clipboard, and reindexing
 - *Completion system* — historical (frequency-ranked), recent, vocabulary (file or inline), related (contextual co-occurrence), filtered (~SQL WHERE~), custom function, and union sources
 - *Saved views* — named presets for filter, sort, and column configuration
 - *Import/export* — CSV, TSV, and org-table import; CSV/TSV export (RFC 4180-compliant)
@@ -37,7 +37,7 @@ Install directly from the online repository using ~elpaca~ or ~straight~:
 
 #+begin_src emacs-lisp
 (use-package tabularium
-  :ensure (:host codeberg :repo "user/tabularium")
+  :ensure (:host codeberg :repo "phmcc/tabularium")
   :config
   (require 'tabularium-menu))
 #+end_src
@@ -147,6 +147,7 @@ Cell-jump commands accept a prefix argument to jump across multiple value transi
 | ~tabularium-view-fill-clear~           | Clear to row: blank the current column from point to a target       |
 | ~tabularium-replace-substring~         | Replace substring across selected fields                            |
 | ~tabularium-replace-exact~             | Replace exact value across selected fields                          |
+| ~tabularium-replace-pattern~           | Replace values matching a glob pattern across selected fields       |
 | ~tabularium-replace-regexp~            | Replace by regexp across selected fields                            |
 | ~tabularium-query-replace~             | Interactive query-replace with visual feedback                      |
 | ~tabularium-toggle-case-sensitive~     | Toggle case sensitivity for replace and mark operations             |
@@ -216,23 +217,27 @@ Cell-jump commands accept a prefix argument to jump across multiple value transi
 
 | Command                 | Description                          |
 |-------------------------+--------------------------------------|
-| ~tabularium-view-show-more~   | Show more rows (default +500)        |
+| ~tabularium-view-show-more~   | Show more rows (one additional page)        |
 | ~tabularium-view-show-all~    | Show all entries (remove page limit) |
 | ~tabularium-view-show-range~  | Show entries within an ID range      |
 | ~tabularium-view-reset-limit~ | Reset to default page size           |
 
-** Freeze/pin, undo/redo, and other
+** Freeze, undo/redo, and other
 
-| Command                   | Description                                   |
-|---------------------------+-----------------------------------------------|
-| ~tabularium-view-freeze~        | Freeze entry at point (pin to top of view)    |
-| ~tabularium-view-freeze-marked~ | Freeze all marked entries                     |
-| ~tabularium-view-unfreeze-all~  | Unfreeze all frozen entries                   |
-| ~tabularium-undo~               | Undo the last database operation              |
-| ~tabularium-redo~               | Redo the last undone operation                |
-| ~tabularium-kill-ring-view~     | View contents of the kill ring                |
-| ~tabularium-view-refresh~       | Refresh the view buffer and reload the schema |
-| ~tabularium-view-menu~          | Open the hydra or transient menu              |
+| Command                            | Description                                   |
+|------------------------------------+-----------------------------------------------|
+| ~tabularium-view-freeze~           | Freeze entry at point or all marked rows      |
+| ~tabularium-view-freeze-marked~    | Freeze all marked entries                     |
+| ~tabularium-view-unfreeze~         | Unfreeze entry at point                       |
+| ~tabularium-view-unfreeze-marked~  | Unfreeze all marked entries                   |
+| ~tabularium-view-unfreeze-all~     | Unfreeze all frozen entries                   |
+| ~tabularium-undo~                  | Undo the last database operation              |
+| ~tabularium-redo~                  | Redo the last undone operation                |
+| ~tabularium-kill-ring-view~        | View contents of the kill ring                |
+| ~tabularium-view-refresh~          | Refresh the view buffer and reload the schema |
+| ~tabularium-view-menu~             | Open the hydra or transient menu              |
+
+Frozen rows always render at the top of the view, regardless of filter or sort.  A small dot (=∙=) marker in the leftmost indicator column distinguishes them from the regular rows beneath.
 
 ** Schema access (from view mode)
 
@@ -249,7 +254,7 @@ Entry mode provides a form-based interface for creating and editing individual r
 
 Three entry methods are available:
 
-- *Form entry* — opens a dedicated buffer with all fields laid out vertically; best for complex schemas and careful data entry (based on the built-in ~forms-mode~).
+- *Form entry* — opens a dedicated buffer with all fields laid out vertically; best for complex schemas and careful data entry.
 - *Prompt entry* — prompts for each field sequentially in the minibuffer; suitable for quick keyboard-driven entry.
 - *Quick entry* — prompts only for fields listed in ~:quick-entry-fields~; ideal for high-volume entry with consistent defaults.
 
@@ -264,7 +269,6 @@ The ~tabularium-entry-method~ variable controls the default method; a prefix arg
 | ~tabularium-entry-edit-field~  | Edit field at point with completion, then advance   |
 | ~tabularium-entry-set-default~ | Set current field to its default value              |
 | ~tabularium-entry-reset-field~ | Reset current field to empty                        |
-| ~tabularium-entry-clear-field~ | Clear field at point                                |
 | ~tabularium-entry-submit~      | Submit the form and save the entry                  |
 | ~tabularium-entry-cancel~      | Cancel the form without saving                      |
 | ~tabularium-entry-new~         | Save current entry and open a new blank form        |
@@ -361,6 +365,43 @@ Views are defined in the ~:views~ property of the schema as a list of plists.  E
 
 Columns can be added, deleted, or edited interactively from view mode.  These operations update both the SQLite database and the schema file.  The schema file can also be edited directly and reloaded without restarting.
 
+** Computed field helpers
+
+Fields defined with ~:computed~ can use an Elisp expression that receives the current row as an alist.  Several helper functions are provided for common patterns:
+
+| Helper                                              | Purpose                                           |
+|-----------------------------------------------------+---------------------------------------------------|
+| ~(tabularium-if CONDITION THEN ELSE)~                 | Inline conditional expression                     |
+| ~(tabularium-case VALUE T1 R1 T2 R2 ... DEFAULT)~     | Match VALUE against tests, return the paired result; optional trailing default |
+| ~(tabularium-sum-fields ROW FIELD1 FIELD2 ...)~       | Sum numeric values of named fields in ROW         |
+| ~(tabularium-concat-fields ROW SEP FIELD1 FIELD2 ...)~ | Concatenate string values of named fields with SEP |
+
+* Extending Tabularium
+
+External packages can inject content and behaviour into Tabularium through a small plugin API exposed by ~tabularium-entry-mode~.
+
+** Render hook
+
+~tabularium-entry-render-hook~ runs at the end of form buffer rendering, inside the render function with ~inhibit-read-only~ bound to ~t~, after the standard hint lines but before cursor positioning.  Hook functions may insert additional content such as cross-table data, schema-specific hint lines, or custom actions.
+
+** Navigable text property
+
+The ~tabularium-navigable~ text property identifies lines (in addition to schema-field overlays) that should participate in field-by-field navigation.  Plugin-injected lines carrying this property are visited by the same navigation commands that move between schema fields.
+
+** Layout context
+
+During and after the render, plugin code may read these buffer-local variables for context:
+
+- ~tabularium-entry-schema-name~ — name of the schema for the current entry buffer (string)
+- ~tabularium-entry-editing-id~ — ID of the entry being edited, or nil for a new (unsaved) entry
+- ~tabularium-entry-first-field-line~ — line number of the first schema field in the form
+- ~tabularium-entry-footer-start~ — buffer position where the footer hint lines begin
+
+** Helper functions
+
+- ~tabularium-entry-all-nav-positions~ returns a sorted list of navigable positions in the form, merging schema-field overlays and plugin-contributed navigable lines
+- ~tabularium-entry-render~ re-renders the form buffer; plugins should call this after mutating data they have injected via the render hook
+
 * Import and Export
 
 ** Import
@@ -394,12 +435,12 @@ TSV is recommended for version control, as it avoids the quoting ambiguities inh
 | ~tabularium-long-field-mode~     | ~text-mode~  | Major mode for editing ~:long~ fields         |
 | ~tabularium-long-field-display~  | ~side~       | Long-field window position (~bottom~ or ~side~) |
 | ~tabularium-export-format~       | ~tsv~        | Default export format (~tsv~ or ~csv~)          |
-| ~tabularium-view-page-size~      | ~1000~       | Number of rows displayed per page           |
+| ~tabularium-view-page-size~      | ~500~        | Number of rows displayed per page           |
 | ~tabularium-view-sort-ascending~ | ~nil~        | Default sort direction                      |
-| ~tabularium-undo-limit~          | ~500~        | Maximum undo entries per database           |
+| ~tabularium-undo-limit~          | ~100~        | Maximum undo entries per database           |
 | ~tabularium-schema-file-suffix~  | ~.schema.el~ | Suffix for schema files                     |
 | ~tabularium-registry-file~       | =(varies)=   | Path to the registry file                   |
-| ~tabularium-registry-max-recent~ | ~50~         | Maximum tracked databases                   |
+| ~tabularium-registry-max-recent~ | ~100~        | Maximum tracked databases                   |
 | ~tabularium-auto-reindex~        | ~nil~        | Reindex automatically on delete             |
 
 Per-schema settings (~:default-sort~, ~:quick-entry-fields~, ~:views~) are specified in the schema file.
@@ -424,13 +465,13 @@ Per-schema settings (~:default-sort~, ~:quick-entry-fields~, ~:views~) are speci
 
 ** Syncing (Git, Syncthing, Dropbox)
 
-Database and schema files are designed to travel together.  Before syncing or suspending, ~tabularium-prepare-for-sync~ checkpoints and closes all connections to ensure a clean state.  ~tabularium-checkpoint~ flushes the write-ahead log without disconnecting.  ~tabularium-fix-paths~ converts any absolute home directory paths in schema files to =~/= notation, ensuring portability across machines with different home directories.
+Database and schema files are designed to travel together.  Before syncing or suspending, ~tabularium-prepare-for-sync~ checkpoints and closes all connections to ensure a clean state.  ~tabularium-checkpoint~ flushes the write-ahead log without disconnecting.  ~tabularium-cleanup-wal-files~ removes any orphaned =-wal= and =-shm= files left by interrupted sessions; it is safe to run when the database is closed.  ~tabularium-fix-paths~ converts any absolute home directory paths in schema files to =~/= notation, ensuring portability across machines with different home directories.
 
 TSV export provides human-readable diffs suitable for version control.
 
 ** Debugging
 
-~tabularium-completion-debug~ inspects the completion configuration and current candidates for any field.  ~tabularium-debug-related-fields~ displays related field configurations with sample co-occurrence data.
+~tabularium-completion-debug~ inspects the completion configuration and current candidates for any field.  ~tabularium-undo-history~ displays the recorded undo and redo stacks for the current database.  ~tabularium-clear-vocabulary-cache~ forces a reload of vocabulary files on the next completion request.  Setting ~tabularium-debug~ to a non-nil value enables verbose diagnostic messages during completion and autofill operations.
 
 * Contributing
 
