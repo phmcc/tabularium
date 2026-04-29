@@ -4,7 +4,7 @@
 
 ;; Author: Paul H. McClelland <paulhmcclelland@protonmail.com>
 ;; Maintainer: Paul H. McClelland <paulhmcclelland@protonmail.com>
-;; Version: 0.4.4
+;; Version: 0.4.5
 ;; Package-Requires: ((emacs "29.1"))
 ;; Keywords: data, sql, tables
 ;; URL: https://codeberg.org/phmcc/tabularium
@@ -91,7 +91,7 @@ Each field in :fields is a plist with:
   :primary  - Exactly one field MUST have :primary t
   :default  - (optional) Default value, symbol, or function
   :required - (optional) If non-nil, field cannot be empty
-  :choices  - (for type=choice) Valid choice values
+  :choice  - (for type=choice) Valid choice values
   :width    - (optional) Display width in list view
   :hidden   - (optional) If non-nil, hide from list view by default
   :long     - (optional) If non-nil, edit in a dedicated buffer
@@ -113,7 +113,7 @@ Example with SQLite (default):
             (:name category :type text :prompt \"Category\"
              :complete historical)
             (:name status :type choice :prompt \"Status\"
-             :choices (\"Open\" \"Closed\"))
+             :choice (\"Open\" \"Closed\"))
             (:name notes :type text :prompt \"Notes\")))))
 
 Example with PostgreSQL (requires emacsql):
@@ -170,7 +170,7 @@ When nil (default), newest entries appear at the top."
   "When non-nil, replace and mark operations use case-sensitive matching.
 This affects `tabularium-replace-substring', `tabularium-replace-exact',
 `tabularium-replace-pattern', `tabularium-replace-regexp',
-`tabularium-query-replace', and the `tabularium-view-mark-*' family.
+`tabularium-replace-query', and the `tabularium-view-mark-*' family.
 Toggle interactively with `tabularium-toggle-case-sensitive'.
 Default is t, matching standard Emacs/Linux behavior."
   :type 'boolean
@@ -352,11 +352,12 @@ DIRECTION is \\='asc or \\='desc.  First element is primary sort.")
                     (let* ((name (plist-get f :name))
                            (ftype (plist-get f :type))
                            (sql-type (tabularium-db-sql-type tabularium--db ftype))
-                           (choices (plist-get f :choices))
+                           (choices (plist-get f :choice))
                            (check (when (and (eq ftype 'choice) choices)
                                     (format "%s IN (%s, '')"
                                             (symbol-name name)
-                                            (mapconcat (lambda (c) (format "'%s'" c))
+                                            (mapconcat (lambda (c)
+                                                         (tabularium-db-sql-quote c))
                                                        choices ", ")))))
                       (list :name name
                             :sql-type sql-type
@@ -1353,7 +1354,7 @@ The resulting schema is written to SCHEMA-FILE."
             (insert content)))
         (message "Created schema file: %s" schema-file)))
 
-     (t (user-error "Registration cancelled")))))
+     (t (user-error "Registration canceled")))))
 
 (defun tabularium-register--search-and-validate-schema (db-file schema-file)
   "Prompt the user to locate a schema file and validate it against DB-FILE.
@@ -1400,7 +1401,7 @@ On success, copies the validated schema to SCHEMA-FILE."
               (progn
                 (copy-file found-file schema-file t)
                 (message "Schema copied to %s (with mismatches)" schema-file))
-            (user-error "Registration cancelled — schema not compatible"))))))))
+            (user-error "Registration canceled — schema not compatible"))))))))
 
 (defun tabularium-register--load-or-recover (schema-file db-file)
   "Load SCHEMA-FILE, offering recovery if it fails.
@@ -1432,7 +1433,7 @@ Returns the schema name on success."
           (find-file schema-file)
           (user-error "Edit the schema file, then re-run `tabularium-register-database'"))
 
-         (t (user-error "Registration cancelled")))))))
+         (t (user-error "Registration canceled")))))))
 
 (defun tabularium-register--check-path-mismatch (schema-name schema-file db-file)
   "Check that the :file in SCHEMA-NAME matches DB-FILE, offering to fix it."
@@ -1563,7 +1564,7 @@ Writes the schema to SCHEMA-FILE."
     (user-error "No database specified"))
   ;; Confirm before forgetting
   (unless (yes-or-no-p (format "Forget database '%s'?  Files will not be deleted. " name))
-    (user-error "Cancelled"))
+    (user-error "Canceled"))
   ;; Remove from registry
   (tabularium-registry--remove name)
   ;; Also remove from in-memory schemas
@@ -1610,7 +1611,7 @@ Closes the database first if it is currently open."
                      (if files-to-delete
                          (mapconcat #'abbreviate-file-name files-to-delete "\n  ")
                        "(no files found — registry entry only)")))
-      (user-error "Cancelled"))
+      (user-error "Canceled"))
     ;; Close if currently open
     (when (equal tabularium--current-schema-name name)
       (tabularium-close))
@@ -1914,7 +1915,7 @@ If another database is already open, prompt to close it first."
           (if (yes-or-no-p (format "Close '%s' and open '%s'? "
                                    tabularium--current-schema-name db-name))
               (tabularium-close)
-            (user-error "Cancelled")))
+            (user-error "Canceled")))
         (tabularium-open db-name)
         (message "Opened database: %s" db-name))
     (user-error "No database at point")))
@@ -1973,7 +1974,7 @@ Prompts before switching if another database is open."
                 (when-let ((old-buf (get-buffer (format "*%s*" tabularium--current-schema-name))))
                   (kill-buffer old-buf))
                 (tabularium-close))
-            (user-error "Cancelled")))
+            (user-error "Canceled")))
         (tabularium-open db-name)
         (funcall action))
     (user-error "No database at point")))
@@ -2051,7 +2052,7 @@ including optional file renames on disk."
                  (not (equal schema-name tabularium--current-schema-name)))
         (unless (yes-or-no-p (format "Close '%s' and open '%s'? "
                                      tabularium--current-schema-name schema-name))
-          (user-error "Cancelled"))
+          (user-error "Canceled"))
         (tabularium-close))
       ;; Open the database
       (setq tabularium--current-schema-name schema-name)
@@ -2135,7 +2136,7 @@ Returns a field plist or nil if user cancels."
                           :prompt prompt
                           :type type))
         (when choices
-          (setq field (plist-put field :choices choices)))
+          (setq field (plist-put field :choice choices)))
         (when completion
           (setq field (plist-put field :complete completion)))
         (when default
@@ -2190,8 +2191,8 @@ Returns list of field plists."
       (push ":required t" items))
     (when (plist-get field :complete)
       (push (format ":complete %s" (plist-get field :complete)) items))
-    (when (plist-get field :choices)
-      (push (format ":choices %S" (plist-get field :choices)) items))
+    (when (plist-get field :choice)
+      (push (format ":choice %S" (plist-get field :choice)) items))
     (when (plist-get field :default)
       (let ((def (plist-get field :default)))
         (push (format ":default %s"
@@ -2304,7 +2305,7 @@ registers the database, and opens it."
 ;;; ** 3.10 Sync Safety
 
 ;;;###autoload
-(defun tabularium-prepare-for-sync ()
+(defun tabularium-sync-prepare ()
   "Prepare databases for syncing (Syncthing, Dropbox, etc.).
 This checkpoints and closes all connections, ensuring a clean state.
 Call this before suspending your laptop or when you're done working."
@@ -2314,14 +2315,14 @@ Call this before suspending your laptop or when you're done working."
   (setq tabularium--db nil))
 
 ;;;###autoload
-(defun tabularium-checkpoint ()
+(defun tabularium-sync-checkpoint ()
   "Checkpoint all databases without closing connections.
 This flushes the write-ahead log to the main database file."
   (interactive)
   (tabularium-db--checkpoint-all))
 
 ;;;###autoload
-(defun tabularium-fix-paths ()
+(defun tabularium-sync-fix-paths ()
   "Convert absolute paths in schema files to use ~ for the home directory.
 This fixes portability issues when syncing databases between machines
 with different home directories (e.g., via Syncthing or Dropbox).
@@ -2388,7 +2389,7 @@ contains a fully expanded home directory path."
                reg-fixed (if (= reg-fixed 1) "y" "ies")
                skipped))))
 
-(defun tabularium-cleanup-wal-files ()
+(defun tabularium-sync-cleanup-wal-files ()
   "Delete orphaned WAL and SHM files for all known databases.
 Safe to delete when database is closed."
   (interactive)
@@ -2508,33 +2509,46 @@ Returns \\='asc (default) or \\='desc."
           (cl-remove-if #'tabularium--computed-field-p
                         (tabularium--schema-fields))))
 
+(defun tabularium--field-accepts-value-p (field-name value)
+  "Return non-nil if FIELD-NAME's schema allows VALUE.
+Choice fields with a `:choice' list reject values not in that list
+\(empty values are always allowed).  Other types accept any value."
+  (let* ((fields (tabularium--schema-fields))
+         (field (cl-find-if
+                 (lambda (f) (string= (symbol-name (plist-get f :name))
+                                      (if (symbolp field-name)
+                                          (symbol-name field-name)
+                                        field-name)))
+                 fields))
+         (choices (and field (plist-get field :choice)))
+         (val (format "%s" (or value ""))))
+    (or (null choices)
+        (string-empty-p val)
+        (member val choices))))
+
 (defun tabularium--fields-accepting-value (field-names value)
   "Filter FIELD-NAMES to those whose schema allows VALUE.
-Choice fields that have a `:choices' list reject values not in
-that list.  Text, number, date, and integer fields always accept.
-Returns the filtered list.  When fields are excluded, reports
-which ones and why via `message'."
-  (let ((fields (tabularium--schema-fields))
+Returns a cons (ACCEPTED . REJECTED) where ACCEPTED is the filtered
+list of field names safe to operate on, and REJECTED is the list of
+field names rejected because VALUE is not a valid choice."
+  (let ((accepted nil)
         (rejected nil))
-    (let ((accepted
-           (cl-remove-if
-            (lambda (name)
-              (let ((field (cl-find-if (lambda (f) (string= (symbol-name (plist-get f :name)) name))
-                                      fields)))
-                (when field
-                  (let ((choices (plist-get field :choices)))
-                    (when (and choices
-                               (not (member value choices))
-                               (not (string-empty-p value)))
-                      (push name rejected)
-                      t)))))
-            field-names)))
-      (when rejected
-        (message "Skipped %s: choice field%s — '%s' is not a valid option"
-                 (string-join (nreverse rejected) ", ")
-                 (if (> (length rejected) 1) "s" "")
-                 value))
-      accepted)))
+    (dolist (name field-names)
+      (if (tabularium--field-accepts-value-p name value)
+          (push name accepted)
+        (push name rejected)))
+    (cons (nreverse accepted) (nreverse rejected))))
+
+(defun tabularium--field-choices (field-name)
+  "Return the `:choice' list for FIELD-NAME, or nil if unconstrained."
+  (let* ((fields (tabularium--schema-fields))
+         (field (cl-find-if
+                 (lambda (f) (string= (symbol-name (plist-get f :name))
+                                      (if (symbolp field-name)
+                                          (symbol-name field-name)
+                                        field-name)))
+                 fields)))
+    (and field (plist-get field :choice))))
 
 (defun tabularium--field-crm ()
   "Prompt for field selection using `completing-read-multiple'.
@@ -2682,6 +2696,8 @@ Useful after editing the schema file externally."
 ;;   (:name status :type text :prompt "Status" :computed (:elisp my-status-fn))
 ;;   (:name age :type integer :prompt "Age" :computed (:sql "strftime('%Y', 'now') - birth_year"))
 
+;;; *** 4.4.1 Core Functions
+
 (defun tabularium--computed-field-p (field)
   "Return non-nil if FIELD is a computed field."
   (plist-get field :computed))
@@ -2748,13 +2764,19 @@ DISPLAY-OFFSET is the column offset for the primary key."
          row-list))
      rows)))
 
-;; Conditional logic helpers for computed fields
+;;; *** 4.4.2 Computational Helpers (tabularium-fn-*)
 
-(defun tabularium-if (condition then-value else-value)
+;; The functions below are intended for use inside `:computed' lambdas
+;; in schema files.  Each receives the current row as an alist of
+;; (FIELD-NAME . VALUE) pairs.
+
+;; Conditional logic
+
+(defun tabularium-fn-if (condition then-value else-value)
   "Return THEN-VALUE if CONDITION is truthy, else ELSE-VALUE."
   (if condition then-value else-value))
 
-(defun tabularium-case (value &rest clauses)
+(defun tabularium-fn-case (value &rest clauses)
   "Match VALUE against CLAUSES for computed fields.
 CLAUSES are (test-value result) pairs, with optional final default."
   (let ((default (if (= (mod (length clauses) 2) 1)
@@ -2767,18 +2789,137 @@ CLAUSES are (test-value result) pairs, with optional final default."
                  when (equal value test) return result)
         default)))
 
-(defun tabularium-sum-fields (row-alist &rest field-names)
-  "Sum the values of FIELD-NAMES in ROW-ALIST."
-  (apply #'+ (mapcar (lambda (name)
-                       (or (alist-get name row-alist) 0))
-                     field-names)))
+;; Numeric and string aggregation across fields of the same row
 
-(defun tabularium-concat-fields (row-alist separator &rest field-names)
-  "Concatenate FIELD-NAMES from ROW-ALIST."
-  (string-join (mapcar (lambda (name)
-                         (format "%s" (or (alist-get name row-alist) "")))
-                       field-names)
-               separator))
+(defun tabularium--field-numeric (row-alist name)
+  "Return ROW-ALIST's NAME field value coerced to a number, or 0."
+  (let ((v (alist-get name row-alist)))
+    (cond
+     ((null v) 0)
+     ((numberp v) v)
+     ((stringp v)
+      (if (string-empty-p v) 0
+        (let ((n (string-to-number v)))
+          (if (and (zerop n) (not (string-match-p "\\`0+\\(\\.0*\\)?\\'" v)))
+              0
+            n))))
+     (t 0))))
+
+(defun tabularium-fn-sum-fields (row-alist &rest field-names)
+  "Sum the numeric values of FIELD-NAMES in ROW-ALIST.
+Non-numeric and missing values count as 0."
+  (apply #'+ 0 (mapcar (lambda (name)
+                         (tabularium--field-numeric row-alist name))
+                       field-names)))
+
+(defun tabularium-fn-concat-fields (row-alist separator &rest field-names)
+  "Concatenate FIELD-NAMES from ROW-ALIST joined by SEPARATOR.
+Empty and missing fields are skipped (no leading or trailing SEPARATOR)."
+  (string-join
+   (delq nil
+         (mapcar (lambda (name)
+                   (let ((v (alist-get name row-alist)))
+                     (cond
+                      ((null v) nil)
+                      ((and (stringp v) (string-empty-p v)) nil)
+                      (t (format "%s" v)))))
+                 field-names))
+   separator))
+
+;; Date arithmetic
+
+(defun tabularium-fn-today ()
+  "Return today's date as an ISO 8601 string (YYYY-MM-DD)."
+  (format-time-string "%Y-%m-%d"))
+
+(defun tabularium-fn-now ()
+  "Return the current timestamp as an ISO 8601 string."
+  (format-time-string "%Y-%m-%dT%H:%M:%S"))
+
+(defun tabularium-fn-date-add (date days)
+  "Return DATE plus DAYS as an ISO date string.
+DATE is parsed with `parse-time-string'; DAYS may be negative."
+  (when (and date (not (string-empty-p date)))
+    (let* ((parsed (parse-time-string date))
+           (sec (encode-time
+                 (or (nth 0 parsed) 0)
+                 (or (nth 1 parsed) 0)
+                 (or (nth 2 parsed) 0)
+                 (nth 3 parsed)
+                 (nth 4 parsed)
+                 (nth 5 parsed))))
+      (format-time-string "%Y-%m-%d"
+                          (time-add sec (* days 86400))))))
+
+(defun tabularium-fn-date-diff (date1 date2)
+  "Return the number of days between DATE1 and DATE2 (DATE2 − DATE1).
+Both arguments are ISO date strings.  Returns nil if either is empty."
+  (when (and date1 date2
+             (not (string-empty-p date1))
+             (not (string-empty-p date2)))
+    (let* ((p1 (parse-time-string date1))
+           (p2 (parse-time-string date2))
+           (t1 (encode-time (or (nth 0 p1) 0) (or (nth 1 p1) 0)
+                            (or (nth 2 p1) 0)
+                            (nth 3 p1) (nth 4 p1) (nth 5 p1)))
+           (t2 (encode-time (or (nth 0 p2) 0) (or (nth 1 p2) 0)
+                            (or (nth 2 p2) 0)
+                            (nth 3 p2) (nth 4 p2) (nth 5 p2))))
+      (round (/ (float-time (time-subtract t2 t1)) 86400)))))
+
+(defun tabularium-fn-age (date &optional reference)
+  "Return the number of years between DATE and REFERENCE (default today).
+DATE is an ISO date string.  Returns nil if DATE is empty.
+The result is the integer number of completed years
+\(birthdays not yet reached do not count)."
+  (when (and date (not (string-empty-p date)))
+    (let* ((ref (or reference (tabularium-fn-today)))
+           (p1 (parse-time-string date))
+           (p2 (parse-time-string ref))
+           (y1 (nth 5 p1)) (m1 (nth 4 p1)) (d1 (nth 3 p1))
+           (y2 (nth 5 p2)) (m2 (nth 4 p2)) (d2 (nth 3 p2))
+           (years (- y2 y1)))
+      (when (or (< m2 m1) (and (= m2 m1) (< d2 d1)))
+        (cl-decf years))
+      years)))
+
+;; Cross-row lookup and aggregation
+;;
+;; These query the current database directly and require an open
+;; connection.  They are safe to call inside `:computed' lambdas
+;; because computed fields are evaluated only when the database is
+;; active.
+
+(defun tabularium-fn-lookup (lookup-field lookup-value return-field)
+  "Return RETURN-FIELD from the first row where LOOKUP-FIELD = LOOKUP-VALUE.
+Returns nil when no matching row exists."
+  (when (and tabularium--db lookup-field return-field)
+    (let* ((sql (format "SELECT %s FROM %s WHERE %s = %s LIMIT 1"
+                        return-field
+                        tabularium-table-name
+                        lookup-field
+                        (tabularium-db-sql-quote lookup-value)))
+           (result (tabularium-db-query-single tabularium--db sql)))
+      (car result))))
+
+(defun tabularium-fn-count-where (field value)
+  "Return the count of rows where FIELD = VALUE."
+  (when (and tabularium--db field)
+    (let* ((sql (format "SELECT COUNT(*) FROM %s WHERE %s = %s"
+                        tabularium-table-name field
+                        (tabularium-db-sql-quote value)))
+           (result (tabularium-db-query-single tabularium--db sql)))
+      (or (car result) 0))))
+
+(defun tabularium-fn-sum-where (sum-field filter-field filter-value)
+  "Return the sum of SUM-FIELD across rows where FILTER-FIELD = FILTER-VALUE."
+  (when (and tabularium--db sum-field filter-field)
+    (let* ((sql (format "SELECT SUM(%s) FROM %s WHERE %s = %s"
+                        sum-field tabularium-table-name
+                        filter-field
+                        (tabularium-db-sql-quote filter-value)))
+           (result (tabularium-db-query-single tabularium--db sql)))
+      (or (car result) 0))))
 
 (defun tabularium--primary-field ()
   "Get the primary key field.
@@ -2948,10 +3089,10 @@ CONTEXT is an optional alist of current field values (for related completion).
 Returns a list of strings."
   (let* ((field-name (plist-get field :name))
          (complete-spec (plist-get field :complete))
-         (choices (plist-get field :choices))
+         (choices (plist-get field :choice))
          (parsed (tabularium--parse-complete-spec complete-spec)))
 
-    ;; Handle :choices for choice type when no :complete specified
+    ;; Handle :choice for choice type when no :complete specified
     (when (and (null parsed) (eq (plist-get field :type) 'choice) choices)
       (setq parsed (list :type 'fixed :values choices)))
 
@@ -2987,7 +3128,7 @@ Returns a list of strings."
                  (puthash cache-key values tabularium--completion-cache)
                  values)))
 
-          ;; Fixed: static list (from :choices or inline)
+          ;; Fixed: static list (from :choice or inline)
           ('fixed
            (or choices (plist-get parsed :values)))
 
@@ -3081,7 +3222,7 @@ Returns a list of strings."
         (princ (format "  ... and %d more\n" (- (length candidates) 20)))))))
 
 ;;;###autoload
-(defun tabularium-clear-vocabulary-cache ()
+(defun tabularium-completion-clear-cache ()
   "Clear the vocabulary file cache."
   (interactive)
   (clrhash tabularium--vocabulary-cache)
@@ -3462,7 +3603,7 @@ See `tabularium-entry-method' to set the default."
     ;; View management
     (define-key map (kbd "v v") #'tabularium-select-view)
     (define-key map (kbd "v 0") #'tabularium-view-0)
-    (define-key map (kbd "v x") #'tabularium-clear-view)
+    (define-key map (kbd "v x") #'tabularium-view-clear)
     (define-key map (kbd "v 1") #'tabularium-view-1)
     (define-key map (kbd "v 2") #'tabularium-view-2)
     (define-key map (kbd "v 3") #'tabularium-view-3)
@@ -3512,14 +3653,14 @@ See `tabularium-entry-method' to set the default."
     (define-key map (kbd "`") #'tabularium-reindex)
     ;; Replace (R prefix)
     (define-key map (kbd "R r") #'tabularium-replace-substring)
-    (define-key map (kbd "R R") #'tabularium-visible-replace-substring)
+    (define-key map (kbd "R R") #'tabularium-replace-visible-substring)
     (define-key map (kbd "R e") #'tabularium-replace-exact)
-    (define-key map (kbd "R E") #'tabularium-visible-replace-exact)
+    (define-key map (kbd "R E") #'tabularium-replace-visible-exact)
     (define-key map (kbd "R p") #'tabularium-replace-pattern)
     (define-key map (kbd "R x") #'tabularium-replace-regexp)
-    (define-key map (kbd "R X") #'tabularium-visible-replace-regexp)
-    (define-key map (kbd "R /") #'tabularium-query-replace)
-    (define-key map (kbd "R ?") #'tabularium-visible-query-replace)
+    (define-key map (kbd "R X") #'tabularium-replace-visible-regexp)
+    (define-key map (kbd "R /") #'tabularium-replace-query)
+    (define-key map (kbd "R ?") #'tabularium-replace-visible-query)
     (define-key map (kbd "R c") #'tabularium-toggle-case-sensitive)
     ;; Sort (S prefix)
     (define-key map (kbd "s s") #'tabularium-view-sort-add)
@@ -3558,6 +3699,7 @@ See `tabularium-entry-method' to set the default."
     (define-key map (kbd "| C") #'tabularium-view-column-copy)
     (define-key map (kbd "| X") #'tabularium-view-column-cut)
     (define-key map (kbd "| V") #'tabularium-view-column-paste)
+    (define-key map (kbd "| A") #'tabularium-view-column-paste-append)
     ;; Schema operations
     (define-key map (kbd ". .") #'tabularium-schema-edit)
     (define-key map (kbd ". s") #'tabularium-schema-show)
@@ -3565,19 +3707,19 @@ See `tabularium-entry-method' to set the default."
     (define-key map (kbd ". w") #'tabularium-schema-switch)
     (define-key map (kbd ". +") #'tabularium-view-column-add)
     ;; Calculate operations
-    (define-key map (kbd "# c") #'tabularium-count)
-    (define-key map (kbd "# V") #'tabularium-visible-count)
+    (define-key map (kbd "# c") #'tabularium-aggregate-count)
+    (define-key map (kbd "# V") #'tabularium-aggregate-visible-count)
     (define-key map (kbd "# *") #'tabularium-view-count-marked)
     (define-key map (kbd "# @") #'tabularium-view-count-across)
-    (define-key map (kbd "# s") #'tabularium-sum)
-    (define-key map (kbd "# S") #'tabularium-visible-sum)
-    (define-key map (kbd "# m") #'tabularium-min-max)
-    (define-key map (kbd "# M") #'tabularium-visible-min-max)
-    (define-key map (kbd "# d") #'tabularium-mean-sd)
-    (define-key map (kbd "# D") #'tabularium-visible-mean-sd)
-    (define-key map (kbd "# i") #'tabularium-median-iqr)
-    (define-key map (kbd "# I") #'tabularium-visible-median-iqr)
-    (define-key map (kbd "# #") #'tabularium-column-summary)
+    (define-key map (kbd "# s") #'tabularium-aggregate-sum)
+    (define-key map (kbd "# S") #'tabularium-aggregate-visible-sum)
+    (define-key map (kbd "# m") #'tabularium-aggregate-min-max)
+    (define-key map (kbd "# M") #'tabularium-aggregate-visible-min-max)
+    (define-key map (kbd "# d") #'tabularium-aggregate-mean-sd)
+    (define-key map (kbd "# D") #'tabularium-aggregate-visible-mean-sd)
+    (define-key map (kbd "# i") #'tabularium-aggregate-median-iqr)
+    (define-key map (kbd "# I") #'tabularium-aggregate-visible-median-iqr)
+    (define-key map (kbd "# #") #'tabularium-aggregate-column-summary)
     ;; View expansion
     (define-key map (kbd "v >") #'tabularium-view-show-more)
     (define-key map (kbd "v a") #'tabularium-view-show-all)
@@ -3778,8 +3920,13 @@ Adds to existing hidden columns rather than replacing."
          (order-by (if date-field
                        (symbol-name (plist-get date-field :name))
                      primary-name))
-         (sql (format "SELECT %s, %s FROM %s WHERE %s LIKE '%%%s%%' ORDER BY %s DESC LIMIT 1"
-                      primary-name order-by tabularium-table-name field pattern order-by))
+         (op (tabularium-db-like-op tabularium-case-sensitive))
+         (wrapped (tabularium-db-like-pattern (format "%s" pattern)
+                                              tabularium-case-sensitive))
+         (escaped (replace-regexp-in-string "'" "''" wrapped))
+         (sql (format "SELECT %s, %s FROM %s WHERE %s %s '%s' ORDER BY %s DESC LIMIT 1"
+                      primary-name order-by tabularium-table-name
+                      field op escaped order-by))
          (result (tabularium-db-query-single tabularium--db sql)))
     (if result
         (progn
@@ -3788,9 +3935,7 @@ Adds to existing hidden columns rather than replacing."
             (tabularium-new-entry (car result))))
       (message "No records found matching '%s'" pattern))))
 
-;;; ** 5.4 Page Navigation
-
-;;; *** 5.4.1 Basic Movement
+;;; *** 5.3.1 Page Navigation
 
 (defun tabularium-view-page-down ()
   "Move forward by `tabularium-view-page-size' rows."
@@ -3802,7 +3947,7 @@ Adds to existing hidden columns rather than replacing."
   (interactive)
   (forward-line (- tabularium-view-page-size)))
 
-;;; *** 5.4.2 Column Scroll
+;;; *** 5.3.2 Column Scroll
 
 (defun tabularium-view--column-width (col-idx)
   "Return display width of column COL-IDX (including separator)."
@@ -3842,9 +3987,9 @@ Useful for wide tables where columns overflow the window."
             (setq cumulative (+ cumulative width)))))
       (set-window-hscroll (selected-window) prev))))
 
-;;; ** 5.5 Cell Navigation
+;;; ** 5.4 Cell Navigation
 
-;;; *** 5.5.1 Basic Movement
+;;; *** 5.4.1 Basic Movement
 
 (defun tabularium-view-forward-cell (&optional n)
   "Move forward N cells in the tabulated list."
@@ -3953,7 +4098,7 @@ If already at the last row, move to the end of the line (bottom-right)."
       (tabularium-view-forward-cell)
       (message "Last row"))))
 
-;;; *** 5.5.2 Jump Navigation
+;;; *** 5.4.2 Jump Navigation
 
 (defun tabularium-view--get-cell-value-at-column (col-idx)
   "Get the cell value at column COL-IDX on the current line.
@@ -4115,7 +4260,7 @@ With prefix N, jump N value transitions."
      (t
       (message "Already at first column")))))
 
-;;; ** 5.6 Fuzzy Search
+;;; ** 5.5 Fuzzy Search
 
 (defun tabularium--format-for-search (row fields)
   "Format ROW using FIELDS for search display."
@@ -4161,7 +4306,7 @@ With prefix N, jump N value transitions."
     (when id
       (tabularium-new-entry id))))
 
-;;; ** 5.7 View Window Expansion
+;;; ** 5.6 View Window Expansion
 
 (defun tabularium-view-show-all ()
   "Show all entries (remove page limit)."
@@ -4201,7 +4346,7 @@ COUNT defaults to `tabularium-view-page-size'."
   (revert-buffer)
   (message "Reset to default limit (%d)" tabularium-view-page-size))
 
-;;; ** 5.8 Saved View Windows
+;;; ** 5.7 Saved View Windows
 
 (defun tabularium-apply-view (view)
   "Apply saved VIEW preset to the current buffer.
@@ -4257,7 +4402,7 @@ VIEW is a plist with optional keys :filter, :columns, :sort."
         (when view
           (tabularium-apply-view view))))))
 
-(defun tabularium-clear-view ()
+(defun tabularium-view-clear ()
   "Clear the current view: no filter, all columns, default sort."
   (interactive)
   (setq tabularium--filter-layers nil)
@@ -4286,7 +4431,7 @@ Returns t if view was applied, nil otherwise."
       (message "No view #%d defined (%d views available)" index (length views))
       nil)))
 
-(defun tabularium-view-0 () "Clear view." (interactive) (tabularium-clear-view))
+(defun tabularium-view-0 () "Clear view." (interactive) (tabularium-view-clear))
 (defun tabularium-view-1 () "Apply view #1 from schema." (interactive) (tabularium--apply-view-by-index 1))
 (defun tabularium-view-2 () "Apply view #2 from schema." (interactive) (tabularium--apply-view-by-index 2))
 (defun tabularium-view-3 () "Apply view #3 from schema." (interactive) (tabularium--apply-view-by-index 3))
@@ -4330,7 +4475,7 @@ Sets view parameters without calling revert-buffer (caller should refresh)."
                           (format "Tabularium[%s]" name)
                         "Tabularium")))))
 
-(defun tabularium-visible-count ()
+(defun tabularium-aggregate-visible-count ()
   "Count entries currently visible (respecting filter)."
   (interactive)
   (let ((count (length tabulated-list-entries))
@@ -4354,7 +4499,7 @@ If called from a view buffer, closes the current buffer first."
   (tabularium-open name)
   (tabularium-view))
 
-;;; ** 5.9 Marking Operations
+;;; ** 5.8 Marking Operations
 
 (defface tabularium-marked-face
   '((((class color) (background dark))
@@ -4771,7 +4916,23 @@ Provides field navigation, completion, and entry operations.
 
 \\{tabularium-entry-mode-map}"
   (setq buffer-read-only t)
-  (setq-local truncate-lines t))
+  (setq-local truncate-lines t)
+  ;; Field highlighting follows point — update on any cursor movement,
+  ;; including mouse clicks and goto-char from outside our nav commands.
+  (add-hook 'post-command-hook
+            #'tabularium-entry--update-highlight-at-point nil t)
+  ;; Confirm before killing a form buffer with unsaved edits (e.g. via
+  ;; C-x k or window-deletion that triggers buffer cleanup).
+  (add-hook 'kill-buffer-query-functions
+            #'tabularium-entry--confirm-kill nil t))
+
+(defun tabularium-entry--confirm-kill ()
+  "Return non-nil unless the user wants to keep editing.
+Used in `kill-buffer-query-functions' to safeguard unsaved form data."
+  (or (not (tabularium-entry-edited-p))
+      (yes-or-no-p
+       (format "Form '%s' has unsaved changes.  Kill anyway? "
+               (buffer-name)))))
 
 (defvar tabularium-entry-render-hook nil
   "Hook run at the end of form buffer rendering.
@@ -4779,6 +4940,55 @@ Called inside the render function with `inhibit-read-only' bound
 to t, after the standard hint lines but before cursor positioning.
 Plugins can use this to inject additional content such as
 cross-table data or schema-specific hint lines.")
+
+(defvar tabularium-entry-pre-render-hook nil
+  "Hook run at the start of form buffer rendering, before layout.
+Called inside `tabularium-entry-render' with the form buffer current
+but before the buffer is erased.  Plugins should use this to set
+buffer-local variables consulted during render — most notably
+`tabularium-entry-header-function' — that need to be in place
+before the layout pass runs.")
+
+(defvar tabularium-entry-new-hook nil
+  "Hook run when a NEW entry form is rendered.
+Called in the form buffer after the initial values have been set
+but before `tabularium-entry-render' lays out the buffer.  Plugins
+can mutate `tabularium-entry--values' to populate plugin-specific
+defaults that are not expressible as simple `:default' values
+\(e.g. cross-field logic, computed dates, counters).
+Not called when editing an existing entry.")
+
+(defvar tabularium-entry-pre-submit-hook nil
+  "Hook run in the form buffer just before save.
+Plugins can mutate `tabularium-entry--values' to update fields
+\(e.g. a Date-modified field set to today on every save) before
+the values are written to the database.  Runs for both new and
+edited entries; check `tabularium-entry-editing-id' to distinguish
+\(nil = new entry, integer = update).")
+
+(defvar-local tabularium-entry-header-function nil
+  "Function returning a header string to insert at the top of the form.
+When non-nil, called by `tabularium-entry-render' with no arguments;
+should return a string (with optional `\\n's) or nil for no header.
+The header is inserted before the schema field list.  Buffer-local;
+each schema may set its own.  Useful for plugins that want to render
+a citation, summary, or other contextual header above the form.")
+
+(defvar tabularium-entry-required-field-functions nil
+  "List of functions declaring dynamic required fields.
+Each function is called during `tabularium-entry-render' with two
+arguments — FIELD-NAME (a symbol) and VALUES (the current
+`tabularium-entry--values' alist) — and should return non-nil if
+FIELD-NAME is required given the entry's current state.
+
+Used to express type-specific or otherwise contextual required
+fields that cannot be captured by static `:required t' in the
+schema.  A field marked dynamically required displays a `+'
+indicator; statically required fields continue to display `*'
+\(static wins when both apply).
+
+Functions in this list compose by short-circuit: the first
+non-nil return value marks the field as required.")
 
 (defun tabularium--compute-default (field)
   "Compute the default value for FIELD."
@@ -4824,7 +5034,7 @@ USE-ALT-METHOD flips the default from `tabularium-entry-method'."
   "Get completion candidates for FIELD in form context.
 Uses current form values for related field completion."
   (let* ((type (plist-get field :type))
-         (choices (plist-get field :choices))
+         (choices (plist-get field :choice))
          (complete (plist-get field :complete))
          ;; Get current form values for context (enables related completion)
          (context (when (boundp 'tabularium-entry--values)
@@ -4850,6 +5060,9 @@ Uses current form values for related field completion."
 
 (defun tabularium-entry-render ()
   "Render the form buffer."
+  ;; Pre-render hook: plugins set buffer-local variables consulted during
+  ;; layout (e.g. `tabularium-entry-header-function').
+  (run-hooks 'tabularium-entry-pre-render-hook)
   (let ((inhibit-read-only t)
         (first-field-line nil)
         (footer-start nil))
@@ -4863,28 +5076,53 @@ Uses current form values for related field completion."
                            "New Entry"))))
       (insert (tabularium--make-box-header title 80 'double) "\n"))
     (insert "\n")
+    ;; Plugin header — text inserted by `tabularium-entry-header-function'
+    ;; appears between the title bar and the field list.  Plugins can use
+    ;; this to render a citation, summary, or other contextual content.
+    (when tabularium-entry-header-function
+      (let ((header-text (funcall tabularium-entry-header-function)))
+        (when (and header-text (stringp header-text)
+                   (not (string-empty-p header-text)))
+          (insert header-text)
+          (unless (eq (char-before) ?\n)
+            (insert "\n"))
+          (insert "\n"))))
     ;; Fields - use %-20s to align with entry mode
     (dolist (field tabularium-entry--fields)
       (let* ((name (plist-get field :name))
              (prompt (plist-get field :prompt))
              (required (plist-get field :required))
+             (dyn-required
+              (and (not required)
+                   (run-hook-with-args-until-success
+                    'tabularium-entry-required-field-functions
+                    name tabularium-entry--values)))
              (type (plist-get field :type))
-             (choices (plist-get field :choices))
+             (choices (plist-get field :choice))
              (value (or (alist-get name tabularium-entry--values) ""))
              (value-str (format "%s" value)))
         ;; Track first field line
         (unless first-field-line
           (setq first-field-line (line-number-at-pos)))
-        ;; Field label — required star occupies the last padding character
-        ;; so the colon aligns at the same column for all fields
-        (if required
-            (insert (propertize (format "  %-19s" prompt)
-                                'face 'font-lock-keyword-face
-                                'tabularium-entry-label name)
-                    (propertize "*" 'face 'error))
+        ;; Field label — required marker occupies the last padding character
+        ;; so the colon aligns at the same column for all fields.
+        ;; `*' for static :required t (always required)
+        ;; `+' for dynamic-required (plugin-declared, contextual)
+        (cond
+         (required
+          (insert (propertize (format "  %-19s" prompt)
+                              'face 'font-lock-keyword-face
+                              'tabularium-entry-label name)
+                  (propertize "*" 'face 'error)))
+         (dyn-required
+          (insert (propertize (format "  %-19s" prompt)
+                              'face 'font-lock-keyword-face
+                              'tabularium-entry-label name)
+                  (propertize "+" 'face 'warning)))
+         (t
           (insert (propertize (format "  %-20s" prompt)
                               'face 'font-lock-keyword-face
-                              'tabularium-entry-label name)))
+                              'tabularium-entry-label name))))
         (insert ": ")
         ;; Field value with overlay for highlighting
         ;; Max value width: 80 - 2 (indent) - 20 (label) - 2 (": ") - 1 (*) - 2 (pad) = 53
@@ -4981,6 +5219,19 @@ Uses current form values for related field completion."
     (overlay-put ov 'face 'tabularium-entry-current-field)
     (goto-char (overlay-start ov))
     (setq tabularium-entry--current-field field-name)))
+
+(defun tabularium-entry--update-highlight-at-point ()
+  "Update field highlighting to follow point.
+If point is over a field overlay different from the currently highlighted
+one, move the highlight there (without moving point).  If point is not
+over any field overlay, leave the highlighting unchanged."
+  (let ((field (tabularium-entry--field-at-point)))
+    (when (and field (not (eq field tabularium-entry--current-field)))
+      (when-let ((ov (alist-get field tabularium-entry--field-overlays)))
+        (dolist (pair tabularium-entry--field-overlays)
+          (overlay-put (cdr pair) 'face nil))
+        (overlay-put ov 'face 'tabularium-entry-current-field)
+        (setq tabularium-entry--current-field field)))))
 
 (defun tabularium-entry--field-list ()
   "Get ordered list of field names."
@@ -5085,7 +5336,7 @@ Falls back to primary-key order when no source buffer exists."
            (source tabularium-entry--source-buffer))
       (if next-id
           (progn
-            (when (tabularium-entry--has-changes-p)
+            (when (tabularium-entry-edited-p)
               (tabularium-entry-submit))
             (tabularium-new-entry next-id)
             ;; Preserve source buffer for subsequent navigation
@@ -5104,7 +5355,7 @@ Falls back to primary-key order when no source buffer exists."
            (source tabularium-entry--source-buffer))
       (if prev-id
           (progn
-            (when (tabularium-entry--has-changes-p)
+            (when (tabularium-entry-edited-p)
               (tabularium-entry-submit))
             (tabularium-new-entry prev-id)
             ;; Preserve source buffer for subsequent navigation
@@ -5297,15 +5548,26 @@ co-occurrence exists for SOURCE-VALUE."
 (defun tabularium-entry-submit ()
   "Submit the form and save the entry."
   (interactive)
+  ;; Run pre-submit hook so plugins can mutate values (e.g. update a
+  ;; date-modified field) before validation and save.
+  (run-hooks 'tabularium-entry-pre-submit-hook)
   (let ((values tabularium-entry--values))
-    ;; Validate required fields
+    ;; Validate required fields — both static (:required t) and dynamic
+    ;; (declared by `tabularium-entry-required-field-functions').
     (dolist (field tabularium-entry--fields)
-      (when (plist-get field :required)
-        (let* ((name (plist-get field :name))
-               (value (alist-get name values)))
-          (when (or (null value) (string-empty-p (format "%s" value)))
-            (tabularium-entry--goto-field name)
-            (user-error "Required field '%s' is empty" (plist-get field :prompt))))))
+      (let* ((name (plist-get field :name))
+             (static-req (plist-get field :required))
+             (dyn-req (and (not static-req)
+                           (run-hook-with-args-until-success
+                            'tabularium-entry-required-field-functions
+                            name values))))
+        (when (or static-req dyn-req)
+          (let ((value (alist-get name values)))
+            (when (or (null value) (string-empty-p (format "%s" value)))
+              (tabularium-entry--goto-field name)
+              (user-error "%s field '%s' is empty"
+                          (if static-req "Required" "Required for this entry type:")
+                          (plist-get field :prompt)))))))
     ;; Save
     (if tabularium-entry-editing-id
         ;; Update existing, and record old values for undo
@@ -5340,6 +5602,10 @@ co-occurrence exists for SOURCE-VALUE."
         (tabularium--undo-push (list :type 'insert :id new-id :data values))
         (tabularium--invalidate-cache)
         (message "Entry added")))
+    ;; Mark buffer clean — values now match what's on disk, so the
+    ;; kill-buffer hook should not prompt about unsaved changes.
+    (setq tabularium-entry--original-values
+          (copy-alist tabularium-entry--values))
     ;; Store source buffer and edit info before quitting
     (let ((source-buf tabularium-entry--source-buffer)
           (source-col tabularium-entry--source-column)
@@ -5368,20 +5634,37 @@ co-occurrence exists for SOURCE-VALUE."
        (t
         (tabularium-view))))))
 
-(defun tabularium-entry--has-changes-p ()
-  "Return non-nil if the form has unsaved changes."
+(defun tabularium-entry-edited-p ()
+  "Return non-nil if the entry buffer has unsaved changes.
+Public predicate; safe for plugins to call."
   (not (equal tabularium-entry--values tabularium-entry--original-values)))
+
+(defun tabularium-entry--maybe-discard (buf)
+  "Prompt before BUF's form is overwritten if it has unsaved changes.
+Returns t if the buffer is safe to clobber (no changes, or user
+confirmed discard); nil if the user canceled."
+  (or (not (buffer-live-p buf))
+      (with-current-buffer buf
+        (or (not (derived-mode-p 'tabularium-entry-mode))
+            (not (tabularium-entry-edited-p))
+            (yes-or-no-p
+             (format "Form '%s' has unsaved changes.  Discard? "
+                     (buffer-name buf)))))))
 
 (defun tabularium-entry-cancel ()
   "Cancel the form without saving.
 Only prompts for confirmation if changes have been made."
   (interactive)
-  (if (not (tabularium-entry--has-changes-p))
+  (if (not (tabularium-entry-edited-p))
       ;; No changes, just quit
       (quit-window t)
     ;; Has changes, ask for confirmation
     (when (yes-or-no-p "Discard changes? ")
-      (quit-window t))))
+      ;; User has confirmed — bypass the kill-buffer-query hook.
+      (let ((kill-buffer-query-functions
+             (remq #'tabularium-entry--confirm-kill
+                   kill-buffer-query-functions)))
+        (quit-window t)))))
 
 (defun tabularium-entry-new ()
   "Save current entry and open a new blank form."
@@ -5409,6 +5692,8 @@ Only prompts for confirmation if changes have been made."
            (new-id (tabularium--next-id)))
       ;; Add new primary key
       (push (cons primary-name new-id) new-values)
+      (unless (tabularium-entry--maybe-discard buf)
+        (user-error "Canceled"))
       (with-current-buffer buf
         (tabularium-entry-mode)
         (setq tabularium-entry-schema-name schema-name)
@@ -5417,7 +5702,8 @@ Only prompts for confirmation if changes have been made."
         (setq tabularium-entry--original-values (copy-alist new-values))
         (setq tabularium-entry-editing-id nil)  ; new entry
         (setq tabularium-entry--source-buffer nil)
-        (tabularium-entry-render))
+        (run-hooks 'tabularium-entry-new-hook)
+                )
       (tabularium--display-entry-buffer buf)
       (message "Duplicated entry - edit and submit to save as new"))))
 
@@ -5454,7 +5740,7 @@ Only works when editing an existing entry (not a new one)."
     (let ((position tabularium-entry-editing-id)
           (schema-name tabularium-entry-schema-name))
       ;; Submit current entry if there are changes
-      (when (tabularium-entry--has-changes-p)
+      (when (tabularium-entry-edited-p)
         (tabularium-entry-submit))
       ;; Shift all entries from position onwards up by 1
       (tabularium--ensure-db)
@@ -5485,6 +5771,8 @@ Only works when editing an existing entry (not a new one)."
                                       position  ; Use the insert position as ID
                                     (or (tabularium--compute-default f) "")))))
                         fields)))
+          (unless (tabularium-entry--maybe-discard buf)
+            (user-error "Canceled"))
           (with-current-buffer buf
             (tabularium-entry-mode)
             (setq tabularium-entry-schema-name schema-name)
@@ -5492,6 +5780,7 @@ Only works when editing an existing entry (not a new one)."
             (setq tabularium-entry--values initial-values)
             (setq tabularium-entry--original-values (copy-alist initial-values))
             (setq tabularium-entry-editing-id nil)  ; This is a NEW entry
+            (run-hooks 'tabularium-entry-new-hook)
             (tabularium-entry-render))
           (tabularium--display-entry-buffer buf)
           (message "Inserted new entry at position %s (shifted %d entries)"
@@ -5504,7 +5793,7 @@ Only works when editing an existing entry (not a new one)."
         (editing-id tabularium-entry-editing-id))
     ;; Submit if there are changes
     (when (and tabularium-entry-editing-id
-               (tabularium-entry--has-changes-p))
+               (tabularium-entry-edited-p))
       (tabularium-entry-submit))
     ;; Switch to view
     (quit-window)
@@ -5551,6 +5840,8 @@ With prefix argument, prompts for ID to edit."
                                   (tabularium--next-id)
                                 (or (tabularium--compute-default f) "")))))
                     fields))))
+    (unless (tabularium-entry--maybe-discard buf)
+      (user-error "Canceled"))
     (with-current-buffer buf
       (tabularium-entry-mode)
       (setq tabularium-entry-schema-name schema-name)
@@ -5562,6 +5853,8 @@ With prefix argument, prompts for ID to edit."
       (setq tabularium-entry--source-buffer source-buffer)
       (setq tabularium-entry--source-column source-column)
       (setq tabularium-entry--source-line-offset source-line-offset)
+      (unless id
+        (run-hooks 'tabularium-entry-new-hook))
       (tabularium-entry-render))
     (tabularium--display-entry-buffer buf)))
 
@@ -5638,7 +5931,7 @@ Fields with `:long t' open a dedicated editing buffer."
                    default
                  (string-to-number input))))
             ('choice
-             (let ((choices (plist-get field :choices)))
+             (let ((choices (plist-get field :choice)))
                (completing-read prompt (append choices '("")) nil nil nil nil (or initial default))))
             ('text
              (if (plist-get field :complete)
@@ -5755,6 +6048,8 @@ With USE-ALT-METHOD non-nil, use the alternative entry method."
                                     record-data))
     ;; Add new primary key
     (push (cons primary-name (tabularium--next-id)) record-data)
+    (unless (tabularium-entry--maybe-discard buf)
+      (user-error "Canceled"))
     (with-current-buffer buf
       (tabularium-entry-mode)
       (setq tabularium-entry-schema-name schema-name)
@@ -5763,7 +6058,8 @@ With USE-ALT-METHOD non-nil, use the alternative entry method."
       (setq tabularium-entry--original-values (copy-alist record-data))
       (setq tabularium-entry-editing-id nil)  ; new entry
       (setq tabularium-entry--source-buffer nil)
-      (tabularium-entry-render))
+      (run-hooks 'tabularium-entry-new-hook)
+            )
     (tabularium--display-entry-buffer buf)
     (message "Duplicated from %s - edit and submit to save" id)))
 
@@ -6089,7 +6385,7 @@ CONSUMED indicates whether batch was removed from kill ring (affects undo)."
       ;; Put batch back if it was consumed and user cancels
       (when consumed
         (push batch tabularium--kill-ring))
-      (user-error "Paste cancelled"))
+      (user-error "Paste canceled"))
     (let* ((insert-position (cond
                              (at-end
                               (1+ (or (caar (tabularium-db-query
@@ -6162,7 +6458,7 @@ With prefix arg CONSUME, remove the batch from the kill ring."
                   (tabularium--peek-kill-ring)))
          (batch-type (tabularium--kill-ring-batch-type batch)))
     (if (eq batch-type 'columns)
-        (tabularium--paste-column-batch batch consume)
+        (tabularium--paste-column-batch batch consume 'last)
       (if consume
           (tabularium--paste-batch batch t nil t)
         (tabularium--paste-batch batch t nil nil)))))
@@ -6357,6 +6653,8 @@ Opens form for data entry."
                                   position
                                 (or (tabularium--compute-default f) "")))))
                     fields)))
+      (unless (tabularium-entry--maybe-discard buf)
+        (user-error "Canceled"))
       (with-current-buffer buf
         (tabularium-entry-mode)
         (setq tabularium-entry-schema-name schema-name)
@@ -6366,6 +6664,7 @@ Opens form for data entry."
         (setq tabularium-entry-editing-id nil)
         (setq tabularium-entry--source-buffer
               (when (derived-mode-p 'tabularium-view-mode) source-buffer))
+        (run-hooks 'tabularium-entry-new-hook)
         (tabularium-entry-render))
       (tabularium--display-entry-buffer buf)
       (message "Inserting new entry at position %d" position))))
@@ -6727,7 +7026,7 @@ The primary key column cannot be deleted.  Undoable."
                                   (length names)
                                   (if (= 1 (length names)) "" "s")
                                   (if (= 1 (length names)) "its" "their")))
-      (user-error "Cancelled"))
+      (user-error "Canceled"))
     (let ((ops '()))
       (dolist (name names)
         (let* ((schema-name (tabularium--schema-name))
@@ -7177,34 +7476,42 @@ If BASE-NAME already exists, append _copy1, _copy2, etc."
         (cl-incf n))
       candidate)))
 
-(defun tabularium--paste-column-batch (batch &optional _consumed)
+(defun tabularium--paste-column-batch (batch &optional _consumed position)
   "Paste a column BATCH from the kill ring.
-CONSUMED indicates whether batch was already removed from kill ring.
-Prompts for insertion position.  Columns with conflicting names are
-automatically renamed with _copy1, _copy2, etc. suffixes."
+_CONSUMED indicates whether batch was already removed from kill ring.
+POSITION may be a column name (paste before that column), the symbol
+\\='__first__ (paste after the primary key), \\='last (append at end),
+or nil (prompt the user)."
   (tabularium--ensure-db)
   (let* ((columns (plist-get batch :columns))
          (schema-name (tabularium--schema-name))
          (primary (tabularium--primary-field-name))
-         ;; Prompt for position — insert before
          (fields (tabularium--schema-fields))
          (col-names (mapcar (lambda (f) (symbol-name (plist-get f :name))) fields))
          (at-point-name (when (derived-mode-p 'tabularium-view-mode)
                           (tabularium--column-name-at-point)))
-         (candidates (append (when at-point-name
-                               (list (format "<POINT> %s"
-                                             (symbol-name at-point-name))))
-                             (list "<FIRST>" "<LAST>")
-                             col-names))
-         (pos-default (if at-point-name
-                          (format "<POINT> %s" (symbol-name at-point-name))
-                        "<FIRST>"))
-         (choice (completing-read "Paste before: " candidates nil t nil nil pos-default))
-         (before-column (cond
-                         ((string= choice "<LAST>") nil)
-                         ((string= choice "<FIRST>") '__first__)
-                         ((string-prefix-p "<POINT> " choice) at-point-name)
-                         (t (intern choice))))
+         (before-column
+          (cond
+           ;; Caller specified a position
+           ((eq position 'last) nil)
+           ((eq position '__first__) '__first__)
+           ((symbolp position) position)
+           ;; Otherwise prompt
+           (t
+            (let* ((candidates (append (when at-point-name
+                                         (list (format "<POINT> %s"
+                                                       (symbol-name at-point-name))))
+                                       (list "<FIRST>" "<LAST>")
+                                       col-names))
+                   (pos-default (if at-point-name
+                                    (format "<POINT> %s" (symbol-name at-point-name))
+                                  "<FIRST>"))
+                   (choice (completing-read "Paste before: " candidates nil t nil nil pos-default)))
+              (cond
+               ((string= choice "<LAST>") nil)
+               ((string= choice "<FIRST>") '__first__)
+               ((string-prefix-p "<POINT> " choice) at-point-name)
+               (t (intern choice)))))))
          ;; Convert before-column to after-column
          (after-column
           (cond
@@ -7311,7 +7618,22 @@ With prefix arg CONSUME, remove the batch from the kill ring."
       (user-error "No column batches in kill ring"))
     (when consume
       (setq tabularium--kill-ring (delq batch tabularium--kill-ring)))
-    (tabularium--paste-column-batch batch consume)))
+    (tabularium--paste-column-batch batch consume nil)))
+
+(defun tabularium-view-column-paste-append (&optional consume)
+  "Paste columns from the most recent column batch at end of schema.
+Skips the position prompt, always appending after the last existing column.
+With prefix arg CONSUME, remove the batch from the kill ring."
+  (interactive "P")
+  (unless tabularium--kill-ring
+    (user-error "Kill ring is empty"))
+  (let ((batch (cl-find-if (lambda (b) (eq (tabularium--kill-ring-batch-type b) 'columns))
+                            tabularium--kill-ring)))
+    (unless batch
+      (user-error "No column batches in kill ring"))
+    (when consume
+      (setq tabularium--kill-ring (delq batch tabularium--kill-ring)))
+    (tabularium--paste-column-batch batch consume 'last)))
 
 (defun tabularium-view-column-edit (edits)
   "Edit properties of one or more columns.
@@ -7536,22 +7858,31 @@ Like `tabularium-view-column-add' but inserts before rather than after."
    ((plist-get layer :raw)
     (plist-get layer :sql))
    ((plist-get layer :across)
-    (let ((conditions (mapcar (lambda (f)
-                                (format "%s LIKE '%%%s%%'" f
-                                        (plist-get layer :value)))
-                              (plist-get layer :fields))))
+    (let* ((value (format "%s" (plist-get layer :value)))
+           (op (tabularium-db-like-op tabularium-case-sensitive))
+           (pattern (tabularium-db-like-pattern value tabularium-case-sensitive))
+           (escaped (replace-regexp-in-string "'" "''" pattern))
+           (conditions (mapcar (lambda (f)
+                                 (format "%s %s '%s'" f op escaped))
+                               (plist-get layer :fields))))
       (format "(%s)" (string-join conditions " OR "))))
    (t
-    (let ((op (plist-get layer :op))
-          (field (plist-get layer :field))
-          (value (plist-get layer :value)))
+    (let* ((op (plist-get layer :op))
+           (field (plist-get layer :field))
+           (value (plist-get layer :value))
+           (vstr (format "%s" value)))
       (pcase op
-        ('= (format "%s = '%s'" field value))
-        ('> (format "CAST(%s AS REAL) > %s" field value))
-        ('>= (format "CAST(%s AS REAL) >= %s" field value))
-        ('< (format "CAST(%s AS REAL) < %s" field value))
-        ('<= (format "CAST(%s AS REAL) <= %s" field value))
-        (_ (tabularium-db-build-like-clause field value)))))))
+        ('= (format "%s = %s" field (tabularium-db-sql-quote vstr)))
+        ('> (format "CAST(%s AS REAL) > %s" field
+                    (tabularium-db-sql-quote vstr)))
+        ('>= (format "CAST(%s AS REAL) >= %s" field
+                     (tabularium-db-sql-quote vstr)))
+        ('< (format "CAST(%s AS REAL) < %s" field
+                    (tabularium-db-sql-quote vstr)))
+        ('<= (format "CAST(%s AS REAL) <= %s" field
+                     (tabularium-db-sql-quote vstr)))
+        (_ (tabularium-db-build-like-clause
+            field vstr tabularium-case-sensitive)))))))
 
 (defun tabularium--build-filter-clause ()
   "Build a SQL WHERE clause fragment from `tabularium--filter-layers'.
@@ -7811,7 +8142,9 @@ If rows are marked, only operates on marked rows; marks are cleared after."
                                   primary-name
                                   (mapconcat #'number-to-string marked-ids ","))))
          (requested-fields (or fields (tabularium--stored-field-names)))
-         (search-fields (tabularium--fields-accepting-value requested-fields new-value))
+         (acc-rej (tabularium--fields-accepting-value requested-fields new-value))
+         (search-fields (car acc-rej))
+         (protected-fields (cdr acc-rej))
          (like-op (tabularium-db-like-op tabularium-case-sensitive))
          (case-fold (not tabularium-case-sensitive))
          (all-undo-ops '())
@@ -7830,8 +8163,11 @@ If rows are marked, only operates on marked rows; marks are cleared after."
         (when (> count 0)
           (setq total-replaced (+ total-replaced count)))))
     (if (zerop total-replaced)
-        (message "No records found containing '%s'%s" old-value
-                 (if marked-ids (format " (%s rows)" (or tabularium--replace-scope "marked")) ""))
+        (message "No records found containing '%s'%s%s" old-value
+                 (if marked-ids (format " (%s rows)" (or tabularium--replace-scope "marked")) "")
+                 (if protected-fields
+                     (format " (%d protected)" (length protected-fields))
+                   ""))
       (when (yes-or-no-p (format "Replace '%s' → '%s' in %d %s%s? "
                                  old-value new-value total-replaced
                                  (if (= 1 total-replaced) "cell" "cells")
@@ -7874,10 +8210,13 @@ If rows are marked, only operates on marked rows; marks are cleared after."
           (when (derived-mode-p 'tabularium-view-mode)
             (let ((inhibit-message t))
               (revert-buffer)))
-          (message "Replaced %d%s" num-replaced
+          (message "Replaced %d%s%s" num-replaced
                    (if (> skipped 0)
                        (format ", skipped %d (%s constraint)"
                        skipped (string-join (nreverse skipped-fields) ", "))
+                     "")
+                   (if protected-fields
+                       (format " (%d protected)" (length protected-fields))
                      "")))))))
 
 (defun tabularium-replace-exact (old-value new-value &optional fields)
@@ -7898,7 +8237,9 @@ If rows are marked, only operates on marked rows; marks are cleared after."
                                   primary-name
                                   (mapconcat #'number-to-string marked-ids ","))))
          (requested-fields (or fields (tabularium--stored-field-names)))
-         (search-fields (tabularium--fields-accepting-value requested-fields new-value))
+         (acc-rej (tabularium--fields-accepting-value requested-fields new-value))
+         (search-fields (car acc-rej))
+         (protected-fields (cdr acc-rej))
          (collate (tabularium-db-collate tabularium-case-sensitive))
          (all-undo-ops '())
          (skipped 0)
@@ -7916,8 +8257,11 @@ If rows are marked, only operates on marked rows; marks are cleared after."
         (when (> count 0)
           (setq total-replaced (+ total-replaced count)))))
     (if (zerop total-replaced)
-        (message "No records found with exact value '%s'%s" old-value
-                 (if marked-ids (format " (%s rows)" (or tabularium--replace-scope "marked")) ""))
+        (message "No records found with exact value '%s'%s%s" old-value
+                 (if marked-ids (format " (%s rows)" (or tabularium--replace-scope "marked")) "")
+                 (if protected-fields
+                     (format " (%d protected)" (length protected-fields))
+                   ""))
       (when (yes-or-no-p (format "Replace '%s' → '%s' in %d %s%s? "
                                  old-value new-value total-replaced
                                  (if (= 1 total-replaced) "cell" "cells")
@@ -7954,10 +8298,13 @@ If rows are marked, only operates on marked rows; marks are cleared after."
           (when (derived-mode-p 'tabularium-view-mode)
             (let ((inhibit-message t))
               (revert-buffer)))
-          (message "Replaced %d%s" num-replaced
+          (message "Replaced %d%s%s" num-replaced
                    (if (> skipped 0)
                        (format ", skipped %d (%s constraint)"
                        skipped (string-join (nreverse skipped-fields) ", "))
+                     "")
+                   (if protected-fields
+                       (format " (%d protected)" (length protected-fields))
                      "")))))))
 
 (defun tabularium-replace-pattern (pattern replacement &optional fields)
@@ -7976,7 +8323,9 @@ Uses GLOB or LIKE per `tabularium-case-sensitive'.  Nil FIELDS means all."
                                   primary-name
                                   (mapconcat #'number-to-string marked-ids ","))))
          (requested-fields (or fields (tabularium--stored-field-names)))
-         (search-fields (tabularium--fields-accepting-value requested-fields replacement))
+         (acc-rej (tabularium--fields-accepting-value requested-fields replacement))
+         (search-fields (car acc-rej))
+         (protected-fields (cdr acc-rej))
          (like-op (tabularium-db-like-op tabularium-case-sensitive))
          (all-undo-ops '())
          (skipped 0)
@@ -7994,8 +8343,11 @@ Uses GLOB or LIKE per `tabularium-case-sensitive'.  Nil FIELDS means all."
         (when (> count 0)
           (setq total-replaced (+ total-replaced count)))))
     (if (zerop total-replaced)
-        (message "No records match pattern '%s'%s" pattern
-                 (if marked-ids (format " (%s rows)" (or tabularium--replace-scope "marked")) ""))
+        (message "No records match pattern '%s'%s%s" pattern
+                 (if marked-ids (format " (%s rows)" (or tabularium--replace-scope "marked")) "")
+                 (if protected-fields
+                     (format " (%d protected)" (length protected-fields))
+                   ""))
       (when (yes-or-no-p (format "Replace %d %s matching '%s' → '%s'%s? "
                                  total-replaced
                                  (if (= 1 total-replaced) "cell" "cells")
@@ -8034,10 +8386,13 @@ Uses GLOB or LIKE per `tabularium-case-sensitive'.  Nil FIELDS means all."
           (when (derived-mode-p 'tabularium-view-mode)
             (let ((inhibit-message t))
               (revert-buffer)))
-          (message "Replaced %d%s" num-replaced
+          (message "Replaced %d%s%s" num-replaced
                    (if (> skipped 0)
                        (format ", skipped %d (%s constraint)"
                        skipped (string-join (nreverse skipped-fields) ", "))
+                     "")
+                   (if protected-fields
+                       (format " (%d protected)" (length protected-fields))
                      "")))))))
 
 (defun tabularium-replace-regexp (regexp replacement &optional fields)
@@ -8052,7 +8407,9 @@ REPLACEMENT can include \\\\& and \\\\N.  Nil FIELDS means all."
   (let* ((primary-name (symbol-name (tabularium--primary-field-name)))
          (marked-ids tabularium--marked-entries)
          (requested-fields (or fields (tabularium--stored-field-names)))
-         (search-fields (tabularium--fields-accepting-value requested-fields replacement))
+         (acc-rej (tabularium--fields-accepting-value requested-fields replacement))
+         (search-fields (car acc-rej))
+         (protected-fields (cdr acc-rej))
          (case-fold (not tabularium-case-sensitive))
          (all-undo-ops '())
          (skipped 0)
@@ -8093,8 +8450,11 @@ REPLACEMENT can include \\\\& and \\\\N.  Nil FIELDS means all."
                      (cl-pushnew field skipped-fields :test #'string=)
                      (message "Skipped ID %s (%s): %s" id field (error-message-string err)))))))))))
     (if (and (zerop total-replaced) (zerop skipped))
-        (message "No cells match regexp '%s'%s" regexp
-                 (if marked-ids (format " (%s rows)" (or tabularium--replace-scope "marked")) ""))
+        (message "No cells match regexp '%s'%s%s" regexp
+                 (if marked-ids (format " (%s rows)" (or tabularium--replace-scope "marked")) "")
+                 (if protected-fields
+                     (format " (%d protected)" (length protected-fields))
+                   ""))
       (when all-undo-ops
         (tabularium--undo-push
          (if (= 1 total-replaced)
@@ -8106,13 +8466,16 @@ REPLACEMENT can include \\\\& and \\\\N.  Nil FIELDS means all."
       (when (derived-mode-p 'tabularium-view-mode)
         (let ((inhibit-message t))
           (revert-buffer)))
-      (message "Replaced %d%s" total-replaced
+      (message "Replaced %d%s%s" total-replaced
                (if (> skipped 0)
                    (format ", skipped %d (%s constraint)"
                        skipped (string-join (nreverse skipped-fields) ", "))
+                 "")
+               (if protected-fields
+                   (format " (%d protected)" (length protected-fields))
                  "")))))
 
-(defun tabularium-query-replace (old-value new-value &optional fields)
+(defun tabularium-replace-query (old-value new-value &optional fields)
   "Interactive query-replace OLD-VALUE with NEW-VALUE across FIELDS.
 Prompts y/n/!/q at each match.  Nil FIELDS means all."
   (interactive
@@ -8128,7 +8491,9 @@ Prompts y/n/!/q at each match.  Nil FIELDS means all."
                                   primary-name
                                   (mapconcat #'number-to-string marked-ids ","))))
          (requested-fields (or fields (tabularium--stored-field-names)))
-         (search-fields (tabularium--fields-accepting-value requested-fields new-value))
+         (acc-rej (tabularium--fields-accepting-value requested-fields new-value))
+         (search-fields (car acc-rej))
+         (protected-fields (cdr acc-rej))
          (replaced 0)
          (skipped 0)
          (replace-all nil)
@@ -8231,7 +8596,10 @@ Prompts y/n/!/q at each match.  Nil FIELDS means all."
         (when in-view-mode
           (let ((inhibit-message t))
             (revert-buffer)))
-        (message "Replaced %d, skipped %d" replaced skipped)))))
+        (message "Replaced %d, skipped %d%s" replaced skipped
+                 (if protected-fields
+                     (format " (%d protected)" (length protected-fields))
+                   ""))))))
 
 (defun tabularium--goto-id (id)
   "Move point to the row with ID in the current view buffer."
@@ -8295,7 +8663,7 @@ Returns the overlay, or nil if not in view mode or not found."
   "Return list of row IDs currently visible in the tabulated list."
   (mapcar #'car tabulated-list-entries))
 
-(defun tabularium-visible-replace-substring (old-value new-value &optional fields)
+(defun tabularium-replace-visible-substring (old-value new-value &optional fields)
   "Replace substring OLD-VALUE with NEW-VALUE in visible rows.
 Like `tabularium-replace-substring' but scoped to the current view
 \(respecting filters and range limits)."
@@ -8308,7 +8676,7 @@ Like `tabularium-replace-substring' but scoped to the current view
         (tabularium--replace-scope "visible"))
     (tabularium-replace-substring old-value new-value fields)))
 
-(defun tabularium-visible-replace-exact (old-value new-value &optional fields)
+(defun tabularium-replace-visible-exact (old-value new-value &optional fields)
   "Replace exact OLD-VALUE with NEW-VALUE in visible rows.
 Like `tabularium-replace-exact' but scoped to the current view."
   (interactive
@@ -8320,7 +8688,7 @@ Like `tabularium-replace-exact' but scoped to the current view."
         (tabularium--replace-scope "visible"))
     (tabularium-replace-exact old-value new-value fields)))
 
-(defun tabularium-visible-replace-regexp (regexp replacement &optional fields)
+(defun tabularium-replace-visible-regexp (regexp replacement &optional fields)
   "Replace REGEXP with REPLACEMENT in visible rows.
 Like `tabularium-replace-regexp' but scoped to the current view."
   (interactive
@@ -8332,9 +8700,9 @@ Like `tabularium-replace-regexp' but scoped to the current view."
         (tabularium--replace-scope "visible"))
     (tabularium-replace-regexp regexp replacement fields)))
 
-(defun tabularium-visible-query-replace (old-value new-value &optional fields)
+(defun tabularium-replace-visible-query (old-value new-value &optional fields)
   "Interactive query-replace OLD-VALUE with NEW-VALUE in visible rows.
-Like `tabularium-query-replace' but scoped to the current view."
+Like `tabularium-replace-query' but scoped to the current view."
   (interactive
    (let* ((old-value (read-string "Query replace (visible): "))
           (new-value (read-string (format "Replace '%s' with: " old-value)))
@@ -8342,13 +8710,13 @@ Like `tabularium-query-replace' but scoped to the current view."
      (list old-value new-value fields)))
   (let ((tabularium--marked-entries (tabularium--visible-row-ids))
         (tabularium--replace-scope "visible"))
-    (tabularium-query-replace old-value new-value fields)))
+    (tabularium-replace-query old-value new-value fields)))
 
-;;; ** 7.5 Math Operations
+;;; ** 7.5 Aggregate Operations
 
 ;;; *** 7.5.1 Count
 
-(defun tabularium-count (field pattern &optional extra-field extra-value)
+(defun tabularium-aggregate-count (field pattern &optional extra-field extra-value)
   "Count records where FIELD matches PATTERN.
 Optional EXTRA-FIELD and EXTRA-VALUE for additional filtering."
   (interactive
@@ -8359,10 +8727,14 @@ Optional EXTRA-FIELD and EXTRA-VALUE for additional filtering."
      (list field pattern nil nil)))
   (tabularium--ensure-db)
   (let* ((extra-clause (if (and extra-field extra-value (not (string-empty-p extra-value)))
-                           (format "AND %s = '%s'" extra-field extra-value)
+                           (format "AND %s"
+                                   (tabularium-db-build-equals-clause
+                                    extra-field extra-value))
                          ""))
-         (sql (format "SELECT COUNT(*) FROM %s WHERE %s LIKE '%%%s%%' %s"
-                      tabularium-table-name field pattern extra-clause))
+         (like-clause (tabularium-db-build-like-clause
+                       field pattern tabularium-case-sensitive))
+         (sql (format "SELECT COUNT(*) FROM %s WHERE %s %s"
+                      tabularium-table-name like-clause extra-clause))
          (count (tabularium-db-query-scalar tabularium--db sql)))
     (message "Found %d records where %s matches '%s'%s"
              count field pattern
@@ -8380,8 +8752,12 @@ If FIELDS is nil, searches all fields."
      (if fields (cons value fields) (list value))))
   (tabularium--ensure-db)
   (let* ((search-fields (or fields (tabularium--stored-field-names)))
+         (op (tabularium-db-like-op tabularium-case-sensitive))
+         (pattern (tabularium-db-like-pattern (format "%s" value)
+                                              tabularium-case-sensitive))
+         (escaped (replace-regexp-in-string "'" "''" pattern))
          (conditions (mapcar (lambda (f)
-                               (format "%s LIKE '%%%s%%'" f value))
+                               (format "%s %s '%s'" f op escaped))
                              search-fields))
          (where-clause (string-join conditions " OR "))
          (sql (format "SELECT COUNT(*) FROM %s WHERE %s"
@@ -8396,7 +8772,7 @@ If FIELDS is nil, searches all fields."
 
 ;;; *** 7.5.2 Basic Statistics
 
-(defun tabularium-sum (field &optional filter-field filter-value)
+(defun tabularium-aggregate-sum (field &optional filter-field filter-value)
   "Calculate sum of FIELD values.
 Optionally filter by FILTER-FIELD matching FILTER-VALUE."
   (interactive
@@ -8417,7 +8793,7 @@ Optionally filter by FILTER-FIELD matching FILTER-VALUE."
        (list field nil nil))))
   (tabularium--ensure-db)
   (let* ((where (if (and filter-field filter-value (not (string-empty-p filter-value)))
-                    (format "WHERE %s LIKE '%%%s%%'" filter-field filter-value)
+                    (format "WHERE %s" (tabularium-db-build-like-clause filter-field filter-value tabularium-case-sensitive))
                   ""))
          (sql (format "SELECT SUM(%s) FROM %s %s" field tabularium-table-name where))
          (result (caar (tabularium-db-query tabularium--db sql))))
@@ -8425,7 +8801,7 @@ Optionally filter by FILTER-FIELD matching FILTER-VALUE."
         (message "Sum of %s (where %s ~ %s): %s" field filter-field filter-value (or result 0))
       (message "Sum of %s: %s" field (or result 0)))))
 
-(defun tabularium-min-max (field &optional filter-field filter-value)
+(defun tabularium-aggregate-min-max (field &optional filter-field filter-value)
   "Show minimum and maximum values of FIELD.
 Optionally filter by FILTER-FIELD matching FILTER-VALUE."
   (interactive
@@ -8446,7 +8822,7 @@ Optionally filter by FILTER-FIELD matching FILTER-VALUE."
        (list field nil nil))))
   (tabularium--ensure-db)
   (let* ((where (if (and filter-field filter-value (not (string-empty-p filter-value)))
-                    (format "WHERE %s LIKE '%%%s%%'" filter-field filter-value)
+                    (format "WHERE %s" (tabularium-db-build-like-clause filter-field filter-value tabularium-case-sensitive))
                   ""))
          (sql (format "SELECT MIN(%s), MAX(%s) FROM %s %s"
                       field field tabularium-table-name where))
@@ -8464,8 +8840,9 @@ Optionally filter by FILTER-FIELD matching FILTER-VALUE.
 Returns nil values removed and list sorted ascending."
   (tabularium--ensure-db)
   (let* ((where (if (and filter-field filter-value (not (string-empty-p filter-value)))
-                    (format "WHERE %s LIKE '%%%s%%' AND %s IS NOT NULL"
-                            filter-field filter-value field)
+                    (format "WHERE %s AND %s IS NOT NULL"
+                            (tabularium-db-build-like-clause filter-field filter-value tabularium-case-sensitive)
+                            field)
                   (format "WHERE %s IS NOT NULL" field)))
          (sql (format "SELECT %s FROM %s %s ORDER BY %s ASC"
                       field tabularium-table-name where field))
@@ -8496,7 +8873,7 @@ Returns nil values removed and list sorted ascending."
                                            values))))
       (sqrt (/ sum-sq-diff (1- n))))))  ; Sample std dev (n-1)
 
-(defun tabularium-mean-sd (field &optional filter-field filter-value)
+(defun tabularium-aggregate-mean-sd (field &optional filter-field filter-value)
   "Show mean ± standard deviation for FIELD.
 Optionally filter by FILTER-FIELD matching FILTER-VALUE."
   (interactive
@@ -8526,7 +8903,7 @@ Optionally filter by FILTER-FIELD matching FILTER-VALUE."
                             "")))
         (message "%s%s: %.2f ± %.2f (n = %d)" field filter-info mean sd n)))))
 
-(defun tabularium-median-iqr (field &optional filter-field filter-value)
+(defun tabularium-aggregate-median-iqr (field &optional filter-field filter-value)
   "Show median [Q1, Q3] (interquartile range) for FIELD.
 Optionally filter by FILTER-FIELD matching FILTER-VALUE."
   (interactive
@@ -8559,7 +8936,7 @@ Optionally filter by FILTER-FIELD matching FILTER-VALUE."
 
 ;;; *** 7.5.3 Visible Statistics
 
-(defun tabularium-visible-sum ()
+(defun tabularium-aggregate-visible-sum ()
   "Calculate sum of a numeric field for currently visible entries."
   (interactive)
   (unless (derived-mode-p 'tabularium-view-mode)
@@ -8627,7 +9004,7 @@ Returns (PROMPT FIELD-IDX FIELD-TYPE)."
           (push 0 vals))))
     (sort vals #'<)))
 
-(defun tabularium-visible-min-max ()
+(defun tabularium-aggregate-visible-min-max ()
   "Show min and max of a numeric field for visible entries."
   (interactive)
   (pcase-let ((`(,name ,idx ,_type) (tabularium--visible-numeric-field)))
@@ -8637,7 +9014,7 @@ Returns (PROMPT FIELD-IDX FIELD-TYPE)."
                    name (car vals) (car (last vals)))
         (message "%s (visible): no numeric values" name)))))
 
-(defun tabularium-visible-mean-sd ()
+(defun tabularium-aggregate-visible-mean-sd ()
   "Show mean ± SD of a numeric field for visible entries."
   (interactive)
   (pcase-let ((`(,name ,idx ,_type) (tabularium--visible-numeric-field)))
@@ -8650,7 +9027,7 @@ Returns (PROMPT FIELD-IDX FIELD-TYPE)."
                (sd (sqrt (/ (apply #'+ sq-diffs) (float (1- n))))))
           (message "%s (visible): %.2f ± %.2f (n = %d)" name mean sd n))))))
 
-(defun tabularium-visible-median-iqr ()
+(defun tabularium-aggregate-visible-median-iqr ()
   "Show median [Q1–Q3] of a numeric field for visible entries."
   (interactive)
   (pcase-let ((`(,name ,idx ,_type) (tabularium--visible-numeric-field)))
@@ -8666,7 +9043,7 @@ Returns (PROMPT FIELD-IDX FIELD-TYPE)."
 
 ;;; *** 7.5.4 Column Summary
 
-(defun tabularium-column-summary (field)
+(defun tabularium-aggregate-column-summary (field)
   "Show comprehensive column summary for FIELD.
 Adapts output based on column type: numeric columns get
 descriptive statistics (mean, median, SD, IQR, range) while
@@ -8818,7 +9195,7 @@ top 10 and bottom 5)."
                                     (goto-char (point-min))
                                     (when (re-search-forward "\\]: \\([^ ]+\\)" nil t)
                                       (match-string 1)))))
-                  (tabularium-column-summary field)))))
+                  (tabularium-aggregate-column-summary field)))))
 
 ;;; ** 7.6 Fill Operations
 
@@ -8861,11 +9238,16 @@ filled row."
   "Prompt for fill source: copy from a row or type a value directly.
 FIELD-NAME is the field being filled.  Returns the chosen value.
 Select <ROW> to copy from a specific row; select an existing value
-from the list; or type any new value directly."
-  (let* ((existing (tabularium--get-historical-values field-name 20))
+from the list; or type any new value directly.
+For `:choice' fields, the candidate list is restricted to the
+field's allowed choices and selection is enforced."
+  (let* ((choices (tabularium--field-choices field-name))
+         (existing (if choices choices
+                     (tabularium--get-historical-values field-name 20)))
          (candidates (cons "<ROW>" existing))
+         (require-match (if choices t nil))
          (choice (completing-read (format "Fill '%s' with: " field-name)
-                                  candidates nil nil nil nil "<ROW>")))
+                                  candidates nil require-match nil nil "<ROW>")))
     (cond
      ((string= choice "<ROW>")
       (let* ((default-id (tabularium--id-at-point))
@@ -8878,7 +9260,14 @@ from the list; or type any new value directly."
   "Execute fill: set FIELD to SOURCE-VALUE.
 When marks are set, fills marked rows (prompting to overwrite non-blank cells).
 When no marks are set, fills blank cells from point in DIRECTION
-\(\\='down or \\='up, default \\='down).  Undoable."
+\(\\='down or \\='up, default \\='down).  Undoable.
+Errors with a clear message when FIELD is a `:choice' field and
+SOURCE-VALUE is not among the allowed choices."
+  (unless (tabularium--field-accepts-value-p field source-value)
+    (let ((choices (tabularium--field-choices field)))
+      (user-error "Cannot fill '%s' with '%s': allowed choices are %s"
+                  field source-value
+                  (mapconcat (lambda (c) (format "'%s'" c)) choices ", "))))
   (let* ((has-marks (and tabularium--marked-entries
                          (> (length tabularium--marked-entries) 0)))
          (field-sym (intern field))
@@ -9448,7 +9837,7 @@ Exports marked rows if any, otherwise all records."
   (when (and (file-exists-p file)
              (not (y-or-n-p (format "File %s exists. Overwrite? "
                                     (file-name-nondirectory file)))))
-    (user-error "Export cancelled"))
+    (user-error "Export canceled"))
   (tabularium--ensure-db)
   (let* ((fmt (or format tabularium-export-format))
          (sep (if (eq fmt 'tsv) "\t" ","))
@@ -10094,7 +10483,7 @@ SCHEMA-NAME is used to look up the schema after loading."
               (when (file-exists-p wal-file) (delete-file wal-file))
               (when (file-exists-p shm-file) (delete-file shm-file))))
         ;; User declined - abort import
-        (user-error "Import cancelled. Cannot import into existing database without deleting it first")))
+        (user-error "Import canceled. Cannot import into existing database without deleting it first")))
     ;; Set as current schema directly (bypass registry lookup which would fail)
     (setq tabularium--current-schema-name actual-name)
     ;; Ensure database connection is established

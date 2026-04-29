@@ -4,7 +4,7 @@
 
 ;; Author: Paul H. McClelland <paulhmcclelland@protonmail.com>
 ;; Maintainer: Paul H. McClelland <paulhmcclelland@protonmail.com>
-;; Version: 0.4.4
+;; Version: 0.4.5
 ;; Package-Requires: ((emacs "29.1"))
 ;; Keywords: data
 ;; URL: https://codeberg.org/phmcc/tabularium
@@ -323,11 +323,21 @@ Merges write-ahead log into the main file for clean syncing."
 
 ;;; * 6 SQL Helpers
 
-(defun tabularium-db-build-like-clause (column pattern)
-  "Build a LIKE clause for COLUMN matching PATTERN."
-  (format "%s LIKE '%%%s%%'"
-          (if (symbolp column) (symbol-name column) column)
-          pattern))
+(defun tabularium-db-build-like-clause (column pattern &optional case-sensitive)
+  "Build a substring match clause for COLUMN matching PATTERN.
+PATTERN is a literal substring; single quotes and (for GLOB) wildcards
+are escaped.  When CASE-SENSITIVE is non-nil, uses GLOB; otherwise LIKE."
+  (let* ((col (if (symbolp column) (symbol-name column) column))
+         (op (tabularium-db-like-op case-sensitive))
+         (wrapped (tabularium-db-like-pattern (format "%s" pattern) case-sensitive))
+         (escaped (replace-regexp-in-string "'" "''" wrapped)))
+    (format "%s %s '%s'" col op escaped)))
+
+(defun tabularium-db-build-equals-clause (column value)
+  "Build an equality clause for COLUMN equal to VALUE.
+VALUE is escaped via `tabularium-db-sql-quote'."
+  (let ((col (if (symbolp column) (symbol-name column) column)))
+    (format "%s = %s" col (tabularium-db-sql-quote value))))
 
 (defun tabularium-db-sql-quote (value)
   "Quote VALUE for safe SQL insertion."
@@ -384,7 +394,7 @@ Modifies the schema file on disk.  Returns non-nil on success."
 
 (defun tabularium-db--checkpoint-all ()
   "Checkpoint all open SQLite WALs without closing connections.
-Internal; called by `tabularium-checkpoint'."
+Internal; called by `tabularium-sync-checkpoint'."
   (let ((count 0) (errors 0))
     (maphash (lambda (_name backend)
                (when (and backend
@@ -406,7 +416,7 @@ Internal; called by `tabularium-checkpoint'."
 
 (defun tabularium-db--prepare-for-sync ()
   "Close all connections for clean sync state.
-Internal; called by `tabularium-prepare-for-sync'."
+Internal; called by `tabularium-sync-prepare'."
   (tabularium-db-close-all-connections)
   (message "All databases closed and ready for sync"))
 

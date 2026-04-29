@@ -1,4 +1,4 @@
-#+TITLE: tabularium — Default Keybindings
+#+TITLE: Default Keybindings
 #+AUTHOR: Paul H. McClelland
 #+OPTIONS: toc:1 num:nil
 
@@ -85,7 +85,7 @@ Page navigation (=C-<down>= / =C-<up>=) jumps by the configured page size in eit
 | =R ?= | Query-replace (visible rows only)     |
 | =R c= | Toggle case-sensitivity               |
 
-Uppercase variants scope to visible rows only.  Lowercase variants act on marked rows (if any) or all rows.  Choice fields (those with =:choices= in the schema) are automatically excluded when the replacement value is not in the allowed set.
+Uppercase variants scope to visible rows only.  Lowercase variants act on marked rows (if any) or all rows.  Choice fields (those with =:choice= in the schema) are automatically excluded when the replacement value is not in the allowed set.
 
 ** Sort (=s= prefix)
 
@@ -173,6 +173,7 @@ Frozen rows always render at the top of the view, marked with a =∙= indicator.
 | =| C= | Copy columns             |
 | =| X= | Cut columns              |
 | =| V= | Paste columns            |
+| =| A= | Paste columns at end     |
 
 ** View expansion (=v= prefix)
 

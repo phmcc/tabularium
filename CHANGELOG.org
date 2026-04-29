@@ -4,6 +4,45 @@
 
 All notable changes to ~tabularium~ are documented in this file.
 
+* 0.4.5 (2026-04-26)
+
+** Added
+
+- ~tabularium-view-column-paste-append~ bound to =| A=, mirroring row paste-append (=A=)
+- Computed-field helpers for date arithmetic: ~tabularium-fn-today~, ~tabularium-fn-now~, ~tabularium-fn-date-add~, ~tabularium-fn-date-diff~, ~tabularium-fn-age~
+- Computed-field helpers for cross-row lookup: ~tabularium-fn-lookup~, ~tabularium-fn-count-where~, ~tabularium-fn-sum-where~
+- ~tabularium-db-build-equals-clause~ helper for safe SQL equality conditions
+- ~tabularium-entry-edited-p~ — public predicate for plugins to detect unsaved form changes
+- ~tabularium--field-accepts-value-p~ — singular schema validator used by fill and replace
+- Plugin hooks for entry-mode lifecycle: ~tabularium-entry-pre-render-hook~ (set buffer-local variables before layout), ~tabularium-entry-new-hook~ (auto-populate fields on new entry creation), ~tabularium-entry-pre-submit-hook~ (mutate values just before save)
+- ~tabularium-entry-required-field-functions~ — abnormal hook for declaring dynamic required fields (e.g. type-specific requirements); marked fields display `+' alongside the static `*' marker for `:required t'
+- ~tabularium-entry-header-function~ — buffer-local function returning a header string inserted between the title bar and field list, for plugin-driven citations or summaries
+- Field highlighting in entry mode now follows point: clicking with the mouse or moving by ~goto-char~ updates the highlighted field, so =RET= always edits the field at the cursor
+- Discard prompt now fires when an active form buffer is about to be overwritten by another entry, or killed via =C-x k= or window cleanup, protecting partially-filled forms
+- Fill operations on `:choice` fields now offer the schema's choices as completion candidates and require a valid selection
+- Replace and fill operations report the number of fields skipped due to schema constraints in their summary message (e.g. "Replaced 5 (2 protected)")
+
+** Changed
+
+- =:choices= field property renamed to =:choice= for consistency with the singular-keyword convention used throughout the schema vocabulary; existing schema files must be updated
+- New namespaces:
+  - ~tabularium-fn-*~ for computed-field helpers (~tabularium-fn-if~, ~-case~, ~-sum-fields~, ~-concat-fields~, ~-today~, ~-now~, ~-date-add~, ~-date-diff~, ~-age~, ~-lookup~, ~-count-where~, ~-sum-where~)
+  - ~tabularium-aggregate-*~ for interactive math/statistics commands (~tabularium-aggregate-count~, ~-sum~, ~-min-max~, ~-mean-sd~, ~-median-iqr~, ~-column-summary~, plus ~-visible-*~ variants)
+  - ~tabularium-sync-*~ for sync-related operations (~tabularium-sync-prepare~, ~-checkpoint~, ~-fix-paths~, ~-cleanup-wal-files~)
+- ~tabularium-replace-*~ namespace consolidates visible-scoped variants (~tabularium-replace-visible-substring~, ~-visible-exact~, ~-visible-regexp~, ~-visible-query~) and renames ~tabularium-query-replace~ → ~tabularium-replace-query~
+- ~tabularium-view-clear~ (was ~tabularium-clear-view~) and ~tabularium-completion-clear-cache~ (was ~tabularium-clear-vocabulary-cache~) regrouped into their respective subsystems
+- ~tabularium--fields-accepting-value~ now returns =(ACCEPTED . REJECTED)= so callers can report protection counts in summary messages
+- ~tabularium-db-build-like-clause~ takes an optional ~CASE-SENSITIVE~ argument; values are properly escaped and the operator (LIKE vs GLOB) reflects ~tabularium-case-sensitive~
+- ~tabularium--paste-column-batch~ takes an optional ~POSITION~ argument; ='last skips the position prompt
+- ~tabularium-fn-sum-fields~ coerces non-numeric and missing values to 0 instead of erroring; ~tabularium-fn-concat-fields~ skips empty and missing fields cleanly
+
+** Fixed
+
+- ~tabularium-entry-submit~ no longer triggers a spurious "unsaved changes" prompt: after a successful save, the buffer's original-values reference is updated so the kill-buffer hook recognizes the buffer as clean
+- ~tabularium-entry-cancel~ no longer double-prompts: when the user has already confirmed "Discard changes?", the kill-buffer-query hook is bypassed for the actual quit
+- SQL injection vectors in filter values closed: substring filters (~tabularium-find~, ~tabularium-view-count-across~, ~tabularium-last~), exact and numeric filter operators in ~tabularium--filter-layer-sql~, aggregate functions (~tabularium-aggregate-sum~, ~-min-max~, ~--get-numeric-values~), and the choice-field CHECK constraint at table creation all now route through ~tabularium-db-sql-quote~ or ~tabularium-db-build-like-clause~
+- Substring filters honor ~tabularium-case-sensitive~ (previously always case-insensitive LIKE)
+
 * 0.4.4 (2026-04-24)
 
 ** Added
@@ -11,10 +50,10 @@ All notable changes to ~tabularium~ are documented in this file.
 - Fill-to-point commands =F ,= / =F .= (~tabularium-view-fill-up-to-point~ / ~-down-to-point~)
 - Page navigation: =C-<down>= / =C-<up>= jump by ~tabularium-view-page-size~ rows
 - Column scroll: =C-<right>= / =C-<left>= shift the viewport one column at a time
-- ~tabularium-visible-replace-exact~ bound to =R E=
+- ~tabularium-replace-visible-exact~ bound to =R E=
 - ~tabularium-entry-current-field~ face (theme-aware light/dark variants)
 - Plugin API expanded: ~tabularium-entry-editing-id~, ~tabularium-entry-schema-name~, ~tabularium-entry-render~ promoted to public
-- README sections for the plugin API and computed-field helpers (~tabularium-if~, ~tabularium-case~, ~tabularium-sum-fields~, ~tabularium-concat-fields~)
+- README sections for the plugin API and computed-field helpers (~tabularium-fn-if~, ~tabularium-fn-case~, ~tabularium-fn-sum-fields~, ~tabularium-fn-concat-fields~)
 
 ** Changed
 
@@ -28,7 +67,7 @@ All notable changes to ~tabularium~ are documented in this file.
 - View-mode buffer-local variables consolidated into Section 1.2 of ~tabularium.el~
 - WAL/SHM cleanup moved to ~tabularium-db.el~ (~tabularium-db-cleanup-wal-files~) with thin wrapper in main file
 - Modeline icon ~defface~ renamed to ~tabularium-modeline-icon-face~ (resolves collision with ~defcustom~ of same name)
-- Modeline mouse-1 click now calls ~tabularium-menu~ (honours ~tabularium-menu-system~)
+- Modeline mouse-1 click now calls ~tabularium-menu~ (honors ~tabularium-menu-system~)
 - ~tabularium-modeline-mode~ disable also tears down the awesome-tray module entry; segments self-deactivate via ~tabularium-modeline--active-p~, which now requires the mode to be enabled
 - ~tabularium-view-show-more~ default increment is ~tabularium-view-page-size~ (was hard-coded 500)
 - File headers reordered to FSF/GNU convention; ~Maintainer:~ and email added
@@ -39,7 +78,7 @@ All notable changes to ~tabularium~ are documented in this file.
 
 - ~tabularium-schemas~ docstring covers all eight ~:complete~ types and the previously-undocumented field properties
 - Fill commands report the actual count of cells changed (the ~filled~ / ~cleared~ counters were tracked but not reported)
-- ~tabularium-checkpoint~ now autoloaded; matching ~tabularium-prepare-for-sync~
+- ~tabularium-sync-checkpoint~ now autoloaded; matching ~tabularium-sync-prepare~
 - ~(require 'subr-x)~ added; forward declarations added for ~tabularium-transient~ and ~tabularium--kill-ring~
 - PostgreSQL backend emits a one-time message when ~emacsql-pg~ is unavailable (was silent)
 - README and KEYBINDINGS corrections: customization defaults, removed bindings that don't exist (=G=, =T=, =h=, =>=), added =* p= / =R E=, fixed column-clipboard key casing

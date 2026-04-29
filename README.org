@@ -10,7 +10,7 @@
 
 ~tabularium~ uses several built-in tools to create a data management ecosystem within Emacs, including ~tabulated-list-mode~ for row/column display and ~sqlite.el~ for the database backend.  The result is something close in spirit to Microsoft Access or LibreOffice Base, but fully integrated into Emacs—leveraging Emacs's standard completion frameworks, keyboard-driven navigation, and version control support.  Each database can also be extended with custom Elisp in its corresponding schema file, and several useful elements from common spreadsheet software such as Microsoft Excel and LibreOffice Calc are also implemented for ease-of-use.  An EIEIO-based backend abstraction layer supports future extensions to PostgreSQL and other database systems.
 
-This package was developed out of a need to more adeptly handle large datasets within Emacs.  Emacs's built-in tools such as ~org-table~ and ~csv-mode~ handle human-readable tables and flat files well, but neither scales gracefully to thousands of records with rich schemas, field-level completion, or computed entries.  Conversely, packages like ~emacsql~ provide raw database access but lack a data management interface, and ~esqlite~ offers SQLite bindings without a user-facing layer.  ~tabularium~ is designed to occupy the space between these tools and full external database applications.
+This package was developed out of a need to more adeptly handle large datasets within Emacs.  Emacs's built-in tools such as ~org-table~ and ~csv-mode~ handle human-readable tables and flat files well, but neither scales gracefully to thousands of records with rich schemas, field-level completion, or computed fields.  Conversely, packages like ~emacsql~ provide raw database access but lack a data management interface, and ~esqlite~ offers SQLite bindings without a user-facing layer.  ~tabularium~ is designed to occupy the space between these tools and full external database applications.
 
 * Features
 
@@ -149,12 +149,12 @@ Cell-jump commands accept a prefix argument to jump across multiple value transi
 | ~tabularium-replace-exact~             | Replace exact value across selected fields                          |
 | ~tabularium-replace-pattern~           | Replace values matching a glob pattern across selected fields       |
 | ~tabularium-replace-regexp~            | Replace by regexp across selected fields                            |
-| ~tabularium-query-replace~             | Interactive query-replace with visual feedback                      |
+| ~tabularium-replace-query~             | Interactive query-replace with visual feedback                      |
 | ~tabularium-toggle-case-sensitive~     | Toggle case sensitivity for replace and mark operations             |
-| ~tabularium-visible-replace-substring~ | Replace substring in visible rows only                              |
-| ~tabularium-visible-replace-exact~     | Replace exact value in visible rows only                            |
-| ~tabularium-visible-replace-regexp~    | Replace by regexp in visible rows only                              |
-| ~tabularium-visible-query-replace~     | Interactive query-replace in visible rows only                      |
+| ~tabularium-replace-visible-substring~ | Replace substring in visible rows only                              |
+| ~tabularium-replace-visible-exact~     | Replace exact value in visible rows only                            |
+| ~tabularium-replace-visible-regexp~    | Replace by regexp in visible rows only                              |
+| ~tabularium-replace-visible-query~     | Interactive query-replace in visible rows only                      |
 
 ** Sorting, filtering, and views
 
@@ -200,17 +200,17 @@ Cell-jump commands accept a prefix argument to jump across multiple value transi
 
 | Command                   | Description                            |
 |---------------------------+----------------------------------------|
-| ~tabularium-sum~                | Sum of a numeric field                 |
-| ~tabularium-visible-sum~        | Sum of visible entries only            |
-| ~tabularium-min-max~            | Minimum and maximum values             |
-| ~tabularium-mean-sd~            | Mean ± standard deviation              |
-| ~tabularium-median-iqr~         | Median [Q1, Q3] (interquartile range)  |
-| ~tabularium-column-summary~     | Comprehensive column statistics        |
-| ~tabularium-visible-min-max~    | Min/max of visible entries only        |
-| ~tabularium-visible-mean-sd~    | Mean ± SD of visible entries only      |
-| ~tabularium-visible-median-iqr~ | Median [Q1–Q3] of visible entries only |
-| ~tabularium-count~              | Count records matching a pattern       |
-| ~tabularium-visible-count~      | Count currently visible entries        |
+| ~tabularium-aggregate-sum~                | Sum of a numeric field                 |
+| ~tabularium-aggregate-visible-sum~        | Sum of visible entries only            |
+| ~tabularium-aggregate-min-max~            | Minimum and maximum values             |
+| ~tabularium-aggregate-mean-sd~            | Mean ± standard deviation              |
+| ~tabularium-aggregate-median-iqr~         | Median [Q1, Q3] (interquartile range)  |
+| ~tabularium-aggregate-column-summary~     | Comprehensive column statistics        |
+| ~tabularium-aggregate-visible-min-max~    | Min/max of visible entries only        |
+| ~tabularium-aggregate-visible-mean-sd~    | Mean ± SD of visible entries only      |
+| ~tabularium-aggregate-visible-median-iqr~ | Median [Q1–Q3] of visible entries only |
+| ~tabularium-aggregate-count~              | Count records matching a pattern       |
+| ~tabularium-aggregate-visible-count~      | Count currently visible entries        |
 | ~tabularium-view-count-across~  | Count across multiple columns          |
 
 ** View expansion
@@ -298,7 +298,7 @@ Each database is paired with a =.schema.el= file that defines its structure.  Th
   '((:name id :type integer :prompt "ID" :primary t :width 5)
     (:name date :type text :prompt "Date" :default today :width 12)
     (:name category :type choice :prompt "Category" :width 12
-     :choices ("Food" "Transport" "Utilities" "Entertainment" "Other"))
+     :choice ("Food" "Transport" "Utilities" "Entertainment" "Other"))
     (:name amount :type number :prompt "Amount" :width 10)
     (:name description :type text :prompt "Description" :width 30
      :complete historical))
@@ -322,7 +322,7 @@ Each database is paired with a =.schema.el= file that defines its structure.  Th
 | ~integer~ | Whole numbers (auto-increment if primary) |
 | ~number~  | Decimal numbers                           |
 | ~date~    | Date values (YYYY-MM-DD)                  |
-| ~choice~  | Constrained selection from ~:choices~       |
+| ~choice~  | Constrained selection from ~:choice~       |
 
 ** Field properties
 
@@ -334,7 +334,7 @@ Each database is paired with a =.schema.el= file that defines its structure.  Th
 | ~:primary~  | boolean      | Primary key field                                      |
 | ~:width~    | integer      | Column width in view mode                              |
 | ~:default~  | any          | Default value (~today~, ~now~, a function, or a literal)   |
-| ~:choices~  | list         | Valid options for ~choice~ type                          |
+| ~:choice~  | list         | Valid options for ~choice~ type                          |
 | ~:computed~ | string/plist | SQL expression or Elisp function                       |
 | ~:complete~ | symbol/plist | Completion source (see below)                          |
 | ~:long~     | boolean      | Open dedicated editing buffer for multi-paragraph text |
@@ -365,24 +365,61 @@ Views are defined in the ~:views~ property of the schema as a list of plists.  E
 
 Columns can be added, deleted, or edited interactively from view mode.  These operations update both the SQLite database and the schema file.  The schema file can also be edited directly and reloaded without restarting.
 
-** Computed field helpers
+** Computed-field helpers
 
-Fields defined with ~:computed~ can use an Elisp expression that receives the current row as an alist.  Several helper functions are provided for common patterns:
+Fields defined with ~:computed~ derive their value from an SQL expression or an Elisp function evaluated against the row, conceptually similar to formulae in spreadsheet software.  Computed fields are not stored — they are evaluated on read.  An Elisp ~:computed~ expression receives the current row as an alist.  Helpers are grouped into four categories: conditional logic, same-row aggregation, date arithmetic, and cross-row lookup.
 
-| Helper                                              | Purpose                                           |
-|-----------------------------------------------------+---------------------------------------------------|
-| ~(tabularium-if CONDITION THEN ELSE)~                 | Inline conditional expression                     |
-| ~(tabularium-case VALUE T1 R1 T2 R2 ... DEFAULT)~     | Match VALUE against tests, return the paired result; optional trailing default |
-| ~(tabularium-sum-fields ROW FIELD1 FIELD2 ...)~       | Sum numeric values of named fields in ROW         |
-| ~(tabularium-concat-fields ROW SEP FIELD1 FIELD2 ...)~ | Concatenate string values of named fields with SEP |
+*** Conditional logic
+
+| Helper                                              | Purpose                                                             |
+|-----------------------------------------------------+---------------------------------------------------------------------|
+| ~(tabularium-fn-if CONDITION THEN ELSE)~                 | Inline conditional expression                                       |
+| ~(tabularium-fn-case VALUE T1 R1 T2 R2 ... DEFAULT)~     | Match VALUE against tests, return the paired result; optional trailing default |
+
+*** Same-row aggregation
+
+| Helper                                              | Purpose                                                             |
+|-----------------------------------------------------+---------------------------------------------------------------------|
+| ~(tabularium-fn-sum-fields ROW FIELD1 FIELD2 ...)~       | Sum numeric values of named fields in ROW (non-numeric counts as 0) |
+| ~(tabularium-fn-concat-fields ROW SEP FIELD1 FIELD2 ...)~ | Concatenate string values, skipping empty/missing fields           |
+
+*** Date arithmetic
+
+| Helper                                              | Purpose                                                             |
+|-----------------------------------------------------+---------------------------------------------------------------------|
+| ~(tabularium-fn-today)~                                  | Return today's date as ~YYYY-MM-DD~                                   |
+| ~(tabularium-fn-now)~                                    | Return the current timestamp as ISO 8601                            |
+| ~(tabularium-fn-date-add DATE DAYS)~                     | Add DAYS to DATE; DAYS may be negative                              |
+| ~(tabularium-fn-date-diff DATE1 DATE2)~                  | Days between DATE1 and DATE2 (DATE2 − DATE1)                        |
+| ~(tabularium-fn-age DATE &optional REFERENCE)~           | Whole years between DATE and REFERENCE (defaults to today)          |
+
+*** Cross-row lookup and aggregation
+
+| Helper                                              | Purpose                                                             |
+|-----------------------------------------------------+---------------------------------------------------------------------|
+| ~(tabularium-fn-lookup LOOKUP-FIELD LOOKUP-VALUE RETURN-FIELD)~ | First row's RETURN-FIELD where LOOKUP-FIELD = LOOKUP-VALUE       |
+| ~(tabularium-fn-count-where FIELD VALUE)~                | Number of rows where FIELD = VALUE                                  |
+| ~(tabularium-fn-sum-where SUM-FIELD FILTER-FIELD VALUE)~ | Sum of SUM-FIELD across rows where FILTER-FIELD = VALUE             |
+
+The cross-row helpers query the open database directly.  They are safe to call from inside ~:computed~ lambdas because computed fields are evaluated only when the database is active.  All values are escaped via ~tabularium-db-sql-quote~ before interpolation, so user-supplied strings cannot break the SQL.
 
 * Extending Tabularium
 
-External packages can inject content and behaviour into Tabularium through a small plugin API exposed by ~tabularium-entry-mode~.
+External packages can inject content and behavior into Tabularium through a small plugin API exposed by ~tabularium-entry-mode~.
 
-** Render hook
+** Hooks
 
-~tabularium-entry-render-hook~ runs at the end of form buffer rendering, inside the render function with ~inhibit-read-only~ bound to ~t~, after the standard hint lines but before cursor positioning.  Hook functions may insert additional content such as cross-table data, schema-specific hint lines, or custom actions.
+| Hook                              | When it fires                                                                                         |
+|-----------------------------------+-------------------------------------------------------------------------------------------------------|
+| ~tabularium-entry-pre-render-hook~  | Inside `tabularium-entry-render', before the buffer is laid out.  Use this to set buffer-local variables (notably ~tabularium-entry-header-function~) that the layout pass consults |
+| ~tabularium-entry-render-hook~      | At the end of form buffer rendering, after the standard hint lines but before cursor positioning.  Use to inject content such as cross-table data or schema-specific hints           |
+| ~tabularium-entry-new-hook~         | After a new entry buffer is initialized (~tabularium-entry-editing-id~ is nil) and before the first render.  Use to populate plugin-specific defaults via ~tabularium-entry--values~  |
+| ~tabularium-entry-pre-submit-hook~  | Just before the form is submitted, in both new and edit paths.  Use to update bookkeeping fields (e.g. a date-modified timestamp) before they are written to the database          |
+| ~tabularium-entry-required-field-functions~ | List of predicates called with =(FIELD-NAME VALUES)= during render and submit.  Returning non-nil marks FIELD-NAME as dynamically required for the current entry's state — useful for type-specific required fields that cannot be expressed by a static `:required t'.  Marked fields display `+' (vs `*' for static `:required t'), and submission errors if such a field is empty |
+
+** Header function
+
+The buffer-local variable ~tabularium-entry-header-function~, when non-nil, is called with no arguments during render and should return a string to be inserted between the title bar and the field list.  Plugins use this to render a citation, summary, or other contextual content.  Set it from ~tabularium-entry-pre-render-hook~ for it to take effect on first render.
 
 ** Navigable text property
 
@@ -397,10 +434,13 @@ During and after the render, plugin code may read these buffer-local variables f
 - ~tabularium-entry-first-field-line~ — line number of the first schema field in the form
 - ~tabularium-entry-footer-start~ — buffer position where the footer hint lines begin
 
+Plugins may also mutate ~tabularium-entry--values~ from within the new- and pre-submit-hooks to populate or update field values before render or save.
+
 ** Helper functions
 
 - ~tabularium-entry-all-nav-positions~ returns a sorted list of navigable positions in the form, merging schema-field overlays and plugin-contributed navigable lines
 - ~tabularium-entry-render~ re-renders the form buffer; plugins should call this after mutating data they have injected via the render hook
+- ~tabularium-entry-edited-p~ returns non-nil if the form has unsaved changes
 
 * Import and Export
 
@@ -465,13 +505,13 @@ Per-schema settings (~:default-sort~, ~:quick-entry-fields~, ~:views~) are speci
 
 ** Syncing (Git, Syncthing, Dropbox)
 
-Database and schema files are designed to travel together.  Before syncing or suspending, ~tabularium-prepare-for-sync~ checkpoints and closes all connections to ensure a clean state.  ~tabularium-checkpoint~ flushes the write-ahead log without disconnecting.  ~tabularium-cleanup-wal-files~ removes any orphaned =-wal= and =-shm= files left by interrupted sessions; it is safe to run when the database is closed.  ~tabularium-fix-paths~ converts any absolute home directory paths in schema files to =~/= notation, ensuring portability across machines with different home directories.
+Database and schema files are designed to travel together.  Before syncing or suspending, ~tabularium-sync-prepare~ checkpoints and closes all connections to ensure a clean state.  ~tabularium-sync-checkpoint~ flushes the write-ahead log without disconnecting.  ~tabularium-sync-cleanup-wal-files~ removes any orphaned =-wal= and =-shm= files left by interrupted sessions; it is safe to run when the database is closed.  ~tabularium-sync-fix-paths~ converts any absolute home directory paths in schema files to =~/= notation, ensuring portability across machines with different home directories.
 
 TSV export provides human-readable diffs suitable for version control.
 
 ** Debugging
 
-~tabularium-completion-debug~ inspects the completion configuration and current candidates for any field.  ~tabularium-undo-history~ displays the recorded undo and redo stacks for the current database.  ~tabularium-clear-vocabulary-cache~ forces a reload of vocabulary files on the next completion request.  Setting ~tabularium-debug~ to a non-nil value enables verbose diagnostic messages during completion and autofill operations.
+~tabularium-completion-debug~ inspects the completion configuration and current candidates for any field.  ~tabularium-undo-history~ displays the recorded undo and redo stacks for the current database.  ~tabularium-completion-clear-cache~ forces a reload of vocabulary files on the next completion request.  Setting ~tabularium-debug~ to a non-nil value enables verbose diagnostic messages during completion and autofill operations.
 
 * Contributing
 

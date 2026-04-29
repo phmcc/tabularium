@@ -6,20 +6,6 @@
 
 The following features are tentatively planned for future releases:
 
-** v0.4.5
-
-- [ ] SQL escaping in filter values
-  - [ ] Route filter values through ~tabularium-db-sql-quote~
-  - [ ] Honour ~tabularium-case-sensitive~ in substring filters
-
-- [ ] Column clipboard symmetry
-  - [ ] ~tabularium-view-column-paste-append~ to mirror ~tabularium-view-paste-append~ for rows
-  - [ ] Bind to ~| A~ in keymap, hydra, and transient
-
-- [ ] Computed field helper expansion
-  - [ ] Add helpers for date arithmetic and lookup
-  - [ ] Document patterns for cross-row aggregation in computed fields
-
 ** v0.5.0
 
 - [ ] Conditional Formatting
