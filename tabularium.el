@@ -4,7 +4,7 @@
 
 ;; Author: Paul H. McClelland <paulhmcclelland@protonmail.com>
 ;; Maintainer: Paul H. McClelland <paulhmcclelland@protonmail.com>
-;; Version: 0.4.5
+;; Version: 0.4.6
 ;; Package-Requires: ((emacs "29.1"))
 ;; Keywords: data, sql, tables
 ;; URL: https://codeberg.org/phmcc/tabularium
@@ -64,6 +64,46 @@
 (defgroup tabularium nil
   "Structured data management in Emacs using SQL."
   :group 'applications
+  :prefix "tabularium-")
+
+(defgroup tabularium-schema nil
+  "Schema definition and on-disk schema files."
+  :group 'tabularium
+  :prefix "tabularium-")
+
+(defgroup tabularium-database nil
+  "Database connections, tables, and caching."
+  :group 'tabularium
+  :prefix "tabularium-")
+
+(defgroup tabularium-display nil
+  "Display, formatting, and view-mode behavior."
+  :group 'tabularium
+  :prefix "tabularium-")
+
+(defgroup tabularium-entry nil
+  "Entry-mode forms, fields, and long-field editing."
+  :group 'tabularium
+  :prefix "tabularium-")
+
+(defgroup tabularium-export nil
+  "Import and export formats."
+  :group 'tabularium
+  :prefix "tabularium-")
+
+(defgroup tabularium-registry nil
+  "Registry of known databases."
+  :group 'tabularium
+  :prefix "tabularium-")
+
+(defgroup tabularium-menu nil
+  "Menu and dispatch system."
+  :group 'tabularium
+  :prefix "tabularium-")
+
+(defgroup tabularium-undo nil
+  "Undo history and clipboard limits."
+  :group 'tabularium
   :prefix "tabularium-")
 
 (defcustom tabularium-schemas nil
@@ -126,40 +166,40 @@ Example with PostgreSQL (requires emacsql):
                         :user \"username\")
            :fields ...)))"
   :type '(alist :key-type string :value-type sexp)
-  :group 'tabularium)
+  :group 'tabularium-schema)
 
 (defcustom tabularium-date-format "%Y-%m-%d"
   "Format for date entry and display."
   :type 'string
-  :group 'tabularium)
+  :group 'tabularium-display)
 
 (defcustom tabularium-export-format 'tsv
   "Default export format.
 TSV is recommended as it handles commas in text fields better."
   :type '(choice (const :tag "Tab-separated (TSV)" tsv)
                  (const :tag "Comma-separated (CSV)" csv))
-  :group 'tabularium)
+  :group 'tabularium-export)
 
 (defcustom tabularium-cache-ttl 300
   "Time-to-live for completion cache in seconds."
   :type 'integer
-  :group 'tabularium)
+  :group 'tabularium-database)
 
 (defcustom tabularium-view-page-size 500
   "Number of rows to display per page in list view."
   :type 'integer
-  :group 'tabularium)
+  :group 'tabularium-display)
 
 (defcustom tabularium-table-name "data"
   "Name of the main data table in the database."
   :type 'string
-  :group 'tabularium)
+  :group 'tabularium-database)
 
 (defcustom tabularium-view-sort-ascending nil
   "Whether to sort list view in ascending order (oldest first).
 When nil (default), newest entries appear at the top."
   :type 'boolean
-  :group 'tabularium)
+  :group 'tabularium-display)
 
 (defcustom tabularium-debug nil
   "When non-nil, print debug messages for troubleshooting."
@@ -174,7 +214,7 @@ This affects `tabularium-replace-substring', `tabularium-replace-exact',
 Toggle interactively with `tabularium-toggle-case-sensitive'.
 Default is t, matching standard Emacs/Linux behavior."
   :type 'boolean
-  :group 'tabularium)
+  :group 'tabularium-display)
 
 (defcustom tabularium-entry-method 'form
   "Preferred method for data entry.
@@ -182,7 +222,7 @@ Default is t, matching standard Emacs/Linux behavior."
 `minibuffer' uses sequential minibuffer prompts."
   :type '(choice (const :tag "Form buffer (visual layout)" form)
                  (const :tag "Minibuffer prompts (sequential)" minibuffer))
-  :group 'tabularium)
+  :group 'tabularium-entry)
 
 (defcustom tabularium-entry-display 'side
   "How to display the entry form buffer.
@@ -190,13 +230,13 @@ Default is t, matching standard Emacs/Linux behavior."
 `side' displays in a side window (default)."
   :type '(choice (const :tag "Replace current window" buffer)
                  (const :tag "Side window" side))
-  :group 'tabularium)
+  :group 'tabularium-entry)
 
 (defcustom tabularium-long-field-mode 'text-mode
   "Major mode for editing `:long' fields.
 Common choices are `text-mode', `org-mode', or `markdown-mode'."
   :type 'function
-  :group 'tabularium)
+  :group 'tabularium-entry)
 
 (defcustom tabularium-long-field-display 'side
   "Where to display the long-field editing buffer.
@@ -204,7 +244,7 @@ Common choices are `text-mode', `org-mode', or `markdown-mode'."
 `side' opens a vertical split on the right (40% width)."
   :type '(choice (const :tag "Bottom window" bottom)
                  (const :tag "Side window (right)" side))
-  :group 'tabularium)
+  :group 'tabularium-entry)
 
 (defcustom tabularium-menu-system 'auto
   "Preferred menu system for Tabularium.
@@ -214,12 +254,12 @@ Common choices are `text-mode', `org-mode', or `markdown-mode'."
   :type '(choice (const :tag "Auto-detect (hydra preferred)" auto)
                  (const :tag "Hydra" hydra)
                  (const :tag "Transient" transient))
-  :group 'tabularium)
+  :group 'tabularium-menu)
 
 (defcustom tabularium-undo-limit 100
   "Maximum number of undo entries to keep per database."
   :type 'integer
-  :group 'tabularium)
+  :group 'tabularium-undo)
 
 ;; Registry customizations
 (defcustom tabularium-registry-file
@@ -231,23 +271,23 @@ Common choices are `text-mode', `org-mode', or `markdown-mode'."
 By default, this is stored in `user-emacs-directory'/var/tabularium/.
 If `no-littering' is loaded, uses `no-littering-var-directory' instead."
   :type 'file
-  :group 'tabularium)
+  :group 'tabularium-registry)
 
 (defcustom tabularium-registry-max-recent 100
   "Maximum number of databases to track in registry."
   :type 'integer
-  :group 'tabularium)
+  :group 'tabularium-registry)
 
 (defcustom tabularium-registry-auto-register-on-open t
   "Whether to automatically register databases when opened."
   :type 'boolean
-  :group 'tabularium)
+  :group 'tabularium-registry)
 
 (defcustom tabularium-schema-file-suffix ".schema.el"
   "Suffix for schema files paired with database files.
 For a database `mydata.db', the schema file would be `mydata.schema.el'."
   :type 'string
-  :group 'tabularium)
+  :group 'tabularium-schema)
 
 ;;; ** 1.2 Internal Variables
 
@@ -784,7 +824,7 @@ Each element is a batch plist with :schema, :type, and :entries or :columns.")
 (defcustom tabularium-kill-ring-max 10
   "Maximum number of batches in the tabularium kill ring."
   :type 'integer
-  :group 'tabularium)
+  :group 'tabularium-undo)
 
 (defun tabularium-kill-ring-clear ()
   "Clear the tabularium kill ring."
@@ -2681,6 +2721,38 @@ Useful after editing the schema file externally."
       (with-current-buffer view-buf
         (revert-buffer)))
     (message "Reloaded schema: %s" schema-name)))
+
+(defun tabularium-schema-rename-field (old-name new-name)
+  "Rename field OLD-NAME to NEW-NAME in the current schema.
+Updates both the database column and the schema file.  Refuses to
+rename the primary-key field (use `tabularium-create-database' to
+restructure if needed).  Undoable.
+
+This is a focused single-property variant of
+`tabularium-view-column-edit'."
+  (interactive
+   (let* ((fields (tabularium--schema-fields))
+          (primary (tabularium--primary-field-name))
+          (renamable (cl-remove-if
+                      (lambda (f) (eq (plist-get f :name) primary))
+                      fields))
+          (choices (mapcar (lambda (f) (symbol-name (plist-get f :name)))
+                           renamable))
+          (old (intern (completing-read "Rename field: " choices nil t)))
+          (new (intern (read-string (format "Rename '%s' to: "
+                                            (symbol-name old))))))
+     (list old new)))
+  (unless tabularium--current-schema-name
+    (user-error "No database open"))
+  (when (eq old-name new-name)
+    (user-error "Old and new names are identical"))
+  (when (eq old-name (tabularium--primary-field-name))
+    (user-error "Cannot rename the primary-key field"))
+  (when (tabularium--field-by-name new-name)
+    (user-error "A field named '%s' already exists" new-name))
+  ;; Delegate to the multi-property column editor with just the rename slot
+  (tabularium-view-column-edit
+   (list (list :old-name old-name :new-name new-name))))
 
 ;;; ** 4.4 Computed Fields
 
@@ -4881,6 +4953,8 @@ when the user saves via `tabularium-long-save'."
     (define-key map (kbd "<delete>") #'tabularium-entry-reset-field)
     (define-key map (kbd "<deletechar>") #'tabularium-entry-reset-field)
     (define-key map (kbd "x") #'tabularium-entry-reset-field)
+    (define-key map (kbd "X") #'tabularium-entry-clear-and-edit)
+    (define-key map (kbd "C-c C-x") #'tabularium-entry-clear-and-edit)
     ;; Submit/Cancel
     (define-key map (kbd "C-c C-c") #'tabularium-entry-submit)
     (define-key map (kbd "C-c C-k") #'tabularium-entry-cancel)
@@ -5176,16 +5250,17 @@ Uses current form values for related field completion."
     (insert (propertize (tabularium--make-box-footer 80 'double) 'face 'shadow) "\n")
     (insert "  "
             (propertize "TAB" 'face 'help-key-binding) "/"
-            (propertize "S-TAB" 'face 'help-key-binding) " Navigate  "
+            (propertize "S-TAB" 'face 'help-key-binding) " Nav  "
             (propertize "n" 'face 'help-key-binding) "/"
             (propertize "p" 'face 'help-key-binding) " Line ↓/↑  "
             (propertize "RET" 'face 'help-key-binding) " Edit  "
             (propertize "x" 'face 'help-key-binding) " Clear  "
-            (propertize "=" 'face 'help-key-binding) " Default  "
-            (propertize "v" 'face 'help-key-binding) " View\n")
+            (propertize "X" 'face 'help-key-binding) " Clear+edit  "
+            (propertize "=" 'face 'help-key-binding) " Default\n")
     (insert "  "
             (propertize "M-n" 'face 'help-key-binding) "/"
             (propertize "M-p" 'face 'help-key-binding) " Entry ↓/↑  "
+            (propertize "v" 'face 'help-key-binding) " View  "
             (propertize "N" 'face 'help-key-binding) " New  "
             (propertize "I" 'face 'help-key-binding) " Insert  "
             (propertize "d" 'face 'help-key-binding) " Dup  "
@@ -5545,6 +5620,19 @@ co-occurrence exists for SOURCE-VALUE."
       (tabularium-entry-render)
       (message "Cleared %s" field-name))))
 
+(defun tabularium-entry-clear-and-edit ()
+  "Clear the current field and immediately prompt for a new value.
+Combines `tabularium-entry-reset-field' and
+`tabularium-entry-edit-field' — useful when overwriting an
+existing value with something unrelated."
+  (interactive)
+  (let ((field-name (or (tabularium-entry--field-at-point)
+                        tabularium-entry--current-field)))
+    (when field-name
+      (setf (alist-get field-name tabularium-entry--values) "")
+      (setq tabularium-entry--current-field field-name)
+      (tabularium-entry-edit-field))))
+
 (defun tabularium-entry-submit ()
   "Submit the form and save the entry."
   (interactive)
@@ -5703,7 +5791,7 @@ Only prompts for confirmation if changes have been made."
         (setq tabularium-entry-editing-id nil)  ; new entry
         (setq tabularium-entry--source-buffer nil)
         (run-hooks 'tabularium-entry-new-hook)
-                )
+        (tabularium-entry-render))
       (tabularium--display-entry-buffer buf)
       (message "Duplicated entry - edit and submit to save as new"))))
 
@@ -6028,7 +6116,7 @@ For form-based entry, use `tabularium-new-entry' instead."
 With USE-ALT-METHOD non-nil, use the alternative entry method."
   (if (tabularium--use-form-p use-alt-method)
       (tabularium--duplicate-form id)
-    (tabularium--duplicate id)))
+    (tabularium--duplicate-prompt id)))
 
 (defun tabularium--duplicate-form (id)
   "Duplicate entry ID using form mode."
@@ -6059,15 +6147,16 @@ With USE-ALT-METHOD non-nil, use the alternative entry method."
       (setq tabularium-entry-editing-id nil)  ; new entry
       (setq tabularium-entry--source-buffer nil)
       (run-hooks 'tabularium-entry-new-hook)
-            )
+      (tabularium-entry-render))
     (tabularium--display-entry-buffer buf)
     (message "Duplicated from %s - edit and submit to save" id)))
 
-(defun tabularium--duplicate (id)
-  "Duplicate record with ID and allow modifications."
-  (interactive
-   (list (or (tabularium--id-at-point)
-             (read-number "Duplicate ID: "))))
+(defun tabularium--duplicate-prompt (id)
+  "Duplicate record with ID via minibuffer prompts.
+Internal helper; users should invoke `tabularium-view-duplicate'
+or `tabularium-entry-duplicate' instead.  Selected by
+`tabularium--duplicate-with-method' when the entry method is
+`prompt' (rather than `form')."
   (tabularium--ensure-db)
   (let* ((primary-name (tabularium--primary-field-name))
          (record-data (tabularium--get-record-by-id id)))
@@ -6140,7 +6229,7 @@ This ensures IDs stay sequential without gaps.
 WARNING: Enabling this breaks undo/redo functionality for those operations.
 Consider leaving this nil and using `tabularium-reindex' manually when needed."
   :type 'boolean
-  :group 'tabularium)
+  :group 'tabularium-database)
 
 (defun tabularium--reindex-silent ()
   "Reindex all entries sequentially without prompts or messages."
@@ -10610,6 +10699,208 @@ FILE can be .org, .csv, or .tsv."
   "Open the Tabularium view mode menu (hydra or transient)."
   (interactive)
   (tabularium--dispatch-menu 'tabularium-view-hydra/body 'tabularium-view-transient))
+
+;;;###autoload
+(defun tabularium-customize ()
+  "Open the Customize buffer for Tabularium."
+  (interactive)
+  (customize-group 'tabularium))
+
+(defun tabularium--format-file-size (bytes)
+  "Format BYTES as a human-readable size string."
+  (cond
+   ((null bytes) "—")
+   ((< bytes 1024) (format "%d B" bytes))
+   ((< bytes (* 1024 1024)) (format "%.1f KB" (/ bytes 1024.0)))
+   ((< bytes (* 1024 1024 1024)) (format "%.1f MB" (/ bytes (* 1024.0 1024.0))))
+   (t (format "%.2f GB" (/ bytes (* 1024.0 1024.0 1024.0))))))
+
+(defun tabularium--describe-database-info ()
+  "Return an alist of database metadata for the open database.
+Keys: name, backend, file, size, modified, row-count, fields."
+  (unless tabularium--current-schema-name
+    (user-error "No database open"))
+  (let* ((schema (tabularium--current-schema))
+         (fields (tabularium--schema-fields))
+         (backend (or (plist-get (cdr schema) :backend) 'sqlite))
+         (file (plist-get (cdr schema) :file))
+         (file-attrs (and file (file-exists-p file) (file-attributes file)))
+         (size (and file-attrs (file-attribute-size file-attrs)))
+         (mtime (and file-attrs (file-attribute-modification-time file-attrs)))
+         (row-count (condition-case nil
+                        (caar (tabularium-db-query
+                               tabularium--db
+                               (format "SELECT COUNT(*) FROM %s"
+                                       tabularium-table-name)))
+                      (error nil))))
+    `((name       . ,tabularium--current-schema-name)
+      (backend    . ,backend)
+      (file       . ,file)
+      (size       . ,size)
+      (modified   . ,mtime)
+      (row-count  . ,row-count)
+      (fields     . ,fields))))
+
+;;;###autoload
+(defun tabularium-describe-database ()
+  "Display a summary of the currently open Tabularium database.
+Shows backend type, file location and size, row count, and the
+list of schema fields with their types and constraints."
+  (interactive)
+  (let* ((info (tabularium--describe-database-info))
+         (name (alist-get 'name info))
+         (backend (alist-get 'backend info))
+         (file (alist-get 'file info))
+         (size (alist-get 'size info))
+         (mtime (alist-get 'modified info))
+         (row-count (alist-get 'row-count info))
+         (fields (alist-get 'fields info))
+         (buf (get-buffer-create "*Tabularium Database*")))
+    (with-current-buffer buf
+      (let ((inhibit-read-only t))
+        (erase-buffer)
+        (special-mode)
+        (setq-local truncate-lines nil)
+        ;; Header
+        (insert (propertize (format "Database: %s (%s)\n" name backend)
+                            'face '(:weight bold :height 1.2)))
+        (insert (make-string 78 ?═) "\n")
+        (when file
+          (insert (format "  %-12s%s\n"
+                          (propertize "File:" 'face 'font-lock-keyword-face)
+                          (abbreviate-file-name file))))
+        (when size
+          (insert (format "  %-12s%s\n"
+                          (propertize "Size:" 'face 'font-lock-keyword-face)
+                          (tabularium--format-file-size size))))
+        (when mtime
+          (insert (format "  %-12s%s\n"
+                          (propertize "Modified:" 'face 'font-lock-keyword-face)
+                          (format-time-string "%Y-%m-%d %H:%M:%S" mtime))))
+        (insert "\n")
+        ;; Schema
+        (insert (propertize (format "Schema (%d field%s)\n"
+                                    (length fields)
+                                    (if (= 1 (length fields)) "" "s"))
+                            'face '(:weight bold)))
+        (insert (make-string 78 ?─) "\n")
+        (let ((max-name (apply #'max 8 (mapcar (lambda (f)
+                                                 (length (symbol-name (plist-get f :name))))
+                                               fields)))
+              (max-type 8))
+          (dolist (field fields)
+            (let* ((fname (symbol-name (plist-get field :name)))
+                   (ftype (plist-get field :type))
+                   (primary (plist-get field :primary))
+                   (required (plist-get field :required))
+                   (computed (plist-get field :computed))
+                   (hidden (plist-get field :hidden))
+                   (long (plist-get field :long))
+                   (flags (delq nil
+                                (list (and primary "primary")
+                                      (and required "required")
+                                      (and computed "computed")
+                                      (and hidden "hidden")
+                                      (and long "long-edit")))))
+              (insert (format "  %s  %s  %s\n"
+                              (propertize (format (format "%%-%ds" max-name) fname)
+                                          'face 'font-lock-variable-name-face)
+                              (propertize (format (format "%%-%ds" max-type)
+                                                  (if ftype (symbol-name ftype) "—"))
+                                          'face 'font-lock-type-face)
+                              (if flags
+                                  (propertize (string-join flags ", ")
+                                              'face 'font-lock-comment-face)
+                                ""))))))
+        (insert "\n")
+        ;; Statistics
+        (insert (propertize "Statistics\n" 'face '(:weight bold)))
+        (insert (make-string 78 ?─) "\n")
+        (insert (format "  %-12s%s\n"
+                        (propertize "Total rows:" 'face 'font-lock-keyword-face)
+                        (if row-count (format "%d" row-count) "—")))
+        (goto-char (point-min))))
+    (display-buffer buf)))
+
+;;; ** 9.3 Command Map
+
+;; A prefix keymap that mirrors the main menu's commands without
+;; requiring `hydra' or `transient'.  Users who do not load
+;; `tabularium-menu' can still access top-level commands by binding
+;; this map to a prefix key, e.g.:
+;;
+;;   (global-set-key (kbd \"C-c t\") tabularium-command-map)
+;;
+;; Then `C-c t o' opens a database, `C-c t v' views all, `C-c t . s'
+;; shows the current schema, `C-c t # s' computes a column sum, etc.
+
+(defvar tabularium-schema-command-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map "." #'tabularium-schema-edit)
+    (define-key map "s" #'tabularium-schema-show)
+    (define-key map "r" #'tabularium-schema-reload)
+    (define-key map "w" #'tabularium-schema-switch)
+    (define-key map "n" #'tabularium-schema-rename-field)
+    (define-key map "+" #'tabularium-view-column-add)
+    map)
+  "Prefix keymap for tabularium schema commands.
+Mirrors the schema sub-hydra in `tabularium-menu'.  Reached via
+`.' from `tabularium-command-map'.")
+
+(defvar tabularium-aggregate-command-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map "c" #'tabularium-aggregate-count)
+    (define-key map "s" #'tabularium-aggregate-sum)
+    (define-key map "m" #'tabularium-aggregate-min-max)
+    (define-key map "d" #'tabularium-aggregate-mean-sd)
+    (define-key map "i" #'tabularium-aggregate-median-iqr)
+    (define-key map "#" #'tabularium-aggregate-column-summary)
+    map)
+  "Prefix keymap for tabularium aggregate (statistics) commands.
+Mirrors the calculate sub-hydra in `tabularium-menu'.  Reached via
+`#' from `tabularium-command-map'.")
+
+;;;###autoload
+(defvar tabularium-command-map
+  (let ((map (make-sparse-keymap)))
+    ;; Database
+    (define-key map "o" #'tabularium-open)
+    (define-key map "O" #'tabularium-open-and-view)
+    (define-key map "x" #'tabularium-close)
+    (define-key map "C" #'tabularium-create-database)
+    (define-key map "r" #'tabularium-registry)
+    (define-key map "$" #'tabularium-rename-database)
+    (define-key map "+" #'tabularium-register-database)
+    ;; Entry
+    (define-key map "N" #'tabularium-new-entry)
+    (define-key map "P" #'tabularium-prompt-entry)
+    (define-key map "Q" #'tabularium-quick-entry)
+    ;; Browse / Query
+    (define-key map "v" #'tabularium-view)
+    (define-key map "/" #'tabularium-find)
+    (define-key map "t" #'tabularium-last)
+    ;; Inspection / Customization
+    (define-key map "?" #'tabularium-describe-database)
+    (define-key map "c" #'tabularium-customize)
+    ;; External
+    (define-key map "e" #'tabularium-export)
+    (define-key map "i" #'tabularium-import)
+    (define-key map "s" #'tabularium-sync-prepare)
+    ;; Submaps
+    (define-key map "." tabularium-schema-command-map)
+    (define-key map "#" tabularium-aggregate-command-map)
+    map)
+  "Prefix keymap exposing top-level Tabularium commands.
+Bind this map to a prefix key to access all main commands without
+loading `tabularium-menu' (and thus without depending on `hydra'
+or `transient').  Sub-prefixes `.' and `#' lead to the schema and
+aggregate command maps respectively.
+
+Example binding:
+
+  (global-set-key (kbd \"C-c t\") tabularium-command-map)
+
+See the README \"Bare keymap\" section for the full key table.")
 
 ;;; * 10 Provide
 

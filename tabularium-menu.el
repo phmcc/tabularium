@@ -4,7 +4,7 @@
 
 ;; Author: Paul H. McClelland <paulhmcclelland@protonmail.com>
 ;; Maintainer: Paul H. McClelland <paulhmcclelland@protonmail.com>
-;; Version: 0.4.5
+;; Version: 0.4.6
 ;; Package-Requires: ((emacs "29.1"))
 ;; Keywords: data
 ;; URL: https://codeberg.org/phmcc/tabularium
@@ -129,7 +129,7 @@
 └────────┘
   ───────────────────────────────────────────────────────────────────────────────
   [_._] Edit          [_s_] Show          [_r_] Reload        [_w_] Switch
-  [_+_] Add field
+  [_+_] Add field     [_n_] Rename field
   ───────────────────────────────────────────────────────────────────────────────
   [_q_] Quit
 "
@@ -138,6 +138,7 @@
     ("r" tabularium-schema-reload)
     ("w" tabularium-schema-switch)
     ("+" tabularium-view-column-add)
+    ("n" tabularium-schema-rename-field)
     ("q" nil))
 
   ;; Calculate sub-hydra (accessible from main hydra)
@@ -279,7 +280,7 @@
 └────────┘
   ───────────────────────────────────────────────────────────────────────────────
   [_._] Edit          [_s_] Show          [_r_] Reload        [_w_] Switch
-  [_+_] Add field
+  [_+_] Add field     [_n_] Rename field
   ───────────────────────────────────────────────────────────────────────────────
   [_q_] Quit
 "
@@ -288,6 +289,7 @@
     ("r" tabularium-schema-reload)
     ("w" tabularium-schema-switch)
     ("+" tabularium-view-column-add)
+    ("n" tabularium-schema-rename-field)
     ("q" nil))
 
   ;; Replace sub-hydra (view mode)
@@ -569,7 +571,8 @@
                              (". s" "Show" tabularium-schema-show)
                              (". r" "Reload" tabularium-schema-reload)
                              (". w" "Switch" tabularium-schema-switch)
-                             (". +" "Add field" tabularium-view-column-add)]
+                             (". +" "Add field" tabularium-view-column-add)
+                             (". n" "Rename field" tabularium-schema-rename-field)]
                             ["Entry"
                              ("N" "New (form)" tabularium-new-entry)
                              ("P" "Prompt entry" tabularium-prompt-entry)
@@ -739,7 +742,8 @@
                              (". s" "Show" tabularium-schema-show)
                              (". r" "Reload" tabularium-schema-reload)
                              (". w" "Switch" tabularium-schema-switch)
-                             (". +" "Add field" tabularium-view-column-add)]])
+                             (". +" "Add field" tabularium-view-column-add)
+                             (". n" "Rename field" tabularium-schema-rename-field)]])
 
   ;; Goto transient (for view mode)
   (transient-define-prefix tabularium-view-goto-transient ()

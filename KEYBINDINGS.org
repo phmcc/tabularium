@@ -1,6 +1,6 @@
-#+TITLE: Default Keybindings
+#+TITLE: tabularium — Default Keybindings
 #+AUTHOR: Paul H. McClelland
-#+OPTIONS: toc:1 num:nil
+#+OPTIONS: toc:nil num:nil
 
 This file documents the default keybindings for ~tabularium~.  All bindings can be customized by modifying the relevant keymap (~tabularium-view-mode-map~, ~tabularium-entry-mode-map~, or ~tabularium-registry-mode-map~).
 
@@ -8,21 +8,21 @@ This file documents the default keybindings for ~tabularium~.  All bindings can 
 
 ** Navigation
 
-| Key                  | Command                                         |
-|----------------------+-------------------------------------------------|
-| =n= / =p=                | Next / previous row                             |
-| =TAB= / =S-TAB=          | Next / previous cell                            |
-| ={= / =}=                | First / last row (same column)                  |
-| =[= / =]=                | Line beginning / end                            |
-| =M-n= / =M-p=            | Jump to different value ↓ / ↑                   |
-| =M-<down>= / =M-<up>=    | Jump to different value ↓ / ↑                   |
-| =M-]= / =M-[=            | Jump to different value → / ←                   |
-| =M-<right>= / =M-<left>= | Jump to different value → / ←                   |
-| =C-<down>= / =C-<up>=    | Page down / up (by ~tabularium-view-page-size~)   |
-| =C-<right>= / =C-<left>= | Scroll viewport one column right / left        |
-| =RET=                  | View entry details                              |
-| =/=                    | Fuzzy find                                      |
-| =g=                    | Refresh                                         |
+| Key                  | Command                                       |
+|----------------------+-----------------------------------------------|
+| =n= / =p=                | Next / previous row                           |
+| =TAB= / =S-TAB=          | Next / previous cell                          |
+| ={= / =}=                | First / last row (same column)                |
+| =[= / =]=                | Line beginning / end                          |
+| =M-n= / =M-p=            | Jump to different value ↓ / ↑                 |
+| =M-<down>= / =M-<up>=    | Jump to different value ↓ / ↑                 |
+| =M-]= / =M-[=            | Jump to different value → / ←                 |
+| =M-<right>= / =M-<left>= | Jump to different value → / ←                 |
+| =C-<down>= / =C-<up>=    | Page down / up (by ~tabularium-view-page-size~) |
+| =C-<right>= / =C-<left>= | Scroll viewport one column right / left       |
+| =RET=                  | View entry details                            |
+| =/=                    | Fuzzy find                                    |
+| =g=                    | Refresh                                       |
 
 Cell-jump navigation (=M-n=, =M-p=, =M-]=, =M-[=, and the =M-<arrow>= variants) moves to the next cell with a different value, useful for grouped or sorted data.  A prefix argument (e.g., =C-u 3 M-n=) jumps multiple value transitions.
 
@@ -177,8 +177,8 @@ Frozen rows always render at the top of the view, marked with a =∙= indicator.
 
 ** View expansion (=v= prefix)
 
-| Key   | Command          |
-|-------+------------------|
+| Key | Command          |
+|-----+------------------|
 | =v v= | Select view      |
 | =v 0= | Reset views      |
 | =v x= | Clear all views  |
@@ -255,12 +255,12 @@ Uppercase variants scope to visible rows only.
 
 ** Field editing
 
-| Key           | Command              |
-|---------------+----------------------|
-| =RET= / =C-c C-e= | Edit field at point  |
-| === / =C-c C-d=   | Set field to default |
-| =DEL= / =x=       | Clear field          |
-| =C-c C-r=       | Reset field          |
+| Key               | Command              |
+|-------------------+----------------------|
+| =RET= / =C-c C-e=     | Edit field at point  |
+| === / =C-c C-d=       | Set field to default |
+| =DEL= / =x= / =C-c C-r= | Clear field          |
+| =X= / =C-c C-x=       | Clear field and edit |
 
 Fields with ~:long t~ open a dedicated editing buffer instead of the minibuffer.  The default mode is ~tabularium-long-edit-mode~ (derived from ~text-mode~ with ~visual-line-mode~ and ~outline-minor-mode~).  Configurable via ~tabularium-long-field-mode~; window position via ~tabularium-long-field-display~ (~side~ or ~bottom~).
 

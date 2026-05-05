@@ -1,8 +1,26 @@
 #+TITLE: Changelog
 #+AUTHOR: Paul H. McClelland
-#+OPTIONS: toc:0 num:nil
+#+OPTIONS: toc:nil num:nil
 
 All notable changes to ~tabularium~ are documented in this file.
+
+* 0.4.6 (2026-04-30)
+
+** Added
+
+- ~tabularium-customize~ — open the Customize buffer for the package
+- ~tabularium-describe-database~ — display a summary of the open database (backend, file path, size, modification time, schema fields with type and constraints, total row count); shown in a dedicated =*Tabularium Database*= buffer.  Bound to =?= in ~tabularium-command-map~
+- ~tabularium-schema-rename-field~ — focused single-property variant of ~tabularium-view-column-edit~ for renaming a field; updates both the database column and the schema file.  Bound to =. n= in ~tabularium-command-map~ and added to the schema sub-menus
+- ~tabularium-entry-clear-and-edit~ bound to =X= in entry mode — clears the current field and immediately prompts for a new value, useful when overwriting an existing value with something unrelated
+
+** Changed
+
+- Customize hierarchy reorganized: defcustoms now grouped under themed subgroups (~tabularium-schema~, ~tabularium-database~, ~tabularium-display~, ~tabularium-entry~, ~tabularium-export~, ~tabularium-registry~, ~tabularium-menu~, ~tabularium-undo~) for easier navigation in the Customize browser
+- ~tabularium--duplicate~ renamed to ~tabularium--duplicate-prompt~ and made truly private (no longer interactive); users invoke duplication through ~tabularium-view-duplicate~ or ~tabularium-entry-duplicate~
+
+** Fixed
+
+- Entry duplication via ~tabularium-view-duplicate~ and ~tabularium-entry-duplicate~ no longer leaves a blank form buffer.  The render call had been inadvertently dropped during a prior refactor when the new-entry hook was wired in
 
 * 0.4.5 (2026-04-26)
 
@@ -17,6 +35,7 @@ All notable changes to ~tabularium~ are documented in this file.
 - Plugin hooks for entry-mode lifecycle: ~tabularium-entry-pre-render-hook~ (set buffer-local variables before layout), ~tabularium-entry-new-hook~ (auto-populate fields on new entry creation), ~tabularium-entry-pre-submit-hook~ (mutate values just before save)
 - ~tabularium-entry-required-field-functions~ — abnormal hook for declaring dynamic required fields (e.g. type-specific requirements); marked fields display `+' alongside the static `*' marker for `:required t'
 - ~tabularium-entry-header-function~ — buffer-local function returning a header string inserted between the title bar and field list, for plugin-driven citations or summaries
+- ~tabularium-command-map~ — prefix keymap exposing top-level commands without depending on ~hydra~ or ~transient~; users may bind it to any prefix key (see README "Bare Keymap" section).  Sub-prefixes ~.~ and ~#~ lead to ~tabularium-schema-command-map~ and ~tabularium-aggregate-command-map~
 - Field highlighting in entry mode now follows point: clicking with the mouse or moving by ~goto-char~ updates the highlighted field, so =RET= always edits the field at the cursor
 - Discard prompt now fires when an active form buffer is about to be overwritten by another entry, or killed via =C-x k= or window cleanup, protecting partially-filled forms
 - Fill operations on `:choice` fields now offer the schema's choices as completion candidates and require a valid selection

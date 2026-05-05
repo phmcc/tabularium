@@ -1,6 +1,6 @@
 #+TITLE: tabularium
 #+AUTHOR: Paul H. McClelland
-#+OPTIONS: toc:0 num:nil
+#+OPTIONS: toc:nil num:nil
 
 *Structured data management in Emacs using SQL*
 
@@ -468,6 +468,8 @@ TSV is recommended for version control, as it avoids the quoting ambiguities inh
 
 * Customization
 
+Run ~M-x tabularium-customize~ to browse all settings in the Customize UI.  Settings are organized into themed subgroups (~Schema~, ~Database~, ~Display~, ~Entry~, ~Export~, ~Registry~, ~Menu~, ~Undo~, ~Modeline~) under the root ~Tabularium~ group.
+
 | Variable                   | Default    | Description                                 |
 |----------------------------+------------+---------------------------------------------|
 | ~tabularium-entry-method~        | ~form~       | Default entry method (~form~ or ~minibuffer~)   |
@@ -484,6 +486,53 @@ TSV is recommended for version control, as it avoids the quoting ambiguities inh
 | ~tabularium-auto-reindex~        | ~nil~        | Reindex automatically on delete             |
 
 Per-schema settings (~:default-sort~, ~:quick-entry-fields~, ~:views~) are specified in the schema file.
+
+* Bare Keymap
+
+For users who do not load ~tabularium-menu~ (and so do not depend on ~hydra~ or ~transient~), ~tabularium-command-map~ exposes the same top-level commands as a regular Emacs prefix keymap.  Bind it to any prefix key:
+
+#+begin_src elisp
+(global-set-key (kbd "C-c t") tabularium-command-map)
+#+end_src
+
+The full key table mirrors the main menu layout:
+
+| Key   | Command                          |
+|-------+----------------------------------|
+| =o=     | ~tabularium-open~                  |
+| =O=     | ~tabularium-open-and-view~         |
+| =x=     | ~tabularium-close~                 |
+| =C=     | ~tabularium-create-database~       |
+| =r=     | ~tabularium-registry~              |
+| =$=     | ~tabularium-rename-database~       |
+| =+=     | ~tabularium-register-database~     |
+| =N=     | ~tabularium-new-entry~             |
+| =P=     | ~tabularium-prompt-entry~          |
+| =Q=     | ~tabularium-quick-entry~           |
+| =v=     | ~tabularium-view~                  |
+| =/=     | ~tabularium-find~                  |
+| =t=     | ~tabularium-last~                  |
+| =?=     | ~tabularium-describe-database~     |
+| =c=     | ~tabularium-customize~             |
+| =e=     | ~tabularium-export~                |
+| =i=     | ~tabularium-import~                |
+| =s=     | ~tabularium-sync-prepare~          |
+| =. .=   | ~tabularium-schema-edit~           |
+| =. s=   | ~tabularium-schema-show~           |
+| =. r=   | ~tabularium-schema-reload~         |
+| =. w=   | ~tabularium-schema-switch~         |
+| =. n=   | ~tabularium-schema-rename-field~   |
+| =. +=   | ~tabularium-view-column-add~       |
+| =# c=   | ~tabularium-aggregate-count~       |
+| =# s=   | ~tabularium-aggregate-sum~         |
+| =# m=   | ~tabularium-aggregate-min-max~     |
+| =# d=   | ~tabularium-aggregate-mean-sd~     |
+| =# i=   | ~tabularium-aggregate-median-iqr~  |
+| =# #=   | ~tabularium-aggregate-column-summary~ |
+
+The =.= and =#= entries are themselves prefix keymaps (~tabularium-schema-command-map~ and ~tabularium-aggregate-command-map~) and may be bound directly to a key if preferred.
+
+This map is independent of the menu system; users who prefer ~tabularium-menu~ can ignore it, and users who prefer a flat keymap need not load ~tabularium-menu~ at all.
 
 * Technical Details
 
