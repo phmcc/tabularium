@@ -411,15 +411,21 @@ External packages can inject content and behavior into Tabularium through a smal
 
 | Hook                              | When it fires                                                                                         |
 |-----------------------------------+-------------------------------------------------------------------------------------------------------|
-| ~tabularium-entry-pre-render-hook~  | Inside `tabularium-entry-render', before the buffer is laid out.  Use this to set buffer-local variables (notably ~tabularium-entry-header-function~) that the layout pass consults |
+| ~tabularium-entry-pre-render-hook~  | Inside `tabularium-entry-render', before the buffer is laid out.  Use this to set buffer-local variables that the layout pass consults |
 | ~tabularium-entry-render-hook~      | At the end of form buffer rendering, after the standard hint lines but before cursor positioning.  Use to inject content such as cross-table data or schema-specific hints           |
 | ~tabularium-entry-new-hook~         | After a new entry buffer is initialized (~tabularium-entry-editing-id~ is nil) and before the first render.  Use to populate plugin-specific defaults via ~tabularium-entry--values~  |
 | ~tabularium-entry-pre-submit-hook~  | Just before the form is submitted, in both new and edit paths.  Use to update bookkeeping fields (e.g. a date-modified timestamp) before they are written to the database          |
 | ~tabularium-entry-required-field-functions~ | List of predicates called with =(FIELD-NAME VALUES)= during render and submit.  Returning non-nil marks FIELD-NAME as dynamically required for the current entry's state — useful for type-specific required fields that cannot be expressed by a static `:required t'.  Marked fields display `+' (vs `*' for static `:required t'), and submission errors if such a field is empty |
+| ~tabularium-entry-field-changed-functions~ | Abnormal hook called with =(FIELD-NAME OLD-VALUE NEW-VALUE)= after each interactive field change (edit, clear, default, autofill).  Plugins may further mutate ~tabularium-entry--values~ in response (e.g. clearing dependent fields, eagerly computing derived values).  Mutations from this hook will themselves fire the hook, so guard against unbounded recursion |
 
 ** Header function
 
-The buffer-local variable ~tabularium-entry-header-function~, when non-nil, is called with no arguments during render and should return a string to be inserted between the title bar and the field list.  Plugins use this to render a citation, summary, or other contextual content.  Set it from ~tabularium-entry-pre-render-hook~ for it to take effect on first render.
+A header function returns a string to be inserted between the title bar and the field list — useful for rendering a citation, summary, or other contextual content.  Two ways to install one:
+
+- *Schema-level*: set ~:header-function~ in the schema definition.  This is the cleanest path when the header applies to every entry of that schema.
+- *Buffer-local*: set ~tabularium-entry-header-function~ to a function in a buffer.  When set, this overrides the schema-level value.
+
+In either case the function takes no arguments and should return a string (with optional newlines) or nil for no header.
 
 ** Navigable text property
 

@@ -4,6 +4,18 @@
 
 All notable changes to ~tabularium~ are documented in this file.
 
+* 0.4.7 (2026-05-10)
+
+** Added
+
+- ~tabularium-entry-field-changed-functions~ — abnormal hook fired when a field value changes via direct edit, set-default, clear, clear-and-edit, long-edit commit, or autofill cascade.  Each function receives =(FIELD-NAME OLD-VALUE NEW-VALUE)= and may further mutate ~tabularium-entry--values~ (e.g. clearing dependent fields or eagerly computing derived values)
+- Schema-level ~:header-function~ property — declare a header function in the schema definition rather than installing one via ~tabularium-entry-pre-render-hook~.  The buffer-local ~tabularium-entry-header-function~ continues to override when set
+
+** Changed
+
+- All interactive field-mutation paths (~tabularium-entry-edit-field~, ~-set-default~, ~-reset-field~, ~-clear-and-edit~, the long-edit commit, and autofill cascades) now route through a new internal helper ~tabularium-entry--set-field-value~ that fires the field-changed hook
+- Completion sentinels (=<<ALL>>=, =<<FIRST>>=, =<<LAST>>=, =<<ROW>>=, =<<TSV>>=, =<<CSV>>=) now use double angle brackets to stand out more clearly from regular completion candidates
+
 * 0.4.6 (2026-04-30)
 
 ** Added

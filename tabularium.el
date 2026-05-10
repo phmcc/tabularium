@@ -4,7 +4,7 @@
 
 ;; Author: Paul H. McClelland <paulhmcclelland@protonmail.com>
 ;; Maintainer: Paul H. McClelland <paulhmcclelland@protonmail.com>
-;; Version: 0.4.6
+;; Version: 0.4.7
 ;; Package-Requires: ((emacs "29.1"))
 ;; Keywords: data, sql, tables
 ;; URL: https://codeberg.org/phmcc/tabularium
@@ -122,6 +122,11 @@ SCHEMA-PLIST contains:
   :quick-entry-fields - (optional) Fields for quick entry
   :views   - (optional) List of saved view presets
   :default-sort - (optional) Default sort direction: asc or desc
+  :header-function - (optional) Function called during form-buffer
+                     render with no arguments; should return a string
+                     to insert between the title bar and the field
+                     list, or nil for no header.  See also the
+                     buffer-local `tabularium-entry-header-function'.
 
 Each field in :fields is a plist with:
 
@@ -2594,12 +2599,12 @@ field names rejected because VALUE is not a valid choice."
   "Prompt for field selection using `completing-read-multiple'.
 Returns a list of field name strings, or nil meaning all stored fields."
   (let* ((all-fields (tabularium--stored-field-names))
-         (candidates (cons "<ALL>" all-fields))
+         (candidates (cons "<<ALL>>" all-fields))
          (selected (completing-read-multiple
                     "Fields (<ALL>, or comma-separated): "
                     candidates nil t)))
     (if (or (null selected)
-            (member "<ALL>" selected))
+            (member "<<ALL>>" selected))
         nil
       selected)))
 
@@ -5044,9 +5049,11 @@ edited entries; check `tabularium-entry-editing-id' to distinguish
   "Function returning a header string to insert at the top of the form.
 When non-nil, called by `tabularium-entry-render' with no arguments;
 should return a string (with optional `\\n's) or nil for no header.
-The header is inserted before the schema field list.  Buffer-local;
-each schema may set its own.  Useful for plugins that want to render
-a citation, summary, or other contextual header above the form.")
+The header is inserted before the schema field list.
+
+This variable is buffer-local; for schema-wide configuration, set
+the schema's `:header-function' property instead.  When both are
+set, the buffer-local value wins.")
 
 (defvar tabularium-entry-required-field-functions nil
   "List of functions declaring dynamic required fields.
@@ -5063,6 +5070,22 @@ indicator; statically required fields continue to display `*'
 
 Functions in this list compose by short-circuit: the first
 non-nil return value marks the field as required.")
+
+(defvar tabularium-entry-field-changed-functions nil
+  "Abnormal hook run when a field value changes in the form buffer.
+Each function is called with three arguments — FIELD-NAME (symbol),
+OLD-VALUE, and NEW-VALUE — after the value has been committed to
+`tabularium-entry--values' and before the buffer is re-rendered.
+
+Fires for direct user edits (e.g. ~tabularium-entry-edit-field~),
+default-setting, clearing, and autofill cascades — but not for
+programmatic mutations from other hooks (e.g. ~pre-submit-hook~)
+which set values via `setf' directly.
+
+Plugin functions may further mutate `tabularium-entry--values' in
+response (e.g. clearing dependent fields when a type changes).
+Such mutations will themselves fire this hook, so plugins should
+guard against unbounded recursion.")
 
 (defun tabularium--compute-default (field)
   "Compute the default value for FIELD."
@@ -5150,17 +5173,23 @@ Uses current form values for related field completion."
                            "New Entry"))))
       (insert (tabularium--make-box-header title 80 'double) "\n"))
     (insert "\n")
-    ;; Plugin header — text inserted by `tabularium-entry-header-function'
-    ;; appears between the title bar and the field list.  Plugins can use
-    ;; this to render a citation, summary, or other contextual content.
-    (when tabularium-entry-header-function
-      (let ((header-text (funcall tabularium-entry-header-function)))
-        (when (and header-text (stringp header-text)
-                   (not (string-empty-p header-text)))
-          (insert header-text)
-          (unless (eq (char-before) ?\n)
-            (insert "\n"))
-          (insert "\n"))))
+    ;; Plugin header — text inserted by the active header function appears
+    ;; between the title bar and the field list.  The buffer-local
+    ;; `tabularium-entry-header-function' takes precedence; otherwise the
+    ;; render falls back to the schema's `:header-function' property.
+    ;; Plugins can use either to render a citation, summary, or other
+    ;; contextual content.
+    (let ((header-fn (or tabularium-entry-header-function
+                         (plist-get (cdr (tabularium--current-schema))
+                                    :header-function))))
+      (when header-fn
+        (let ((header-text (funcall header-fn)))
+          (when (and header-text (stringp header-text)
+                     (not (string-empty-p header-text)))
+            (insert header-text)
+            (unless (eq (char-before) ?\n)
+              (insert "\n"))
+            (insert "\n")))))
     ;; Fields - use %-20s to align with entry mode
     (dolist (field tabularium-entry--fields)
       (let* ((name (plist-get field :name))
@@ -5499,6 +5528,20 @@ Returns the new value, or nil if aborted to go to the previous field."
                (signal 'quit nil)))))
       (remove-hook 'minibuffer-setup-hook setup-fn))))
 
+(defun tabularium-entry--set-field-value (field-name new-value)
+  "Set FIELD-NAME's value to NEW-VALUE in the form buffer.
+Updates `tabularium-entry--values' and runs
+`tabularium-entry-field-changed-functions' with the field name,
+old value, and new value as arguments.  Used by all interactive
+field-change paths (edit, clear, default, autofill).
+
+Returns the new value."
+  (let ((old-value (alist-get field-name tabularium-entry--values)))
+    (setf (alist-get field-name tabularium-entry--values) new-value)
+    (run-hook-with-args 'tabularium-entry-field-changed-functions
+                        field-name old-value new-value)
+    new-value))
+
 (defun tabularium-entry-edit-field ()
   "Edit the field at point with completion.
 Fields with `:long t' open a dedicated editing buffer instead of
@@ -5521,7 +5564,7 @@ the minibuffer."
              (symbol-name field-name) initial
              (lambda (text)
                (with-current-buffer entry-buf
-                 (setf (alist-get field-name tabularium-entry--values) text)
+                 (tabularium-entry--set-field-value field-name text)
                  (tabularium-entry-render)
                  (tabularium-entry--goto-field field-name)
                  (message "Saved %s (%d chars)" (plist-get field :prompt)
@@ -5548,7 +5591,7 @@ the minibuffer."
                   (tabularium-entry-render)
                   (message "Moved to previous field")))
             ;; Normal completion - save value and proceed
-            (setf (alist-get field-name tabularium-entry--values) new-value)
+            (tabularium-entry--set-field-value field-name new-value)
             (when tabularium-debug
               (message "DEBUG edit-field: edited %s, new-value='%s', was-empty=%s"
                        field-name new-value was-empty))
@@ -5593,7 +5636,7 @@ co-occurrence exists for SOURCE-VALUE."
                   (when tabularium-debug
                     (message "DEBUG: No autofill value found for %s=%s -> %s"
                              source-field-name source-value target-name))
-                (setf (alist-get target-name tabularium-entry--values) autofill-value)
+                (tabularium-entry--set-field-value target-name autofill-value)
                 (message "Auto-filled %s: %s"
                          (plist-get target-field :prompt) autofill-value)))))))))
 
@@ -5604,7 +5647,7 @@ co-occurrence exists for SOURCE-VALUE."
               (field (cl-find-if (lambda (f) (eq (plist-get f :name) field-name))
                                  tabularium-entry--fields))
               (default (tabularium--compute-default field)))
-    (setf (alist-get field-name tabularium-entry--values) default)
+    (tabularium-entry--set-field-value field-name default)
     (tabularium-entry-render)
     (tabularium-entry--goto-field field-name)
     (message "Set %s to default: %s" (plist-get field :prompt) default)))
@@ -5615,7 +5658,7 @@ co-occurrence exists for SOURCE-VALUE."
   (let ((field-name (or (tabularium-entry--field-at-point)
                         tabularium-entry--current-field)))
     (when field-name
-      (setf (alist-get field-name tabularium-entry--values) "")
+      (tabularium-entry--set-field-value field-name "")
       (setq tabularium-entry--current-field field-name)
       (tabularium-entry-render)
       (message "Cleared %s" field-name))))
@@ -5629,7 +5672,7 @@ existing value with something unrelated."
   (let ((field-name (or (tabularium-entry--field-at-point)
                         tabularium-entry--current-field)))
     (when field-name
-      (setf (alist-get field-name tabularium-entry--values) "")
+      (tabularium-entry--set-field-value field-name "")
       (setq tabularium-entry--current-field field-name)
       (tabularium-entry-edit-field))))
 
@@ -6993,15 +7036,15 @@ This modifies both the database and the schema.  Undoable."
                            (tabularium--column-name-at-point)))
           (candidates (append (when at-point-name
                                (list (format "<POINT> %s" (symbol-name at-point-name))))
-                             (list "<FIRST>" "<LAST>")
+                             (list "<<FIRST>>" "<<LAST>>")
                              col-names))
           (pos-default (if at-point-name
                            (format "<POINT> %s" (symbol-name at-point-name))
-                         "<LAST>"))
+                         "<<LAST>>"))
           (choice (completing-read "Insert after: " candidates nil t nil nil pos-default))
           (after (cond
-                  ((string= choice "<LAST>") nil)
-                  ((string= choice "<FIRST>") '__first__)
+                  ((string= choice "<<LAST>>") nil)
+                  ((string= choice "<<FIRST>>") '__first__)
                   ((string-prefix-p "<POINT> " choice) at-point-name)
                   (t (intern choice)))))
      (list (intern name) type prompt
@@ -7231,16 +7274,16 @@ This reorders the schema and saves.  Undoable."
           (tgt-candidates (append (when tgt-at-point
                                    (list (format "<POINT> %s"
                                                  (symbol-name tgt-at-point))))
-                                 (list "<FIRST>" "<LAST>")
+                                 (list "<<FIRST>>" "<<LAST>>")
                                  remaining))
           (tgt-default (if tgt-at-point
                            (format "<POINT> %s" (symbol-name tgt-at-point))
-                         "<FIRST>"))
+                         "<<FIRST>>"))
           (target-choice (completing-read "Move before: " tgt-candidates nil t
                                           nil nil tgt-default))
           (before-col (cond
-                       ((string= target-choice "<FIRST>") '__first__)
-                       ((string= target-choice "<LAST>") nil)
+                       ((string= target-choice "<<FIRST>>") '__first__)
+                       ((string= target-choice "<<LAST>>") nil)
                        ((string-prefix-p "<POINT> " target-choice) tgt-at-point)
                        (t (intern target-choice)))))
      (list sel-syms before-col)))
@@ -7590,15 +7633,15 @@ or nil (prompt the user)."
             (let* ((candidates (append (when at-point-name
                                          (list (format "<POINT> %s"
                                                        (symbol-name at-point-name))))
-                                       (list "<FIRST>" "<LAST>")
+                                       (list "<<FIRST>>" "<<LAST>>")
                                        col-names))
                    (pos-default (if at-point-name
                                     (format "<POINT> %s" (symbol-name at-point-name))
-                                  "<FIRST>"))
+                                  "<<FIRST>>"))
                    (choice (completing-read "Paste before: " candidates nil t nil nil pos-default)))
               (cond
-               ((string= choice "<LAST>") nil)
-               ((string= choice "<FIRST>") '__first__)
+               ((string= choice "<<LAST>>") nil)
+               ((string= choice "<<FIRST>>") '__first__)
                ((string-prefix-p "<POINT> " choice) at-point-name)
                (t (intern choice)))))))
          ;; Convert before-column to after-column
@@ -7905,15 +7948,15 @@ Like `tabularium-view-column-add' but inserts before rather than after."
           (candidates (append (when at-point-name
                                 (list (format "<POINT> %s"
                                               (symbol-name at-point-name))))
-                              (list "<FIRST>" "<LAST>")
+                              (list "<<FIRST>>" "<<LAST>>")
                               col-names))
           (pos-default (if at-point-name
                            (format "<POINT> %s" (symbol-name at-point-name))
-                         "<FIRST>"))
+                         "<<FIRST>>"))
           (choice (completing-read "Insert before: " candidates nil t nil nil pos-default))
           (before (cond
-                   ((string= choice "<FIRST>") '__first__)
-                   ((string= choice "<LAST>") nil)
+                   ((string= choice "<<FIRST>>") '__first__)
+                   ((string= choice "<<LAST>>") nil)
                    ((string-prefix-p "<POINT> " choice) at-point-name)
                    (t (intern choice)))))
      (list (intern name) type prompt
@@ -9326,19 +9369,19 @@ filled row."
 (defun tabularium--fill-source-choice (field-name)
   "Prompt for fill source: copy from a row or type a value directly.
 FIELD-NAME is the field being filled.  Returns the chosen value.
-Select <ROW> to copy from a specific row; select an existing value
+Select <<ROW>> to copy from a specific row; select an existing value
 from the list; or type any new value directly.
 For `:choice' fields, the candidate list is restricted to the
 field's allowed choices and selection is enforced."
   (let* ((choices (tabularium--field-choices field-name))
          (existing (if choices choices
                      (tabularium--get-historical-values field-name 20)))
-         (candidates (cons "<ROW>" existing))
+         (candidates (cons "<<ROW>>" existing))
          (require-match (if choices t nil))
          (choice (completing-read (format "Fill '%s' with: " field-name)
-                                  candidates nil require-match nil nil "<ROW>")))
+                                  candidates nil require-match nil nil "<<ROW>>")))
     (cond
-     ((string= choice "<ROW>")
+     ((string= choice "<<ROW>>")
       (let* ((default-id (tabularium--id-at-point))
              (source-id (read-number "Source row ID: " default-id))
              (record (tabularium--get-record-by-id source-id)))
@@ -9573,13 +9616,13 @@ Undoable."
      (if (eq field-type 'date)
          ;; Date field: smart source selection
          (let* ((today (format-time-string tabularium-date-format))
-                (source-choices (append (when has-data '("<ROW>"))
+                (source-choices (append (when has-data '("<<ROW>>"))
                                         (mapcar (lambda (v) (format "%s" v)) existing)))
                 (choice (completing-read (format "Start date for '%s': " field)
                                          source-choices nil nil nil nil
-                                         (if has-data "<ROW>" today)))
+                                         (if has-data "<<ROW>>" today)))
                 (start (cond
-                        ((string= choice "<ROW>")
+                        ((string= choice "<<ROW>>")
                          (let* ((default-id (tabularium--id-at-point))
                                 (source-id (read-number "Source row ID: " default-id))
                                 (record (tabularium--get-record-by-id source-id)))
@@ -9588,12 +9631,12 @@ Undoable."
                 (increment (read-number "Increment (days): " 1)))
            (list field start increment))
        ;; Numeric field: smart source selection
-       (let* ((source-choices (append (when has-data '("<ROW>"))
+       (let* ((source-choices (append (when has-data '("<<ROW>>"))
                                       (mapcar (lambda (v) (format "%s" v)) existing)))
               (choice (completing-read (format "Start value for '%s': " field)
                                        source-choices nil nil nil nil nil))
               (start (cond
-                      ((string= choice "<ROW>")
+                      ((string= choice "<<ROW>>")
                        (let* ((default-id (tabularium--id-at-point))
                               (source-id (read-number "Source row ID: " default-id))
                               (record (tabularium--get-record-by-id source-id))
@@ -9908,10 +9951,10 @@ If no database is open, prompts for database file and schema handling
 Exports marked rows if any, otherwise all records."
   (interactive
    (let* ((format-choice (completing-read "Export format: "
-                                          '("<TSV>" "<CSV>") nil t nil nil
+                                          '("<<TSV>>" "<<CSV>>") nil t nil nil
                                           (if (eq tabularium-export-format 'tsv)
-                                              "<TSV>" "<CSV>")))
-          (fmt (if (string= format-choice "<TSV>") 'tsv 'csv))
+                                              "<<TSV>>" "<<CSV>>")))
+          (fmt (if (string= format-choice "<<TSV>>") 'tsv 'csv))
           (ext (if (eq fmt 'tsv) ".tsv" ".csv"))
           (default-name (concat (file-name-sans-extension
                                  (or (tabularium--schema-export-file)
