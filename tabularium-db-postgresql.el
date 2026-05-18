@@ -4,7 +4,7 @@
 
 ;; Author: Paul H. McClelland <paulhmcclelland@protonmail.com>
 ;; Maintainer: Paul H. McClelland <paulhmcclelland@protonmail.com>
-;; Version: 0.4.7
+;; Version: 0.4.8
 ;; Package-Requires: ((emacs "29.1") (emacsql "4.0") (emacsql-pg "1.0"))
 ;; Keywords: data
 ;; URL: https://codeberg.org/phmcc/tabularium
@@ -117,7 +117,7 @@
   (cl-defmethod tabularium-db-table-columns ((backend tabularium-db-postgresql) table-name)
     "Get column info for PostgreSQL TABLE-NAME."
     (mapcar (lambda (row)
-              (list :name (intern (nth 0 row))
+              (list :id (intern (nth 0 row))
                     :type (nth 1 row)
                     :notnull (string= (nth 2 row) "NO")
                     :default (nth 3 row)))
@@ -133,7 +133,7 @@
     "Create TABLE-NAME in PostgreSQL with COLUMNS."
     (let* ((col-defs
             (mapcar (lambda (col)
-                      (let ((name (symbol-name (plist-get col :name)))
+                      (let ((name (symbol-name (plist-get col :id)))
                             (type (plist-get col :sql-type))
                             (primary (plist-get col :primary)))
                         (concat name " " type (when primary " PRIMARY KEY"))))

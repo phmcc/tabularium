@@ -17,6 +17,26 @@ The following features are tentatively planned for future releases:
   - [ ] Custom validation functions
   - [ ] Regex patterns for text fields
 
+- [ ] ~time~ field type
+  - [ ] Stored as ISO 8601 HH:MM[:SS]
+  - [ ] Validation and default-to-now option
+
+- [ ] Quick-startup wizard
+  - [ ] One-shot prompt for all fields at once (e.g. =name:text:required age:integer date:date=)
+  - [ ] Schema generation from a pasted header row
+
+- [ ] Generate database from existing schema file
+  - [ ] Build the =.db= file by reading a hand-written or imported =.schema.el=
+  - [ ] Useful when the schema is moved between machines or restored from version control
+
+- [ ] Face customization via ~defface~ / ~defcustom~
+  - [ ] Tabulated-list header face
+  - [ ] Marked-row face
+  - [ ] Frozen-row face
+  - [ ] Sort-indicator face
+  - [ ] Filter / view-status face in the modeline
+  - [ ] Group all under a ~tabularium-faces~ customize group
+
 ** v0.6.0
 
 - [ ] Audit Log / Diff

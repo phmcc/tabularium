@@ -1,4 +1,4 @@
-#+TITLE: tabularium — Default Keybindings
+#+TITLE: Default Keybindings
 #+AUTHOR: Paul H. McClelland
 #+OPTIONS: toc:nil num:nil
 
@@ -135,14 +135,15 @@ Filters are progressive layers with logical operators.  The first filter sets th
 | Key   | Command                      |
 |-------+------------------------------|
 | =v v=   | Select saved view            |
+| =v s=   | Save current visible state   |
 | =v x=   | Clear all (filter/sort/cols) |
 | =0=     | Reset view (same as =v x=)     |
 | =1=–=9= | Apply schema view by number  |
 
 ** Freeze rows (=z= prefix)
 
-| Key   | Command                                  |
-|-------+------------------------------------------|
+| Key | Command                                  |
+|-----+------------------------------------------|
 | =z z= | Freeze row at point (or all marked rows) |
 | =z *= | Freeze all marked rows                   |
 | =z u= | Unfreeze row at point                    |
@@ -177,15 +178,17 @@ Frozen rows always render at the top of the view, marked with a =∙= indicator.
 
 ** View expansion (=v= prefix)
 
-| Key | Command          |
-|-----+------------------|
-| =v v= | Select view      |
-| =v 0= | Reset views      |
-| =v x= | Clear all views  |
-| =v >= | Show more rows   |
-| =v a= | Show all rows    |
-| =v r= | Show ID range    |
-| =v == | Reset to default |
+| Key | Command                        |
+|-----+--------------------------------|
+| =v v= | Select view                    |
+| =v s= | Save current                   |
+| =v 0= | Reset views                    |
+| =v x= | Clear all views                |
+| =v >= | Show more rows                 |
+| =v a= | Show all rows (no constraints) |
+| =v += | Show all rows in current view  |
+| =v r= | Show ID range                  |
+| =v == | Reset to default               |
 
 ** Math (=#= prefix)
 

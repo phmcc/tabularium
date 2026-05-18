@@ -4,6 +4,50 @@
 
 All notable changes to ~tabularium~ are documented in this file.
 
+* 0.4.8 (2026-05-17)
+
+** Added
+
+- Interactive view-save: =v s= (or =M-x tabularium-view-save=) captures the current visible state (active filter, sort spec, visible columns when customized) as a saved-view preset in one of 9 slots.  Prompts for the slot and a display name, persists immediately to the schema file, and updates the modeline.  The Views sub-hydra has a new "Save current" entry; the transient menu gains =v s= under View
+- =tabularium-view-show-all= (=v a=) now wipes all view constraints (filter, sort, hidden columns, saved-view label) in addition to removing the row limit and ID-range — useful when the goal is "show me everything in this table."  The previous behavior (expand row count while keeping the active view) is now =tabularium-view-show-all-in-view= (=v +=)
+- Search/replace history: ~tabularium-search-history~, ~tabularium-replace-history~, and ~tabularium-regexp-history~ are now wired into the find/replace prompts (mark-containing/equal/regexp, replace value/exact/regexp/query, count-value, all visible-scope variants, and the dynamic =Replace 'X' with:= prompts).  Press \\[previous-history-element] in any of these prompts to recall a previous value
+- ~:safe~ predicates on simple-typed defcustoms (~tabularium-case-sensitive~, ~tabularium-debug~, ~tabularium-auto-reindex~, ~tabularium-view-page-size~, ~tabularium-view-sort-ascending~) so they may be set in =.dir-locals.el= without prompting
+- Database creation wizard is now more walkthrough-style: each prompt explains what it's asking for, field names default to =fieldN= and are sluggified automatically, prompts default to a Title Case version of the field name, and the =boolean= field type is offered alongside text/integer/number/date/choice
+- Wizard prompts are now breadcrumb-prefixed so the user remains oriented inside nested sub-prompts.  Each prompt shows the path of already-known attributes followed by the currently-prompted attribute.  Schema attributes appear in CAPS with an optional bracketed hint (default value, =empty to finish=); yes/no questions appear in Title Case ending with =?= and rely on `y-or-n-p''s built-in =(y or n)= suffix.  Example sequence:
+  - =FIELD #1 > LABEL [empty to finish]: Patient Name=
+  - =FIELD #1 > "Patient Name" > ID [patient_name]:= (RET accepts the suggested slug)
+  - =FIELD #1 > "Patient Name" > "patient_name" > TYPE: text=
+  - =FIELD #1 > "..." > "..." > text > Required? (y or n)=
+  - =FIELD #1 > "..." > "..." > date > Default to today? (y or n)=
+- Wizard now offers ~:width~ (column width) and ~:long~ (long-edit buffer) per field, plus the ~recent~, ~vocabulary~ (with file picker), and ~related~ (with sibling-field picker) completion sources in addition to ~historical~.  Advanced sources (~filtered~, ~function~, ~union~) remain configurable by editing the schema file directly
+- Wizard can optionally insert a commented-out ~:computed (lambda (row) ...)~ placeholder line beneath the field, for users who want to add a computed value later without re-running the wizard
+
+** Changed
+
+- *Breaking rename:* the field-plist keywords ~:name~ and ~:prompt~ have been renamed to ~:id~ and ~:label~ throughout.  Pre-release, so no aliases are provided.  Hand-written schema files must be updated.  The registry and view definitions continue to use ~:name~ for non-field display names
+- Undo records now use ~:row~ (and ~:row1~, ~:row2~) for the affected row primary-key value, and ~:column~ for the affected column name, distinct from field plists' ~:id~ and the registry's ~:name~.  Each plist sector now has unique keyword names so that an accidental rename or refactor cannot silently cross sectors
+
+** Fixed
+
+- Removed a trailing period from the user-error in ~tabularium-insert-entry~ to match Emacs convention
+- ~tabularium-import--org-list-tables~ would hang in an infinite loop when called on multi-table org files; the helper invoked ~org-table-end~ but discarded its return value, leaving point inside the table.  The picker-style ~tabularium-import-org-select-table~ would have been affected on any file with at least one table
+- Choice fields and fixed-completion text fields are now restricted to their declared candidate list when edited in entry mode (previously free text was accepted)
+- The registry buffer now positions the cursor at the first database entry on open
+- Boolean fields are now locked to a single canonical pair (Yes/No, True/False, 1/0, etc.) per column, optionally declared via a new ~:boolean-pair~ field property and otherwise inferred from existing column data.  The wizard prompts for the pair upfront when a boolean field is created.  Entry-mode restricts completion to the chosen pair (require-match) so the column cannot accumulate mixed conventions
+- Entry-mode now validates field input at edit time using a single per-type validator: integer fields reject decimals, number fields reject non-numeric strings, and date fields reject anything other than =YYYY-MM-DD=.  Empty input is always accepted (for clearing a field).  The wizard's default-value prompts use the same validator, so an integer field's default cannot be a decimal and a date default cannot be an arbitrary string.  Error messages follow a uniform format: =Invalid X: 'value'.  Please enter Y=
+
+** Changed
+
+- The fixed-completion choice list is now shown as a faded inline hint after fixed-completion text fields in entry mode (already done for ~:type choice~ fields)
+- Wizard prompts for an invalid field-name input (e.g. with spaces or punctuation) now explicitly offer the sluggified form rather than silently accepting it; entering an all-punctuation name re-prompts
+- ~tabularium-create-database~ signals an error if the generated schema file fails to load, rather than continuing on to a downstream "No schema found" message
+- The wizard's "fixed" completion option has been merged with `:type choice'.  Both previously emitted a restricted-list field, but `:type choice' additionally produces a SQL CHECK constraint so the database itself enforces the restriction.  The wizard now always emits the stronger form; hand-edit the schema file if the looser `:type text :complete fixed' is wanted
+- Database display names with spaces, parentheses, dots, or other punctuation now produce clean filename and Lisp-symbol slugs (e.g. =Testing (v0.4.8)= → =testing-v0-4-8.db= and feature =testing-v0-4-8-schema=).  The display name is preserved verbatim in the registry, schema title bar, and form headers
+
+** Internal
+
+- Four `(when (not X) Y)' patterns simplified to `(unless X Y)' for clarity
+
 * 0.4.7 (2026-05-10)
 
 ** Added

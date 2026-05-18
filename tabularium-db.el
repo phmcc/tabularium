@@ -4,7 +4,7 @@
 
 ;; Author: Paul H. McClelland <paulhmcclelland@protonmail.com>
 ;; Maintainer: Paul H. McClelland <paulhmcclelland@protonmail.com>
-;; Version: 0.4.7
+;; Version: 0.4.8
 ;; Package-Requires: ((emacs "29.1"))
 ;; Keywords: data
 ;; URL: https://codeberg.org/phmcc/tabularium
@@ -64,7 +64,7 @@
   "Return non-nil if TABLE-NAME exists in BACKEND's database.")
 
 (cl-defgeneric tabularium-db-table-columns (backend table-name)
-  "Return column info plists (:name :type) for TABLE-NAME.")
+  "Return column info plists (:id :type) for TABLE-NAME.")
 
 (cl-defgeneric tabularium-db-create-table (backend table-name columns)
   "Create TABLE-NAME in BACKEND with COLUMNS definition plists.")
@@ -99,7 +99,7 @@
 ;;; * 2 Backend Base Class
 
 (defclass tabularium-db-backend ()
-  ((name :initarg :name :initform "Unknown" :type string)
+  ((name :initarg :id :initform "Unknown" :type string)
    (connection :initform nil))
   "Base class for Tabularium database backends."
   :abstract t)
@@ -188,7 +188,7 @@ Merges write-ahead log into the main file for clean syncing."
 (cl-defmethod tabularium-db-table-columns ((backend tabularium-db-sqlite) table-name)
   "Get column info for SQLite TABLE-NAME."
   (mapcar (lambda (row)
-            (list :name (intern (nth 1 row))
+            (list :id (intern (nth 1 row))
                   :type (nth 2 row)
                   :notnull (= (nth 3 row) 1)
                   :default (nth 4 row)
@@ -199,7 +199,7 @@ Merges write-ahead log into the main file for clean syncing."
   "Create TABLE-NAME in SQLite with COLUMNS."
   (let* ((col-defs
           (mapcar (lambda (col)
-                    (let ((name (symbol-name (plist-get col :name)))
+                    (let ((name (symbol-name (plist-get col :id)))
                           (type (plist-get col :sql-type))
                           (primary (plist-get col :primary))
                           (check (plist-get col :check)))

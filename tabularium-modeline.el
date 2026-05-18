@@ -4,7 +4,7 @@
 
 ;; Author: Paul H. McClelland <paulhmcclelland@protonmail.com>
 ;; Maintainer: Paul H. McClelland <paulhmcclelland@protonmail.com>
-;; Version: 0.4.7
+;; Version: 0.4.8
 ;; Package-Requires: ((emacs "29.1"))
 ;; Keywords: data, faces
 ;; URL: https://codeberg.org/phmcc/tabularium

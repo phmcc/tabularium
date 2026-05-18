@@ -4,7 +4,7 @@
 
 ;; Author: Paul H. McClelland <paulhmcclelland@protonmail.com>
 ;; Maintainer: Paul H. McClelland <paulhmcclelland@protonmail.com>
-;; Version: 0.4.7
+;; Version: 0.4.8
 ;; Package-Requires: ((emacs "29.1"))
 ;; Keywords: data, sql, tables
 ;; URL: https://codeberg.org/phmcc/tabularium
@@ -130,9 +130,9 @@ SCHEMA-PLIST contains:
 
 Each field in :fields is a plist with:
 
-  :name     - Symbol, the column name
-  :prompt   - String, shown to user during entry
-  :type     - One of: text, number, integer, date, choice
+  :id     - Symbol, the column name
+  :label   - String, shown to user during entry
+  :type     - One of: text, number, integer, date, choice, boolean
   :primary  - Exactly one field MUST have :primary t
   :default  - (optional) Default value, symbol, or function
   :required - (optional) If non-nil, field cannot be empty
@@ -153,13 +153,13 @@ Example with SQLite (default):
         \\='((\"cases\"
            :file \"~/data/cases.db\"
            :fields
-           ((:name id   :type integer :primary t :prompt \"ID\")
-            (:name date :type date :default today :prompt \"Date\")
-            (:name category :type text :prompt \"Category\"
+           ((:id rn   :type integer :primary t :label \"rn\")
+            (:id date :type date :default today :label \"Date\")
+            (:id category :type text :label \"Category\"
              :complete historical)
-            (:name status :type choice :prompt \"Status\"
+            (:id status :type choice :label \"Status\"
              :choice (\"Open\" \"Closed\"))
-            (:name notes :type text :prompt \"Notes\")))))
+            (:id notes :type text :label \"Notes\")))))
 
 Example with PostgreSQL (requires emacsql):
 
@@ -193,7 +193,8 @@ TSV is recommended as it handles commas in text fields better."
 (defcustom tabularium-view-page-size 500
   "Number of rows to display per page in list view."
   :type 'integer
-  :group 'tabularium-display)
+  :group 'tabularium-display
+  :safe #'integerp)
 
 (defcustom tabularium-table-name "data"
   "Name of the main data table in the database."
@@ -204,12 +205,14 @@ TSV is recommended as it handles commas in text fields better."
   "Whether to sort list view in ascending order (oldest first).
 When nil (default), newest entries appear at the top."
   :type 'boolean
-  :group 'tabularium-display)
+  :group 'tabularium-display
+  :safe #'booleanp)
 
 (defcustom tabularium-debug nil
   "When non-nil, print debug messages for troubleshooting."
   :type 'boolean
-  :group 'tabularium)
+  :group 'tabularium
+  :safe #'booleanp)
 
 (defcustom tabularium-case-sensitive t
   "When non-nil, replace and mark operations use case-sensitive matching.
@@ -219,7 +222,8 @@ This affects `tabularium-replace-substring', `tabularium-replace-exact',
 Toggle interactively with `tabularium-toggle-case-sensitive'.
 Default is t, matching standard Emacs/Linux behavior."
   :type 'boolean
-  :group 'tabularium-display)
+  :group 'tabularium-display
+  :safe #'booleanp)
 
 (defcustom tabularium-entry-method 'form
   "Preferred method for data entry.
@@ -351,7 +355,6 @@ DIRECTION is \\='asc or \\='desc.  First element is primary sort.")
 (defvar-local tabularium--hidden-columns nil
   "List of column names (symbols) to hide in view mode.")
 
-;; Registry internal variables
 (defvar tabularium-registry--list nil
   "List of known databases (plists with :name :file :schema-file :last-used).")
 
@@ -394,7 +397,7 @@ DIRECTION is \\='asc or \\='desc.  First element is primary sort.")
          (primary-name (tabularium--primary-field-name))
          (columns
           (mapcar (lambda (f)
-                    (let* ((name (plist-get f :name))
+                    (let* ((name (plist-get f :id))
                            (ftype (plist-get f :type))
                            (sql-type (tabularium-db-sql-type tabularium--db ftype))
                            (choices (plist-get f :choice))
@@ -404,7 +407,7 @@ DIRECTION is \\='asc or \\='desc.  First element is primary sort.")
                                             (mapconcat (lambda (c)
                                                          (tabularium-db-sql-quote c))
                                                        choices ", ")))))
-                      (list :name name
+                      (list :id name
                             :sql-type sql-type
                             :primary (eq name primary-name)
                             :check check)))
@@ -416,7 +419,7 @@ DIRECTION is \\='asc or \\='desc.  First element is primary sort.")
       (when (eq (plist-get f :complete) 'historical)
         (tabularium-db-create-index tabularium--db
                                 tabularium-table-name
-                                (symbol-name (plist-get f :name)))))))
+                                (symbol-name (plist-get f :id)))))))
 
 ;;; ** 2.2 Undo/Redo System
 
@@ -475,25 +478,25 @@ Each entry is a list of row redo operations, newest first.")
   (pcase (plist-get op :type)
     ('insert
      ;; Undo insert = delete
-     (let ((id (plist-get op :id)))
+     (let ((id (plist-get op :row)))
        (tabularium-db-delete tabularium--db tabularium-table-name
                          (tabularium--primary-field-name) id)
-       (list :type 'delete :id id :data (plist-get op :data))))
+       (list :type 'delete :row id :data (plist-get op :data))))
     ('delete
      ;; Undo delete = re-insert
      (let ((data (plist-get op :data)))
        (tabularium-db-insert tabularium--db tabularium-table-name data)
-       (list :type 'insert :id (plist-get op :id) :data data)))
+       (list :type 'insert :row (plist-get op :row) :data data)))
     ('update
      ;; Undo update = restore old value
-     (let ((id (plist-get op :id))
+     (let ((id (plist-get op :row))
            (field (plist-get op :field))
            (old-val (plist-get op :old))
            (new-val (plist-get op :new)))
        (tabularium-db-update tabularium--db tabularium-table-name
                          (list (cons field old-val))
                          (tabularium--primary-field-name) id)
-       (list :type 'update :id id :field field :old new-val :new old-val)))
+       (list :type 'update :row id :field field :old new-val :new old-val)))
     ('paste
      ;; Undo paste = delete inserted rows and restore batch to kill-ring
      (let ((batch (plist-get op :batch))
@@ -534,8 +537,8 @@ Each entry is a list of row redo operations, newest first.")
        (list :type 'multi :ops (nreverse inverse-ops))))
     ('swap
      ;; Undo swap = re-swap (swap is its own inverse)
-     (let* ((id1 (plist-get op :id1))
-            (id2 (plist-get op :id2))
+     (let* ((id1 (plist-get op :row1))
+            (id2 (plist-get op :row2))
             (primary-name (symbol-name (tabularium--primary-field-name)))
             (temp-id -1))
        (tabularium-db-execute
@@ -550,7 +553,7 @@ Each entry is a list of row redo operations, newest first.")
         tabularium--db
         (format "UPDATE %s SET %s = ? WHERE %s = ?" tabularium-table-name primary-name primary-name)
         (list id2 temp-id))
-       (list :type 'swap :id1 id1 :id2 id2)))
+       (list :type 'swap :row1 id1 :row2 id2)))
     ('move
      ;; Undo move = restore primary keys from before-map using stable ROWIDs
      (let* ((before-map (plist-get op :before-map))
@@ -582,14 +585,14 @@ Each entry is a list of row redo operations, newest first.")
                :count (plist-get op :count)))))
     ('add-column
      ;; Undo add-column = drop the column
-     (let* ((name (plist-get op :name))
+     (let* ((name (plist-get op :column))
             (field-plist (plist-get op :field-plist))
             (name-str (symbol-name name))
             (schema-name (tabularium--schema-name))
             (fields (tabularium--schema-fields))
             ;; Save position and any data that was entered since adding
             (position (cl-position-if
-                       (lambda (f) (eq (plist-get f :name) name)) fields))
+                       (lambda (f) (eq (plist-get f :id) name)) fields))
             (primary-str (symbol-name (tabularium--primary-field-name)))
             (rows (tabularium-db-query
                    tabularium--db
@@ -600,8 +603,8 @@ Each entry is a list of row redo operations, newest first.")
             (col-data (mapcar (lambda (row) (cons (car row) (cadr row))) rows)))
        ;; Drop column from DB (recreate table)
        (let* ((keep-fields (cl-remove-if
-                            (lambda (f) (eq (plist-get f :name) name)) fields))
-              (keep-names (mapcar (lambda (f) (symbol-name (plist-get f :name)))
+                            (lambda (f) (eq (plist-get f :id) name)) fields))
+              (keep-names (mapcar (lambda (f) (symbol-name (plist-get f :id)))
                                   keep-fields))
               (cols-str (string-join keep-names ", ")))
          (tabularium-db-execute tabularium--db
@@ -620,17 +623,17 @@ Each entry is a list of row redo operations, newest first.")
        (let* ((schema (assoc schema-name tabularium-schemas))
               (plist (cdr schema))
               (new-fields (cl-remove-if
-                           (lambda (f) (eq (plist-get f :name) name))
+                           (lambda (f) (eq (plist-get f :id) name))
                            (plist-get plist :fields))))
          (setf (cdr schema) (plist-put plist :fields new-fields))
          (tabularium--save-schema-to-file schema-name))
        ;; Return inverse: delete-column (so redo re-adds it)
-       (list :type 'delete-column :name name
+       (list :type 'delete-column :column name
              :field-plist field-plist :position position
              :data col-data)))
     ('delete-column
      ;; Undo delete-column = re-add the column and restore data
-     (let* ((name (plist-get op :name))
+     (let* ((name (plist-get op :column))
             (field-plist (plist-get op :field-plist))
             (position (plist-get op :position))
             (col-data (plist-get op :data))
@@ -665,7 +668,7 @@ Each entry is a list of row redo operations, newest first.")
          (setf (cdr schema) (plist-put plist :fields new-fields))
          (tabularium--save-schema-to-file schema-name))
        ;; Return inverse: add-column (so redo re-deletes it)
-       (list :type 'add-column :name name
+       (list :type 'add-column :column name
              :field-plist field-plist)))
     ('reorder-columns
      ;; Undo reorder = restore old column order
@@ -674,10 +677,10 @@ Each entry is a list of row redo operations, newest first.")
             (schema (assoc schema-name tabularium-schemas))
             (plist (cdr schema))
             (fields (plist-get plist :fields))
-            (current-order (mapcar (lambda (f) (plist-get f :name)) fields))
+            (current-order (mapcar (lambda (f) (plist-get f :id)) fields))
             ;; Reorder fields to match old-order
             (new-fields (mapcar (lambda (name)
-                                  (cl-find-if (lambda (f) (eq (plist-get f :name) name))
+                                  (cl-find-if (lambda (f) (eq (plist-get f :id) name))
                                               fields))
                                 old-order)))
        (setf (cdr schema) (plist-put plist :fields new-fields))
@@ -689,7 +692,7 @@ Each entry is a list of row redo operations, newest first.")
      ;; Undo edit-column = restore old field plist
      (let* ((old-field-plist (plist-get op :old-field-plist))
             (current-name (plist-get op :new-name))
-            (original-name (plist-get old-field-plist :name))
+            (original-name (plist-get old-field-plist :id))
             (filled-ids (plist-get op :filled-ids))
             (schema-name (tabularium--schema-name)))
        ;; Clear cells that were auto-filled with the new default
@@ -714,13 +717,13 @@ Each entry is a list of row redo operations, newest first.")
        (let* ((schema (assoc schema-name tabularium-schemas))
               (plist (cdr schema))
               (cur-fields (plist-get plist :fields))
-              (field (cl-find-if (lambda (f) (eq (plist-get f :name) current-name))
+              (field (cl-find-if (lambda (f) (eq (plist-get f :id) current-name))
                                  cur-fields))
               ;; Save current state for redo
               (current-field-plist (copy-sequence field)))
          (when field
            ;; Restore all properties from old plist
-           (dolist (key '(:name :type :prompt :width :default :complete))
+           (dolist (key '(:id :type :label :width :default :complete))
              (let ((old-val (plist-get old-field-plist key)))
                (if old-val
                    (plist-put field key old-val)
@@ -780,20 +783,20 @@ column operations (add, delete, reorder)."
 (defun tabularium--describe-op (op)
   "Return human-readable description of OP."
   (pcase (plist-get op :type)
-    ('insert (format "insert #%s" (plist-get op :id)))
-    ('delete (format "delete #%s" (plist-get op :id)))
-    ('update (format "update #%s.%s" (plist-get op :id) (plist-get op :field)))
+    ('insert (format "insert #%s" (plist-get op :row)))
+    ('delete (format "delete #%s" (plist-get op :row)))
+    ('update (format "update #%s.%s" (plist-get op :row) (plist-get op :field)))
     ('paste (format "paste %d entries" (length (plist-get op :ops))))
     ('unpaste (format "unpaste %d entries" (length (plist-get op :ops))))
     ('yank (format "yank %d entries" (length (plist-get op :ops))))
     ('unyank (format "unyank %d entries" (length (plist-get op :ops))))
     ('multi (format "%d operations" (length (plist-get op :ops))))
-    ('swap (format "swap #%s ↔ #%s" (plist-get op :id1) (plist-get op :id2)))
+    ('swap (format "swap #%s ↔ #%s" (plist-get op :row1) (plist-get op :row2)))
     ('move (format "move %d %s"
                    (or (plist-get op :count) 1)
                    (if (= 1 (or (plist-get op :count) 1)) "entry" "entries")))
-    ('add-column (format "add column %s" (plist-get op :name)))
-    ('delete-column (format "delete column %s" (plist-get op :name)))
+    ('add-column (format "add column %s" (plist-get op :column)))
+    ('delete-column (format "delete column %s" (plist-get op :column)))
     ('reorder-columns "reorder columns")
     ('edit-column (format "edit column %s"
                           (plist-get op :new-name)))))
@@ -900,7 +903,7 @@ SOURCE-BUF is the buffer to paste into; preserved across refreshes."
                     (dolist (col columns)
                       (cl-incf col-num)
                       (when (<= col-num 5)
-                        (let* ((name (plist-get col :name))
+                        (let* ((name (plist-get col :column))
                                (col-type (plist-get (plist-get col :field-plist) :type))
                                (data-count (length (plist-get col :data))))
                           (insert (format "    %d. %s (%s, %d values)\n"
@@ -1538,7 +1541,7 @@ schema fields absent from the database."
               (when new
                 (setq schema-name (car new))
                 (setq schema-fields
-                      (mapcar (lambda (f) (symbol-name (plist-get f :name)))
+                      (mapcar (lambda (f) (symbol-name (plist-get f :id)))
                               (plist-get (cdr new) :fields)))))
             ;; Restore original schemas
             (setq tabularium-schemas saved-schemas))
@@ -1578,9 +1581,9 @@ Writes the schema to SCHEMA-FILE."
                                ((string-match-p "real\\|float\\|double\\|numeric" col-type) 'number)
                                ((string-match-p "date" col-type) 'date)
                                (t 'text)))
-             (field (list :name (intern col-name)
+             (field (list :id (intern col-name)
                           :type tabularium-type
-                          :prompt (capitalize (replace-regexp-in-string "_" " " col-name)))))
+                          :label (capitalize (replace-regexp-in-string "_" " " col-name)))))
         (when is-pk
           (setq field (plist-put field :primary t)))
         (push field fields)))
@@ -1748,7 +1751,7 @@ Updates in-memory schema, registry, and optionally files on disk."
     ;; Step 5: Update registry
     (let ((reg-entry (tabularium-registry--find-entry old-name)))
       (when reg-entry
-        (plist-put reg-entry :name new-name)
+        (plist-put reg-entry :id new-name)
         (when new-db-file
           (plist-put reg-entry :file (abbreviate-file-name new-db-file)))
         (when new-schema-file
@@ -1927,7 +1930,7 @@ Uses abbreviate-file-name first, then truncates to show ~/first/.../last/file."
                 (propertize "o" 'face 'help-key-binding) " Open   "
                 (propertize "v" 'face 'help-key-binding) " View   "
                 (propertize "C" 'face 'help-key-binding) " Create   "
-                (propertize "+" 'face 'help-key-binding) " Register\n")
+                (propertize "+" 'face 'help-key-binding) " Add\n")
         (insert "  " (propertize "." 'face 'help-key-binding) " Edit schema   "
                 (propertize "$" 'face 'help-key-binding) " Rename   "
                 (propertize "D" 'face 'help-key-binding) " Delete   "
@@ -1939,10 +1942,14 @@ Uses abbreviate-file-name first, then truncates to show ~/first/.../last/file."
         (tabularium-registry-mode)
         ;; THEN store bounds for navigation (after mode is active)
         (setq tabularium-registry--first-line (or first-entry-line 5))
-        (setq tabularium-registry--last-line (or last-entry-line 5))
-        ;; Position cursor on first entry
-        (goto-char (or first-entry-pos (point-min)))))
-    (switch-to-buffer buf)))
+        (setq tabularium-registry--last-line (or last-entry-line 5))))
+    (switch-to-buffer buf)
+    ;; Position cursor at the first database entry — applied after the
+    ;; buffer is displayed so window-point doesn't get reset back to
+    ;; (point-min) by Emacs's redisplay machinery.
+    (goto-char (point-min))
+    (let ((pos (next-single-property-change (point-min) 'tabularium-db-name)))
+      (when pos (goto-char pos)))))
 
 (defun tabularium-registry--db-at-point ()
   "Return the database name at point, or nil."
@@ -2122,83 +2129,362 @@ including optional file renames on disk."
 ;;; ** 3.9 Database Creation Wizard
 
 (defvar tabularium-wizard--field-types
-  '(("text" . text)
+  '(("text"    . text)
     ("integer" . integer)
-    ("number" . number)
-    ("date" . date)
-    ("choice" . choice))
-  "Alist of field type names to symbols.")
+    ("number"  . number)
+    ("date"    . date)
+    ("choice"  . choice)
+    ("boolean" . boolean))
+  "Alist of field type names to symbols.
+Each entry is shown in the wizard's type prompt.")
 
 (defvar tabularium-wizard--completion-types
-  '(("none" . nil)
+  '(("none"       . nil)
     ("historical" . historical)
-    ("fixed" . fixed))
-  "Alist of completion type names to symbols.")
+    ("recent"     . recent)
+    ("vocabulary" . vocabulary)
+    ("related"    . related))
+  "Alist of completion-source names exposed by the wizard.
+Advanced sources (filtered, function, union) are not included
+because they require additional configuration best done by
+editing the schema file directly.")
 
-(defun tabularium-wizard--read-field ()
+(defun tabularium-wizard--slugify (s)
+  "Convert string S into a lowercase Lisp-symbol-safe slug.
+Replaces non-alphanumeric characters with underscores, collapses
+runs, and strips leading/trailing underscores.  Returns a string."
+  (let* ((trimmed (string-trim s))
+         (lowered (downcase trimmed))
+         (replaced (replace-regexp-in-string "[^a-z0-9]+" "_" lowered))
+         (stripped (replace-regexp-in-string "\\`_\\|_\\'" "" replaced)))
+    stripped))
+
+(defun tabularium-wizard--filename-slug (s)
+  "Convert string S into a filename-safe slug.
+Like `tabularium-wizard--slugify' but uses hyphens instead of
+underscores, matching common filename conventions."
+  (let* ((trimmed (string-trim s))
+         (lowered (downcase trimmed))
+         (replaced (replace-regexp-in-string "[^a-z0-9]+" "-" lowered))
+         (stripped (replace-regexp-in-string "\\`-\\|-\\'" "" replaced)))
+    stripped))
+
+(defun tabularium-wizard--titlecase (s)
+  "Convert underscored slug S to a Title Case prompt string.
+e.g. \"first_name\" → \"First Name\"."
+  (let ((words (split-string (replace-regexp-in-string "_" " " s) " +" t)))
+    (mapconcat #'capitalize words " ")))
+
+(defun tabularium-wizard--breadcrumb (field-index segments active-attr
+                                                  &optional hint)
+  "Build a breadcrumb prefix ending with the CURRENT prompt attribute.
+FIELD-INDEX is the 1-based ordinal.
+
+SEGMENTS is a list of already-known attribute values in display
+order (the field name, then the display label, then a type
+symbol).  String segments are shown in double quotes; symbols are
+rendered with `prin1-to-string'.  Empty or nil segments are
+skipped.
+
+ACTIVE-ATTR is the symbol or string for the attribute being
+prompted (e.g. \\='label, \\='type, \\='completion).  Rendered in
+UPPERCASE as the final segment of the breadcrumb.
+
+HINT, when non-nil, is a short hint string shown in square
+brackets after ACTIVE-ATTR — e.g. \"empty to finish\" or a default
+value.  No brackets are added if HINT is nil.
+
+For yes/no questions, use `tabularium-wizard--breadcrumb-ask'
+instead, which uses Title-Case + a question mark.
+
+Example outputs:
+  FIELD #1 > LABEL [empty to finish]:
+  FIELD #1 > \"Patient Name\" > ID [patient_name]:
+  FIELD #1 > \"Patient Name\" > \"patient_name\" > TYPE:
+  FIELD #1 > \"Color\" > \"color\" > choice > CHOICE #1 [empty to finish]:"
+  (let* ((head (format "FIELD #%d" field-index))
+         (rendered-segments
+          (mapcar (lambda (s)
+                    (cond
+                     ((null s) nil)
+                     ((and (stringp s) (string-empty-p s)) nil)
+                     ((stringp s) (format "\"%s\"" s))
+                     (t (prin1-to-string s))))
+                  segments))
+         (parts (cons head (delq nil rendered-segments)))
+         (path (mapconcat #'identity parts " > "))
+         (attr-str (upcase (if (symbolp active-attr)
+                               (symbol-name active-attr)
+                             active-attr))))
+    (if hint
+        (format "%s > %s [%s]: " path attr-str hint)
+      (format "%s > %s: " path attr-str))))
+
+(defun tabularium-wizard--breadcrumb-ask (field-index segments question)
+  "Build a breadcrumb prefix for a yes/no QUESTION.
+FIELD-INDEX and SEGMENTS are as in `tabularium-wizard--breadcrumb'.
+
+QUESTION is a short Title-Case phrase ending with `?'.  It is
+rendered verbatim as the final breadcrumb segment.
+
+No `[y/n]' hint is appended because `y-or-n-p' already adds its own
+`(y or n)' suffix.
+
+Example output:
+  FIELD #1 > \"...\" > \"...\" > text > Long-form?
+  FIELD #1 > \"...\" > \"...\" > date > Default to today?"
+  (let* ((head (format "FIELD #%d" field-index))
+         (rendered-segments
+          (mapcar (lambda (s)
+                    (cond
+                     ((null s) nil)
+                     ((and (stringp s) (string-empty-p s)) nil)
+                     ((stringp s) (format "\"%s\"" s))
+                     (t (prin1-to-string s))))
+                  segments))
+         (parts (cons head (delq nil rendered-segments)))
+         (path (mapconcat #'identity parts " > ")))
+    (format "%s > %s " path question)))
+
+(defun tabularium-wizard--read-validated (prompt type)
+  "Read a string for PROMPT, looping until input is valid for TYPE.
+TYPE is passed to `tabularium--validate-field-value'.  Empty
+input is rejected here (unlike the entry-mode editor where empty
+clears a field, the wizard's default-value prompt is reached only
+when the user already opted in to setting a default).  Returns
+the validated string."
+  (let ((value nil)
+        (current-initial nil))
+    (while (null value)
+      (let* ((input (read-string prompt current-initial))
+             (trimmed (string-trim input))
+             (err (cond
+                   ((string-empty-p trimmed)
+                    "Value cannot be empty.  Please enter a value")
+                   (t (tabularium--validate-field-value trimmed type)))))
+        (if err
+            (progn
+              (message "%s" err)
+              (sit-for 1.0)
+              (setq current-initial trimmed))
+          (setq value trimmed))))
+    value))
+
+(defun tabularium-wizard--read-field (field-index existing-fields)
   "Interactively read a single field definition.
-Returns a field plist or nil if user cancels."
-  (let* ((name (read-string "Field name (empty to finish): "))
+FIELD-INDEX is the 1-based ordinal shown in the prompt.
+EXISTING-FIELDS is the list of fields already defined; used for
+the `related' completion source which needs to pick a sibling
+field.
+
+The prompt sequence is label → id → type → completion (if text) →
+primary (if integer) → required → default → width → computed → long.
+Asking for the label first allows the wizard to suggest a sluggified
+ID as a default, so the user can just press RET to accept it.
+
+Returns a field plist, or nil when an empty label is entered to
+finish the field-definition phase."
+  (let* ((label (tabularium-wizard--read-field-label field-index))
          field)
-    (unless (string-empty-p name)
-      (let* ((prompt (read-string (format "Prompt for '%s' [%s]: " name name)
-                                  nil nil name))
-             (type-name (completing-read "Type: " tabularium-wizard--field-types nil t nil nil "text"))
-             (type (alist-get type-name tabularium-wizard--field-types nil nil #'equal))
+    (unless (string-empty-p label)
+      (let* ((suggested-id (let ((s (tabularium-wizard--slugify label)))
+                             (if (string-empty-p s) "field" s)))
+             (id-slug (tabularium-wizard--read-field-id field-index label
+                                                        suggested-id))
+             (type-name (completing-read
+                         (tabularium-wizard--breadcrumb
+                          field-index (list label id-slug) 'type)
+                         tabularium-wizard--field-types nil t nil nil "text"))
+             (type (alist-get type-name tabularium-wizard--field-types
+                              nil nil #'equal))
+             ;; All later prompts share the same path of (label id type)
+             (segs (list label id-slug type))
+             (bc (lambda (attr &optional hint)
+                   (tabularium-wizard--breadcrumb field-index segs attr hint)))
+             (ask (lambda (question)
+                    (tabularium-wizard--breadcrumb-ask
+                     field-index segs question)))
              (choices nil)
+             (boolean-pair nil)
              (completion nil)
+             (vocabulary-file nil)
+             (related-field nil)
              (default nil)
+             (width nil)
+             (long nil)
              (required nil)
-             (primary nil))
-        ;; For choice type, get the choices
+             (computed-placeholder nil))
+        ;; For choice type, gather the candidate list
         (when (eq type 'choice)
-          (setq choices (tabularium-wizard--read-choices)))
-        ;; Ask about completion for text fields
+          (setq choices (tabularium-wizard--read-choices segs field-index)))
+        ;; For boolean type, pick the canonical pair upfront so the column
+        ;; is locked to one style (Yes/No, True/False, 1/0, …).
+        (when (eq type 'boolean)
+          (let* ((pair-labels (mapcar (lambda (p)
+                                        (format "%s / %s" (car p) (cadr p)))
+                                      tabularium--boolean-pairs))
+                 (picked (completing-read
+                          (funcall bc 'boolean-pair)
+                          pair-labels nil t nil nil
+                          (car pair-labels))))
+            (setq boolean-pair
+                  (nth (cl-position picked pair-labels :test #'equal)
+                       tabularium--boolean-pairs))))
+        ;; Completion options apply to text type only
         (when (eq type 'text)
-          (let ((comp-name (completing-read "Completion: " tabularium-wizard--completion-types nil t nil nil "none")))
-            (setq completion (alist-get comp-name tabularium-wizard--completion-types nil nil #'equal))
-            ;; For fixed completion, get choices
-            (when (eq completion 'fixed)
-              (setq choices (tabularium-wizard--read-choices)))))
-        ;; Ask about default
-        (when (y-or-n-p "Set a default value? ")
+          (let* ((comp-name (completing-read
+                             (funcall bc 'completion)
+                             tabularium-wizard--completion-types nil t nil nil "none"))
+                 (comp-sym (alist-get comp-name tabularium-wizard--completion-types
+                                      nil nil #'equal)))
+            (setq completion comp-sym)
+            (pcase completion
+              ('vocabulary
+               (setq vocabulary-file
+                     (read-file-name (funcall bc 'vocabulary-file))))
+              ('related
+               (let ((sibling-names
+                      (mapcar (lambda (f) (symbol-name (plist-get f :id)))
+                              existing-fields)))
+                 (if sibling-names
+                     (setq related-field
+                           (intern (completing-read
+                                    (funcall bc 'related-field)
+                                    sibling-names nil t)))
+                   (message
+                    "No previously-defined fields to relate to; reverting to none.")
+                   (sit-for 1.5)
+                   (setq completion nil)))))))
+        ;; Required
+        (setq required (y-or-n-p (funcall ask "Required?")))
+        ;; Default value
+        (when (y-or-n-p (funcall ask "Default value?"))
           (setq default
                 (pcase type
-                  ('date (if (y-or-n-p "Default to today? ")
+                  ('date (if (y-or-n-p (funcall ask "Default to today?"))
                              'today
-                           (read-string "Default date (YYYY-MM-DD): ")))
-                  ('choice (completing-read "Default: " choices nil t))
-                  ('integer (read-number "Default: "))
-                  ('number (read-number "Default: "))
-                  (_ (read-string "Default: ")))))
-        ;; Ask about required
-        (setq required (y-or-n-p "Required field? "))
-        ;; Ask about primary key (for integer fields)
-        (when (eq type 'integer)
-          (setq primary (y-or-n-p "Primary key (auto-increment)? ")))
-        ;; Build field plist
-        (setq field (list :name (intern name)
-                          :prompt prompt
+                           (tabularium-wizard--read-validated
+                            (funcall bc 'date-format "YYYY-MM-DD")
+                            'date)))
+                  ('choice (completing-read (funcall bc 'default) choices nil t))
+                  ('integer (string-to-number
+                             (tabularium-wizard--read-validated
+                              (funcall bc 'default) 'integer)))
+                  ('number (string-to-number
+                            (tabularium-wizard--read-validated
+                             (funcall bc 'default) 'number)))
+                  ('boolean (completing-read
+                             (funcall bc 'default)
+                             (or boolean-pair
+                                 tabularium--boolean-pair-anchors)
+                             nil t))
+                  (_ (read-string (funcall bc 'default))))))
+        ;; Optional column width
+        (when (y-or-n-p (funcall ask "Set width?"))
+          (setq width (string-to-number
+                       (tabularium-wizard--read-validated
+                        (funcall bc 'width) 'integer))))
+        ;; Optional :computed placeholder for later schema-file editing
+        (setq computed-placeholder (y-or-n-p (funcall ask "Computed?")))
+        ;; Long-form editing buffer (text type only)
+        (when (eq type 'text)
+          (setq long (y-or-n-p (funcall ask "Long-form?"))))
+        ;; Build field plist now that every value is gathered
+        (setq field (list :id (intern id-slug)
+                          :label label
                           :type type))
         (when choices
           (setq field (plist-put field :choice choices)))
-        (when completion
+        (when boolean-pair
+          (setq field (plist-put field :boolean-pair boolean-pair)))
+        ;; Completion: simple symbols stored bare, complex sources as plists
+        (cond
+         ((memq completion '(historical recent))
           (setq field (plist-put field :complete completion)))
-        (when default
-          (setq field (plist-put field :default default)))
+         ((and (eq completion 'vocabulary) vocabulary-file)
+          (setq field (plist-put field :complete
+                                 (list :type 'vocabulary
+                                       :source vocabulary-file))))
+         ((and (eq completion 'related) related-field)
+          (setq field (plist-put field :complete
+                                 (list :type 'related
+                                       :field related-field)))))
         (when required
           (setq field (plist-put field :required t)))
-        (when primary
-          (setq field (plist-put field :primary t)))))
+        (when default
+          (setq field (plist-put field :default default)))
+        (when width
+          (setq field (plist-put field :width width)))
+        (when long
+          (setq field (plist-put field :long t)))
+        (when computed-placeholder
+          (setq field (plist-put field :_computed-placeholder t)))))
     field))
 
-(defun tabularium-wizard--read-choices ()
-  "Read a list of choices from user."
+(defun tabularium-wizard--read-field-label (field-index)
+  "Read a field's display label.
+Empty input ends the field-definition loop.  Returns the label
+string (possibly empty)."
+  (read-string (tabularium-wizard--breadcrumb
+                field-index nil 'label "empty to finish")))
+
+(defun tabularium-wizard--read-field-id (field-index label suggested)
+  "Read a field's ID (code identifier).
+FIELD-INDEX is the ordinal; LABEL is the already-entered display
+label (shown in the breadcrumb); SUGGESTED is a sluggified
+default offered in square brackets and used when the user just
+hits RET.
+
+Loops until the input is a valid Lisp symbol or the user accepts
+the suggested slug.  Returns the chosen ID string."
+  (let ((result nil))
+    (while (null result)
+      (let* ((raw (read-string
+                   (tabularium-wizard--breadcrumb
+                    field-index (list label) 'id suggested)
+                   nil nil suggested))
+             (trimmed (string-trim raw)))
+        (cond
+         ;; Empty (defensive — read-string with DEFAULT-VALUE returns it for RET)
+         ;; Accept the suggested slug if we somehow get an empty string.
+         ((string-empty-p trimmed)
+          (setq result suggested))
+         ;; Already a valid symbol
+         ((string-match-p "\\`[a-z][a-z0-9_]*\\'" trimmed)
+          (setq result trimmed))
+         ;; Needs sluggification; offer either to accept or re-enter
+         (t
+          (let ((slug (tabularium-wizard--slugify trimmed)))
+            (cond
+             ((string-empty-p slug)
+              (message "'%s' has no usable characters; please re-enter." trimmed)
+              (sit-for 1.5))
+             ((y-or-n-p (format "'%s' is not a valid identifier; use '%s'? "
+                                trimmed slug))
+              (setq result slug))
+             (t nil)))))))
+    result))
+
+(defun tabularium-wizard--read-choices (segments field-index)
+  "Read a list of choices.
+SEGMENTS is the breadcrumb segment list inherited from the parent
+field prompt; FIELD-INDEX is the same field's ordinal.  Each
+prompt is rendered as e.g.
+  FIELD #1 > \"color\" > \"Color\" > choice > CHOICE #1 [empty to finish]:
+One choice per prompt; commas are kept verbatim.  An empty entry
+ends the list."
   (let ((choices '())
-        (choice nil))
-    (message "Enter choices one at a time (empty to finish):")
-    (while (not (string-empty-p (setq choice (read-string "Choice: "))))
-      (push choice choices))
+        (choice nil)
+        (n 1))
+    (while (not (string-empty-p
+                 (setq choice (string-trim
+                               (read-string
+                                (tabularium-wizard--breadcrumb
+                                 field-index segments
+                                 (format "choice #%d" n)
+                                 "empty to finish"))))))
+      (push choice choices)
+      (setq n (1+ n)))
     (nreverse choices)))
 
 (defun tabularium-wizard--read-fields ()
@@ -2206,38 +2492,49 @@ Returns a field plist or nil if user cancels."
 Returns list of field plists."
   (let ((fields '())
         (field nil)
-        (has-primary nil))
-    (message "Define fields for your database (enter empty name to finish):")
+        (has-primary nil)
+        (idx 1))
     ;; Suggest adding an ID field first
-    (when (y-or-n-p "Add an auto-increment ID field? ")
-      (push '(:name id :prompt "ID" :type integer :primary t) fields)
-      (setq has-primary t)
-      (message "Added 'id' field as primary key."))
-    ;; Read remaining fields
-    (while (setq field (tabularium-wizard--read-field))
+    (when (y-or-n-p "Add an auto-increment ID field first (recommended)? ")
+      (push '(:id rn :label "rn" :type integer :primary t :width 5) fields)
+      (setq has-primary t))
+    ;; Read remaining fields, passing existing fields for `related' lookup
+    (while (setq field (tabularium-wizard--read-field idx (reverse fields)))
       (when (and (plist-get field :primary) has-primary)
-        (message "Warning: Already have a primary key, removing from this field.")
+        (message "A primary key is already defined; ignoring :primary on this field.")
         (setq field (plist-put field :primary nil)))
       (when (plist-get field :primary)
         (setq has-primary t))
       (push field fields)
-      (message "Added field: %s" (plist-get field :name)))
+      (setq idx (1+ idx)))
     (nreverse fields)))
 
 (defun tabularium-wizard--format-field (field)
-  "Format a single FIELD plist as a string."
-  (let ((items '()))
-    (push (format ":name %s" (plist-get field :name)) items)
-    (push (format ":prompt \"%s\"" (plist-get field :prompt)) items)
+  "Format a single FIELD plist as a string suitable for the schema file.
+If FIELD contains :_computed-placeholder, append a commented-out
+:computed example line on a new indented line so the user can
+fill it in later."
+  (let ((items '())
+        (placeholder (plist-get field :_computed-placeholder)))
+    (push (format ":id %s" (plist-get field :id)) items)
+    (push (format ":label \"%s\"" (plist-get field :label)) items)
     (push (format ":type %s" (plist-get field :type)) items)
     (when (plist-get field :primary)
       (push ":primary t" items))
     (when (plist-get field :required)
       (push ":required t" items))
+    (when (plist-get field :width)
+      (push (format ":width %d" (plist-get field :width)) items))
+    (when (plist-get field :long)
+      (push ":long t" items))
     (when (plist-get field :complete)
-      (push (format ":complete %s" (plist-get field :complete)) items))
+      ;; `:complete' may be a bare symbol (historical, recent) or a plist
+      ;; (vocabulary, related, …).  Either form prints correctly via %S.
+      (push (format ":complete %S" (plist-get field :complete)) items))
     (when (plist-get field :choice)
       (push (format ":choice %S" (plist-get field :choice)) items))
+    (when (plist-get field :boolean-pair)
+      (push (format ":boolean-pair %S" (plist-get field :boolean-pair)) items))
     (when (plist-get field :default)
       (let ((def (plist-get field :default)))
         (push (format ":default %s"
@@ -2245,16 +2542,21 @@ Returns list of field plists."
                           def
                         (format "\"%s\"" def)))
               items)))
-    (concat "(" (string-join (nreverse items) " ") ")")))
+    (if placeholder
+        ;; Multi-line form with commented-out :computed inside the parens
+        (concat "(" (string-join (nreverse items) " ") "\n"
+                "      ;; :computed (lambda (row) ...)\n"
+                "      )")
+      (concat "(" (string-join (nreverse items) " ") ")"))))
 
 (defun tabularium-wizard--generate-schema-file (name db-file fields &optional feature-name)
   "Generate contents for a schema file.
-NAME is the schema name, DB-FILE is the database path,
+NAME is the schema display name, DB-FILE is the database path,
 FIELDS is the list of field definitions,
-FEATURE-NAME is the feature to provide (defaults to NAME-schema)."
-  (let ((feature (or feature-name
-                     (intern (concat (downcase (replace-regexp-in-string " " "-" name))
-                                     "-schema")))))
+FEATURE-NAME is the feature to provide (defaults to NAME-slug-schema)."
+  (let* ((slug (let ((s (tabularium-wizard--filename-slug name)))
+                 (if (string-empty-p s) "database" s)))
+         (feature (or feature-name (intern (concat slug "-schema")))))
     (with-temp-buffer
       (insert (format ";;; %s.el --- Schema for %s -*- lexical-binding: t; -*-\n\n"
                       feature name))
@@ -2263,7 +2565,7 @@ FEATURE-NAME is the feature to provide (defaults to NAME-schema)."
       (insert (format ";; Database file: %s\n" (abbreviate-file-name db-file)))
       (insert ";;\n")
       (insert ";; This file is automatically loaded when the database is opened.\n")
-      (insert ";; You can add custom functions below the schema definition.\n\n")
+      (insert ";; Add custom functions below the schema definition.\n\n")
       (insert ";;; Code:\n\n")
       (insert "(require 'tabularium)\n\n")
       ;; Schema definition
@@ -2281,17 +2583,15 @@ FEATURE-NAME is the feature to provide (defaults to NAME-schema)."
       (insert "))\n\n")
       ;; Custom functions section
       (insert ";;; Custom Functions\n\n")
-      (insert ";; Add your database-specific functions here.\n")
+      (insert ";; Add database-specific functions here.\n")
       (insert ";; Examples:\n")
       (insert ";;\n")
-      (insert (format ";;   (defun %s-count-by-field (field value)\n"
-                      (downcase (replace-regexp-in-string " " "-" name))))
+      (insert (format ";;   (defun %s-count-by-field (field value)\n" slug))
       (insert ";;     \"Count records where FIELD equals VALUE.\"\n")
       (insert ";;     (interactive ...)\n")
       (insert ";;     ...)\n")
       (insert ";;\n")
-      (insert (format ";;   (defhydra %s-hydra (:color blue :hint nil)\n"
-                      (downcase (replace-regexp-in-string " " "-" name))))
+      (insert (format ";;   (defhydra %s-hydra (:color blue :hint nil)\n" slug))
       (insert ";;     \"Custom hydra for this database.\"\n")
       (insert ";;     ...)\n\n")
       ;; Provide
@@ -2303,12 +2603,19 @@ FEATURE-NAME is the feature to provide (defaults to NAME-schema)."
 (defun tabularium-create-database (name db-file)
   "Create a new database NAME at DB-FILE using an interactive wizard.
 Walks through field definition, creates the schema and database files,
-registers the database, and opens it."
+registers the database, and opens it.
+
+NAME is the display name shown in the registry and form title bars;
+it may contain spaces and punctuation.  The database filename and
+the schema's Lisp feature name are derived from a sluggified version
+of NAME to keep them filesystem- and symbol-safe."
   (interactive
-   (let* ((name (read-string "Database name: "))
+   (let* ((name (read-string "Database display name (e.g. \"New Database\"): "))
           (default-dir (expand-file-name "~/"))
-          (default-base (concat (downcase (replace-regexp-in-string " " "-" name)) ".db"))
-          (db-file (read-file-name "Database file: " default-dir default-base nil default-base)))
+          (slug (tabularium-wizard--filename-slug name))
+          (default-base (concat (if (string-empty-p slug) "database" slug) ".db"))
+          (db-file (read-file-name "Database file: " default-dir default-base
+                                   nil default-base)))
      (list name db-file)))
   (let ((db-file (expand-file-name db-file))
         (schema-file (tabularium-registry--schema-file-for-db db-file)))
@@ -2332,8 +2639,12 @@ registers the database, and opens it."
         (with-temp-file schema-file
           (insert schema-content)))
       (message "Created schema file: %s" schema-file)
-      ;; Load the schema
-      (tabularium-registry--load-schema-file schema-file)
+      ;; Load the schema; signal an error if it doesn't parse so the
+      ;; user sees the problem immediately rather than a downstream
+      ;; "No schema found" message.
+      (unless (tabularium-registry--load-schema-file schema-file)
+        (user-error "Failed to load generated schema %s.  Edit the file to fix it"
+                    schema-file))
       ;; Register in database list
       (tabularium-registry--add
        (list :name name
@@ -2479,7 +2790,7 @@ View definitions are plists with:
       (error "Schema \"%s\": no field has :primary t.  \
   Tabularium requires a primary key field (typically an integer ID) \
   for row identification, undo/redo, move, sort, and mark operations.  \
-  Add :primary t to one field, e.g. (:name id :type integer :primary t :prompt \"ID\")"
+  Add :primary t to one field, e.g. (:id rn :type integer :primary t :label \"rn\")"
              name))
     (let ((existing (assoc name tabularium-schemas)))
       (if existing
@@ -2541,16 +2852,16 @@ Returns \\='asc (default) or \\='desc."
 (defun tabularium--schema-quick-fields ()
   "Get the quick entry fields, or all fields if not specified."
   (or (plist-get (tabularium--current-schema) :quick-entry-fields)
-      (mapcar (lambda (f) (plist-get f :name)) (tabularium--schema-fields))))
+      (mapcar (lambda (f) (plist-get f :id)) (tabularium--schema-fields))))
 
 (defun tabularium--field-by-name (name)
   "Get field definition for NAME."
-  (cl-find-if (lambda (f) (eq (plist-get f :name) name))
+  (cl-find-if (lambda (f) (eq (plist-get f :id) name))
               (tabularium--schema-fields)))
 
 (defun tabularium--stored-field-names ()
   "Return name strings for all non-computed fields."
-  (mapcar (lambda (f) (symbol-name (plist-get f :name)))
+  (mapcar (lambda (f) (symbol-name (plist-get f :id)))
           (cl-remove-if #'tabularium--computed-field-p
                         (tabularium--schema-fields))))
 
@@ -2560,7 +2871,7 @@ Choice fields with a `:choice' list reject values not in that list
 \(empty values are always allowed).  Other types accept any value."
   (let* ((fields (tabularium--schema-fields))
          (field (cl-find-if
-                 (lambda (f) (string= (symbol-name (plist-get f :name))
+                 (lambda (f) (string= (symbol-name (plist-get f :id))
                                       (if (symbolp field-name)
                                           (symbol-name field-name)
                                         field-name)))
@@ -2588,7 +2899,7 @@ field names rejected because VALUE is not a valid choice."
   "Return the `:choice' list for FIELD-NAME, or nil if unconstrained."
   (let* ((fields (tabularium--schema-fields))
          (field (cl-find-if
-                 (lambda (f) (string= (symbol-name (plist-get f :name))
+                 (lambda (f) (string= (symbol-name (plist-get f :id))
                                       (if (symbolp field-name)
                                           (symbol-name field-name)
                                         field-name)))
@@ -2739,9 +3050,9 @@ This is a focused single-property variant of
    (let* ((fields (tabularium--schema-fields))
           (primary (tabularium--primary-field-name))
           (renamable (cl-remove-if
-                      (lambda (f) (eq (plist-get f :name) primary))
+                      (lambda (f) (eq (plist-get f :id) primary))
                       fields))
-          (choices (mapcar (lambda (f) (symbol-name (plist-get f :name)))
+          (choices (mapcar (lambda (f) (symbol-name (plist-get f :id)))
                            renamable))
           (old (intern (completing-read "Rename field: " choices nil t)))
           (new (intern (read-string (format "Rename '%s' to: "
@@ -2769,9 +3080,9 @@ This is a focused single-property variant of
 ;;   - A plist with :sql or :elisp key for explicit type
 ;;
 ;; Example schema:
-;;   (:name total :type number :prompt "Total" :computed "price * quantity")
-;;   (:name status :type text :prompt "Status" :computed (:elisp my-status-fn))
-;;   (:name age :type integer :prompt "Age" :computed (:sql "strftime('%Y', 'now') - birth_year"))
+;;   (:id total :type number :label "Total" :computed "price * quantity")
+;;   (:id status :type text :label "Status" :computed (:elisp my-status-fn))
+;;   (:id age :type integer :label "Age" :computed (:sql "strftime('%Y', 'now') - birth_year"))
 
 ;;; *** 4.4.1 Core Functions
 
@@ -2810,7 +3121,7 @@ This is a focused single-property variant of
 (defun tabularium--build-select-with-computed (visible-fields)
   "Build SELECT clause including computed fields for VISIBLE-FIELDS."
   (mapcar (lambda (f)
-            (let ((name (symbol-name (plist-get f :name)))
+            (let ((name (symbol-name (plist-get f :id)))
                   (sql-expr (tabularium--computed-sql-expression f)))
               (if sql-expr
                   (format "(%s) AS %s" sql-expr name)
@@ -2822,17 +3133,17 @@ This is a focused single-property variant of
 VISIBLE-FIELDS is the ordered list of visible field plists.
 COMPUTED-FIELDS is the subset with elisp :computed specs.
 DISPLAY-OFFSET is the column offset for the primary key."
-  (let ((visible-names (mapcar (lambda (f) (plist-get f :name)) visible-fields)))
+  (let ((visible-names (mapcar (lambda (f) (plist-get f :id)) visible-fields)))
     (mapcar
      (lambda (row)
        (let* ((row-list (copy-sequence row))
               ;; Build alist from all visible fields for computation context
               (alist (cl-mapcar
-                      (lambda (f val) (cons (plist-get f :name) val))
+                      (lambda (f val) (cons (plist-get f :id) val))
                       visible-fields (nthcdr display-offset row-list))))
          ;; Compute each elisp field and update the row
          (dolist (cf computed-fields)
-           (let* ((name (plist-get cf :name))
+           (let* ((name (plist-get cf :id))
                   (value (tabularium--compute-field-value cf alist))
                   (pos (cl-position name visible-names))
                   (idx (when pos (+ display-offset pos))))
@@ -2841,13 +3152,13 @@ DISPLAY-OFFSET is the column offset for the primary key."
          row-list))
      rows)))
 
-;;; *** 4.4.2 Computational Helpers (tabularium-fn-*)
+;;; *** 4.4.2 Computational Helpers
 
 ;; The functions below are intended for use inside `:computed' lambdas
 ;; in schema files.  Each receives the current row as an alist of
 ;; (FIELD-NAME . VALUE) pairs.
 
-;; Conditional logic
+;;; *** 4.4.2.1 Conditional Logic
 
 (defun tabularium-fn-if (condition then-value else-value)
   "Return THEN-VALUE if CONDITION is truthy, else ELSE-VALUE."
@@ -2866,7 +3177,7 @@ CLAUSES are (test-value result) pairs, with optional final default."
                  when (equal value test) return result)
         default)))
 
-;; Numeric and string aggregation across fields of the same row
+;;; *** 4.4.2.2 Same-Row Numeric and String Aggregation
 
 (defun tabularium--field-numeric (row-alist name)
   "Return ROW-ALIST's NAME field value coerced to a number, or 0."
@@ -2903,7 +3214,7 @@ Empty and missing fields are skipped (no leading or trailing SEPARATOR)."
                  field-names))
    separator))
 
-;; Date arithmetic
+;;; *** 4.4.2.3 Date Arithmetic
 
 (defun tabularium-fn-today ()
   "Return today's date as an ISO 8601 string (YYYY-MM-DD)."
@@ -2960,8 +3271,8 @@ The result is the integer number of completed years
         (cl-decf years))
       years)))
 
-;; Cross-row lookup and aggregation
-;;
+;;; *** 4.4.2.4 Cross-Row Lookup and Aggregation
+
 ;; These query the current database directly and require an open
 ;; connection.  They are safe to call inside `:computed' lambdas
 ;; because computed fields are evaluated only when the database is
@@ -3007,12 +3318,103 @@ Signals an error if no field has :primary t."
 
 (defun tabularium--primary-field-name ()
   "Get the name of the primary key field."
-  (plist-get (tabularium--primary-field) :name))
+  (plist-get (tabularium--primary-field) :id))
 
 ;;; ** 4.5 Completion
 
 ;; Completion types: historical, recent, fixed, vocabulary, related,
 ;; filtered, function, union.  See `tabularium-schemas' docstring for details.
+
+;;; *** 4.5.0 Field-Value Validation
+
+(defun tabularium--validate-field-value (value type)
+  "Check whether VALUE is acceptable input for a field of TYPE.
+Returns nil when valid, or an error string when invalid.
+
+Empty values are always valid (so users can clear a field).
+Date validation is strict YYYY-MM-DD; integer rejects decimals;
+number accepts integers and decimals.  Other types pass through."
+  (cond
+   ((or (null value) (and (stringp value) (string-empty-p value)))
+    nil)
+   ((eq type 'integer)
+    (unless (string-match-p "\\`-?[0-9]+\\'" value)
+      (format "Invalid integer: '%s'.  Please enter a whole number"
+              value)))
+   ((eq type 'number)
+    (unless (string-match-p "\\`-?[0-9]+\\(\\.[0-9]+\\)?\\'" value)
+      (format "Invalid number: '%s'.  Please enter a number"
+              value)))
+   ((eq type 'date)
+    (unless (string-match-p "\\`[0-9]\\{4\\}-[0-9]\\{2\\}-[0-9]\\{2\\}\\'"
+                            value)
+      (format "Invalid date: '%s'.  Please enter a date in YYYY-MM-DD format"
+              value)))
+   (t nil)))
+
+;;; *** 4.5.1 Boolean Pairs
+
+(defvar tabularium--boolean-pairs
+  '(("yes" "no")
+    ("Yes" "No")
+    ("YES" "NO")
+    ("true" "false")
+    ("True" "False")
+    ("TRUE" "FALSE")
+    ("t" "f")
+    ("T" "F")
+    ("y" "n")
+    ("Y" "N")
+    ("1" "0"))
+  "Canonical pairs for `:type boolean' fields.
+Each entry is a (TRUTHY FALSY) list.  A column's pair is either
+declared explicitly via the schema's `:boolean-pair' property or
+inferred from the first non-empty value already in the column.
+Once a pair is established, entry-mode restricts completion to
+those two values to keep the column internally consistent.")
+
+(defvar tabularium--boolean-pair-anchors
+  (mapcar #'car tabularium--boolean-pairs)
+  "Initial-pick candidates for a brand-new boolean column.
+Picking one of these values selects the corresponding pair from
+`tabularium--boolean-pairs' for the rest of the column.")
+
+(defun tabularium--boolean-pair-for-value (value)
+  "Return the (TRUTHY FALSY) pair containing VALUE, or nil.
+VALUE is compared case-sensitively against entries in
+`tabularium--boolean-pairs'."
+  (when (and value (stringp value) (not (string-empty-p value)))
+    (cl-find-if (lambda (pair) (member value pair))
+                tabularium--boolean-pairs)))
+
+(defun tabularium--boolean-pair-for (field)
+  "Return the (TRUTHY FALSY) pair governing FIELD, or nil if none yet.
+Resolution order: explicit `:boolean-pair' on the field plist
+takes precedence; otherwise, the column is sampled for the first
+non-empty value and matched against `tabularium--boolean-pairs'.
+If neither source yields a value, nil is returned so the caller
+falls back to the canonical anchor list."
+  (or
+   ;; 1. Explicit schema declaration
+   (let ((declared (plist-get field :boolean-pair)))
+     (cond
+      ((and (listp declared) (= (length declared) 2)) declared)
+      ((and (consp declared) (atom (cdr declared)))
+       (list (car declared) (cdr declared)))
+      (t nil)))
+   ;; 2. Inference from existing data
+   (when (and tabularium--db tabularium--current-schema-name)
+     (let* ((col-name (symbol-name (plist-get field :id)))
+            (primary (tabularium--primary-field-name))
+            (sql (format
+                  "SELECT %s FROM %s WHERE %s IS NOT NULL AND %s != '' LIMIT 1"
+                  col-name tabularium-table-name col-name col-name)))
+       (ignore primary)
+       (condition-case _
+           (let* ((rows (tabularium-db-query tabularium--db sql))
+                  (sample (and rows (caar rows))))
+             (tabularium--boolean-pair-for-value sample))
+         (error nil))))))
 
 (defun tabularium--invalidate-cache ()
   "Invalidate the completion and paired field caches."
@@ -3164,7 +3566,7 @@ Returns a plist with at least :type key, or nil."
   "Get completion candidates for FIELD.
 CONTEXT is an optional alist of current field values (for related completion).
 Returns a list of strings."
-  (let* ((field-name (plist-get field :name))
+  (let* ((field-name (plist-get field :id))
          (complete-spec (plist-get field :complete))
          (choices (plist-get field :choice))
          (parsed (tabularium--parse-complete-spec complete-spec)))
@@ -3280,7 +3682,7 @@ Returns a list of strings."
   "Debug completion configuration for FIELD-NAME."
   (interactive
    (list (completing-read "Field: "
-                          (mapcar (lambda (f) (symbol-name (plist-get f :name)))
+                          (mapcar (lambda (f) (symbol-name (plist-get f :id)))
                                   (tabularium--schema-fields)))))
   (tabularium--ensure-db)
   (let* ((field-def (tabularium--field-by-name (intern field-name)))
@@ -3382,7 +3784,7 @@ Returns a list of field plists that have :complete with :type related,
 
 (defun tabularium-view--field-visible-p (field)
   "Return non-nil if FIELD should be visible."
-  (let ((name (plist-get field :name)))
+  (let ((name (plist-get field :id)))
     (and (not (plist-get field :hidden))
          (not (memq name tabularium--hidden-columns)))))
 
@@ -3393,7 +3795,7 @@ Returns a list of field plists that have :complete with :type related,
                       (cl-remove-if
                        #'null
                        (mapcar (lambda (name)
-                                 (cl-find-if (lambda (f) (eq (plist-get f :name) name))
+                                 (cl-find-if (lambda (f) (eq (plist-get f :id) name))
                                              schema-fields))
                                tabularium--column-order))
                     schema-fields)))
@@ -3404,7 +3806,7 @@ Returns a list of field plists that have :complete with :type related,
   (let* ((visible-fields (tabularium-view--ordered-visible-fields))
          (base-columns
           (mapcar (lambda (field)
-                    (list (plist-get field :prompt)
+                    (list (plist-get field :label)
                           (or (plist-get field :width) 15)
                           t))
                   visible-fields))
@@ -3424,7 +3826,7 @@ Returns a list of field plists that have :complete with :type related,
   (tabularium--ensure-db)
   (tabularium-view--setup-columns)
   (let* ((visible-fields (tabularium-view--ordered-visible-fields))
-         (field-names (mapcar (lambda (f) (symbol-name (plist-get f :name)))
+         (field-names (mapcar (lambda (f) (symbol-name (plist-get f :id)))
                               visible-fields))
          (primary-name (symbol-name (tabularium--primary-field-name)))
          ;; Build WHERE clause combining filter and ID range
@@ -3579,7 +3981,7 @@ schema so that changes to view definitions take effect."
                     (when filter
                       (list (list :raw t :sql filter :desc active-view-name :join nil))))
               (when columns
-                (let ((all-fields (mapcar (lambda (f) (plist-get f :name))
+                (let ((all-fields (mapcar (lambda (f) (plist-get f :id))
                                           (tabularium--schema-fields))))
                   (setq tabularium--hidden-columns
                         (cl-remove-if (lambda (col) (memq col columns)) all-fields)))
@@ -3679,6 +4081,7 @@ See `tabularium-entry-method' to set the default."
     (define-key map (kbd "F x") #'tabularium-view-fill-clear)
     ;; View management
     (define-key map (kbd "v v") #'tabularium-select-view)
+    (define-key map (kbd "v s") #'tabularium-view-save)
     (define-key map (kbd "v 0") #'tabularium-view-0)
     (define-key map (kbd "v x") #'tabularium-view-clear)
     (define-key map (kbd "v 1") #'tabularium-view-1)
@@ -3780,8 +4183,9 @@ See `tabularium-entry-method' to set the default."
     ;; Schema operations
     (define-key map (kbd ". .") #'tabularium-schema-edit)
     (define-key map (kbd ". s") #'tabularium-schema-show)
-    (define-key map (kbd ". r") #'tabularium-schema-reload)
+    (define-key map (kbd ". =") #'tabularium-schema-reload)
     (define-key map (kbd ". w") #'tabularium-schema-switch)
+    (define-key map (kbd ". $") #'tabularium-schema-rename-field)
     (define-key map (kbd ". +") #'tabularium-view-column-add)
     ;; Calculate operations
     (define-key map (kbd "# c") #'tabularium-aggregate-count)
@@ -3800,6 +4204,7 @@ See `tabularium-entry-method' to set the default."
     ;; View expansion
     (define-key map (kbd "v >") #'tabularium-view-show-more)
     (define-key map (kbd "v a") #'tabularium-view-show-all)
+    (define-key map (kbd "v +") #'tabularium-view-show-all-in-view)
     (define-key map (kbd "v r") #'tabularium-view-show-range)
     (define-key map (kbd "v =") #'tabularium-view-reset-limit)
 
@@ -3866,7 +4271,7 @@ go to the beginning of the row."
   "Move point to the beginning of COLUMN-NAME on the current row."
   (let* ((fields (tabularium--schema-fields))
          (order (or tabularium--column-order
-                    (mapcar (lambda (f) (plist-get f :name)) fields)))
+                    (mapcar (lambda (f) (plist-get f :id)) fields)))
          (visible (cl-remove-if
                    (lambda (name)
                      (or (memq name tabularium--hidden-columns)
@@ -3889,7 +4294,7 @@ go to the beginning of the row."
 (defun tabularium-view-toggle-column (column-name)
   "Toggle visibility of COLUMN-NAME in the current view."
   (interactive
-   (let* ((all-fields (mapcar (lambda (f) (symbol-name (plist-get f :name)))
+   (let* ((all-fields (mapcar (lambda (f) (symbol-name (plist-get f :id)))
                               (tabularium--schema-fields)))
           (field (completing-read "Toggle column: " all-fields nil t)))
      (list (intern field))))
@@ -3911,7 +4316,7 @@ go to the beginning of the row."
   "Hide multiple COLUMNS in the current view.
 Adds to existing hidden columns rather than replacing."
   (interactive
-   (let* ((all-fields (mapcar (lambda (f) (symbol-name (plist-get f :name)))
+   (let* ((all-fields (mapcar (lambda (f) (symbol-name (plist-get f :id)))
                               (tabularium--schema-fields)))
           (visible-fields (cl-remove-if
                            (lambda (name)
@@ -3928,13 +4333,13 @@ Adds to existing hidden columns rather than replacing."
 (defun tabularium-view-show-only-columns (columns)
   "Show only the selected COLUMNS, hiding all others."
   (interactive
-   (let* ((all-fields (mapcar (lambda (f) (symbol-name (plist-get f :name)))
+   (let* ((all-fields (mapcar (lambda (f) (symbol-name (plist-get f :id)))
                               (tabularium--schema-fields)))
           (selected (completing-read-multiple "Show only columns: " all-fields)))
      (list (mapcar #'intern selected))))
   (when (null columns)
     (user-error "No columns selected"))
-  (let ((all-names (mapcar (lambda (f) (plist-get f :name))
+  (let ((all-names (mapcar (lambda (f) (plist-get f :id))
                            (tabularium--schema-fields))))
     ;; Hide all columns except selected
     (setq tabularium--hidden-columns
@@ -3968,7 +4373,7 @@ Adds to existing hidden columns rather than replacing."
   (interactive
    (let* ((fields (tabularium--schema-fields))
           (order (or tabularium--column-order
-                     (mapcar (lambda (f) (plist-get f :name)) fields)))
+                     (mapcar (lambda (f) (plist-get f :id)) fields)))
           (visible (cl-remove-if
                     (lambda (name)
                       (or (memq name tabularium--hidden-columns)
@@ -3983,7 +4388,7 @@ Adds to existing hidden columns rather than replacing."
 (defun tabularium-last (field pattern)
   "Find most recent record where FIELD matches PATTERN."
   (interactive
-   (let* ((field-names (mapcar (lambda (f) (symbol-name (plist-get f :name)))
+   (let* ((field-names (mapcar (lambda (f) (symbol-name (plist-get f :id)))
                                (cl-remove-if #'tabularium--computed-field-p
                                              (tabularium--schema-fields))))
           (field (completing-read "Search field: " field-names nil t))
@@ -3995,7 +4400,7 @@ Adds to existing hidden columns rather than replacing."
          (date-field (cl-find-if (lambda (f) (eq (plist-get f :type) 'date))
                                  (tabularium--schema-fields)))
          (order-by (if date-field
-                       (symbol-name (plist-get date-field :name))
+                       (symbol-name (plist-get date-field :id))
                      primary-name))
          (op (tabularium-db-like-op tabularium-case-sensitive))
          (wrapped (tabularium-db-like-pattern (format "%s" pattern)
@@ -4358,7 +4763,7 @@ With prefix N, jump N value transitions."
                                  (or (plist-get f :hidden)
                                      (tabularium--computed-field-p f)))
                                (tabularium--schema-fields)))
-         (field-names (mapcar (lambda (f) (symbol-name (plist-get f :name))) fields))
+         (field-names (mapcar (lambda (f) (symbol-name (plist-get f :id))) fields))
          (primary-name (symbol-name (tabularium--primary-field-name)))
          (sql (format "SELECT %s FROM %s ORDER BY %s DESC"
                       (string-join field-names ", ")
@@ -4386,12 +4791,45 @@ With prefix N, jump N value transitions."
 ;;; ** 5.6 View Window Expansion
 
 (defun tabularium-view-show-all ()
-  "Show all entries (remove page limit)."
+  "Show every row in the table.
+Removes the page-size limit, ID-range filter, and any active filter,
+sort spec, column hiding, and saved-view label.  This is the most
+permissive view — useful when you want to see literally everything
+in the database without any constraints.
+
+For showing all rows that match the current filter/view constraints,
+use `tabularium-view-show-all-in-view'."
+  (interactive)
+  ;; Clear all view constraints
+  (setq tabularium--filter-layers nil)
+  (setq tabularium--hidden-columns nil)
+  (setq tabularium--sort-columns nil)
+  (setq tabularium--sort-ascending
+        (if tabularium--current-schema-name
+            (eq (tabularium--schema-default-sort) 'asc)
+          tabularium-view-sort-ascending))
+  (setq tabularium--column-order nil)
+  (setq tabularium--current-view nil)
+  ;; Remove row limit and ID-range
+  (setq tabularium--view-limit most-positive-fixnum)
+  (setq tabularium--view-id-range nil)
+  (setq mode-name "Tabularium")
+  (revert-buffer)
+  (message "Showing every row in the table (all constraints cleared)"))
+
+(defun tabularium-view-show-all-in-view ()
+  "Show all rows that match the current view constraints.
+Removes only the page-size limit and any ID-range filter; the
+active filter, sort spec, column hiding, and saved-view label are
+preserved.
+
+To clear constraints in addition to expanding the row count, use
+`tabularium-view-show-all'."
   (interactive)
   (setq tabularium--view-limit most-positive-fixnum)
   (setq tabularium--view-id-range nil)
   (revert-buffer)
-  (message "Showing all entries"))
+  (message "Showing all rows in current view"))
 
 (defun tabularium-view-show-range (start end)
   "Show entries with IDs from START to END (inclusive)."
@@ -4438,7 +4876,7 @@ VIEW is a plist with optional keys :filter, :columns, :sort."
             (list (list :raw t :sql filter :desc name :join nil))))
     ;; Apply column visibility and ordering
     (when columns
-      (let ((all-fields (mapcar (lambda (f) (plist-get f :name))
+      (let ((all-fields (mapcar (lambda (f) (plist-get f :id))
                                 (tabularium--schema-fields))))
         (setq tabularium--hidden-columns
               (cl-remove-if (lambda (col) (memq col columns)) all-fields)))
@@ -4478,6 +4916,102 @@ VIEW is a plist with optional keys :filter, :columns, :sort."
                                views)))
         (when view
           (tabularium-apply-view view))))))
+
+(defun tabularium--capture-current-view ()
+  "Return a view plist describing the buffer's current visible state.
+Captures the active filter (as a SQL WHERE clause), the sort spec,
+and the visible-columns list (only when the user has customized
+column visibility or order — otherwise `:columns' is omitted so
+the view follows the schema default)."
+  (let* ((filter (tabularium--build-filter-clause))
+         (sort-spec tabularium--sort-columns)
+         (columns-customized (or tabularium--hidden-columns
+                                 tabularium--column-order))
+         (visible-cols
+          (when columns-customized
+            (mapcar (lambda (f) (plist-get f :id))
+                    (tabularium-view--ordered-visible-fields)))))
+    (append
+     (when filter (list :filter filter))
+     (when visible-cols (list :columns visible-cols))
+     (when sort-spec
+       ;; Normalize: single (col . dir) stored as cons, list stays list
+       (list :sort (if (= 1 (length sort-spec))
+                       (car sort-spec)
+                     sort-spec))))))
+
+(defun tabularium-view-save (slot &optional name)
+  "Save the current visible state as preset view SLOT.
+SLOT is 1..9 — the index into the schema's `:views' list.
+NAME is the display name; when called interactively, prompts for
+both.  Overwrites an existing view at SLOT after confirmation.
+
+The captured view includes the active filter, current sort, and
+the visible-columns list (only when the user has hidden or
+reordered columns — otherwise the view tracks the schema default).
+The view is persisted to the schema file immediately so it
+survives Emacs restarts."
+  (interactive
+   (progn
+     (unless (derived-mode-p 'tabularium-view-mode)
+       (user-error "Not in a Tabularium view buffer"))
+     (let* ((views (tabularium--schema-views))
+            (taken (mapcar (lambda (v) (plist-get v :name)) views))
+            (slot-choices
+             (mapcar (lambda (i)
+                       (let ((existing (nth (1- i) views)))
+                         (format "%d%s" i
+                                 (if existing
+                                     (format " (currently: %s)"
+                                             (plist-get existing :name))
+                                   ""))))
+                     (number-sequence 1 9)))
+            (slot-pick (completing-read "Save as view slot: "
+                                        slot-choices nil t))
+            (slot-num (string-to-number slot-pick))
+            (existing (nth (1- slot-num) views))
+            (default-name (or (and existing (plist-get existing :name))
+                              tabularium--current-view))
+            (name (read-string
+                   (format "View name%s: "
+                           (if default-name
+                               (format " [%s]" default-name)
+                             ""))
+                   nil nil default-name)))
+       (when (string-empty-p (string-trim name))
+         (user-error "View name cannot be empty"))
+       (when (and existing
+                  (not (y-or-n-p (format "Slot %d already has view '%s'.  Overwrite? "
+                                         slot-num (plist-get existing :name)))))
+         (user-error "Cancelled"))
+       (when (and (member name taken)
+                  (not (and existing (equal name (plist-get existing :name))))
+                  (not (y-or-n-p (format "A view named '%s' already exists in another slot.  Continue? "
+                                         name))))
+         (user-error "Cancelled"))
+       (list slot-num name))))
+  (unless (and (integerp slot) (<= 1 slot 9))
+    (user-error "Slot must be an integer between 1 and 9"))
+  (let* ((schema-name (tabularium--schema-name))
+         (schema (assoc schema-name tabularium-schemas))
+         (plist (cdr schema))
+         (views (or (plist-get plist :views) '()))
+         (captured (tabularium--capture-current-view))
+         (new-view (append (list :name name) captured))
+         ;; Pad views list to slot length
+         (padded (append views (make-list (max 0 (- slot (length views))) nil)))
+         (idx 0)
+         (updated (mapcar (lambda (v)
+                            (cl-incf idx)
+                            (if (= idx slot) new-view v))
+                          padded)))
+    (setq plist (plist-put plist :views updated))
+    (setf (cdr schema) plist)
+    (tabularium--save-schema-to-file schema-name)
+    (setq tabularium--current-view name)
+    (setq mode-name (format "Tabularium[%s]" name))
+    (force-mode-line-update)
+    (message "Saved view #%d: %s" slot name)))
 
 (defun tabularium-view-clear ()
   "Clear the current view: no filter, all columns, default sort."
@@ -4534,7 +5068,7 @@ Sets view parameters without calling revert-buffer (caller should refresh)."
               (list (list :raw t :sql filter :desc name :join nil))))
       ;; Apply column visibility and ordering
       (when columns
-        (let ((all-fields (mapcar (lambda (f) (plist-get f :name))
+        (let ((all-fields (mapcar (lambda (f) (plist-get f :id))
                                   (tabularium--schema-fields))))
           (setq tabularium--hidden-columns
                 (cl-remove-if (lambda (col) (memq col columns)) all-fields)))
@@ -4680,7 +5214,7 @@ If called from a view buffer, closes the current buffer first."
   "Mark all entries where VALUE appears as a substring in FIELDS.
 FIELDS is a list of field name strings.  If nil, searches all fields."
   (interactive
-   (let* ((value (read-string "Mark containing: "))
+   (let* ((value (read-string "Mark containing: " nil 'tabularium-search-history))
           (fields (tabularium--field-crm)))
      (list value fields)))
   (tabularium--ensure-db)
@@ -4702,7 +5236,7 @@ FIELDS is a list of field name strings.  If nil, searches all fields."
   "Mark all entries where VALUE equals a cell value exactly in FIELDS.
 FIELDS is a list of field name strings.  If nil, searches all fields."
   (interactive
-   (let* ((value (read-string "Mark equal to: "))
+   (let* ((value (read-string "Mark equal to: " nil 'tabularium-search-history))
           (fields (tabularium--field-crm)))
      (list value fields)))
   (tabularium--ensure-db)
@@ -4750,7 +5284,7 @@ FIELDS is a list of field name strings.  If nil, searches all fields."
 Uses Emacs regular expressions (not SQL patterns).
 FIELDS is a list of field name strings.  If nil, searches all fields."
   (interactive
-   (let* ((regexp (read-string "Mark matching regexp: "))
+   (let* ((regexp (read-string "Mark matching regexp: " nil 'tabularium-regexp-history))
           (fields (tabularium--field-crm)))
      (list regexp fields)))
   (tabularium--ensure-db)
@@ -4812,6 +5346,8 @@ Presents a completion menu of available operations."
 
 ;;; *** 6.1.1 Form-Based Entry
 
+;;; *** 6.1.1.1 Mode & State
+
 (defvar-local tabularium-entry--fields nil
   "List of field definitions for current form.")
 
@@ -4853,80 +5389,6 @@ Reuses an existing window showing BUF if one is available."
                        (direction . right)
                        (window-width . 0.4)))
     (switch-to-buffer buf)))
-
-;;; Long-field editing
-
-(defvar-local tabularium-long--callback nil
-  "Function to call with the edited text when the long-field buffer is saved.")
-
-(defvar-local tabularium-long--field-name nil
-  "Field name being edited in this long-field buffer.")
-
-(defvar tabularium-long-edit-mode-map
-  (let ((map (make-sparse-keymap)))
-    (set-keymap-parent map text-mode-map)
-    (define-key map (kbd "C-c C-c") #'tabularium-long-save)
-    (define-key map (kbd "C-c C-k") #'tabularium-long-cancel)
-    map)
-  "Keymap for `tabularium-long-edit-mode'.")
-
-(define-derived-mode tabularium-long-edit-mode text-mode "Tabularium-Long"
-  "Major mode for editing long-form Tabularium fields.
-Derived from `text-mode' with visual-line-mode and outline support.
-\\{tabularium-long-edit-mode-map}"
-  (visual-line-mode 1)
-  (setq-local outline-regexp "[#*]+ ")
-  (outline-minor-mode 1))
-
-(defun tabularium-long-save ()
-  "Save the long-field buffer contents and close."
-  (interactive)
-  (let ((text (string-trim (buffer-substring-no-properties
-                            (point-min) (point-max))))
-        (callback tabularium-long--callback))
-    (quit-window t)
-    (when callback
-      (funcall callback text))))
-
-(defun tabularium-long-cancel ()
-  "Cancel long-field editing without saving."
-  (interactive)
-  (let ((in-recursive (> (recursion-depth) 0)))
-    (quit-window t)
-    (when in-recursive
-      (abort-recursive-edit))))
-
-(defun tabularium--edit-long-field (field-name initial callback)
-  "Open a buffer for editing long-form text for FIELD-NAME.
-INITIAL is the current value.  CALLBACK is called with the new text
-when the user saves via `tabularium-long-save'."
-  (let ((buf (get-buffer-create (format "*Tabularium: %s*" field-name))))
-    (with-current-buffer buf
-      (let ((inhibit-read-only t))
-        (erase-buffer)
-        (if (eq tabularium-long-field-mode 'text-mode)
-            (tabularium-long-edit-mode)
-          (funcall tabularium-long-field-mode)
-          ;; Add our keybindings as minor mode overlay
-          (local-set-key (kbd "C-c C-c") #'tabularium-long-save)
-          (local-set-key (kbd "C-c C-k") #'tabularium-long-cancel))
-        (setq tabularium-long--callback callback)
-        (setq tabularium-long--field-name field-name)
-        (when (and initial (not (string-empty-p initial)))
-          (insert initial))
-        (setq-local header-line-format
-                    (list " Editing: " (propertize field-name 'face 'bold)
-                          "  "
-                          (propertize "C-c C-c" 'face 'help-key-binding)
-                          " Save  "
-                          (propertize "C-c C-k" 'face 'help-key-binding)
-                          " Cancel"))
-        (goto-char (point-min))))
-    (select-window
-     (display-buffer-in-side-window
-      buf (if (eq tabularium-long-field-display 'side)
-              '((side . right) (window-width . 0.4))
-            '((side . bottom) (window-height . 0.4)))))))
 
 (defface tabularium-entry-current-field
   '((((class color) (background dark))
@@ -5109,7 +5571,7 @@ guard against unbounded recursion.")
   (tabularium--ensure-db)
   (let* ((primary-name (symbol-name (tabularium--primary-field-name)))
          (col-info (tabularium--get-table-columns))
-         (col-names (mapcar (lambda (c) (plist-get c :name)) col-info))
+         (col-names (mapcar (lambda (c) (plist-get c :id)) col-info))
          (sql (format "SELECT * FROM %s WHERE %s = ?"
                       tabularium-table-name primary-name))
          (row (tabularium-db-query-single tabularium--db sql (list id))))
@@ -5143,9 +5605,15 @@ Uses current form values for related field completion."
      ;; Has :complete spec - use the enhanced dispatcher
      (complete
       (tabularium--get-completion-candidates field context))
-     ;; Boolean type
+     ;; Boolean type — restricted to a single canonical pair
      ((eq type 'boolean)
-      '("yes" "no" "true" "false" "1" "0"))
+      (let ((pair (tabularium--boolean-pair-for field)))
+        (if pair
+            (list (car pair) (cadr pair))
+          ;; No pair determined yet: fall back to the canonical list of
+          ;; first-entries (the user's choice here will lock in the pair
+          ;; for the column going forward).
+          tabularium--boolean-pair-anchors)))
      ;; No completion
      (t nil))))
 
@@ -5154,6 +5622,8 @@ Uses current form values for related field completion."
 
 (defvar-local tabularium-entry-footer-start nil
   "Position where footer starts in form buffer.")
+
+;;; *** 6.1.1.2 Rendering
 
 (defun tabularium-entry-render ()
   "Render the form buffer."
@@ -5192,8 +5662,8 @@ Uses current form values for related field completion."
             (insert "\n")))))
     ;; Fields - use %-20s to align with entry mode
     (dolist (field tabularium-entry--fields)
-      (let* ((name (plist-get field :name))
-             (prompt (plist-get field :prompt))
+      (let* ((name (plist-get field :id))
+             (prompt (plist-get field :label))
              (required (plist-get field :required))
              (dyn-required
               (and (not required)
@@ -5202,6 +5672,7 @@ Uses current form values for related field completion."
                     name tabularium-entry--values)))
              (type (plist-get field :type))
              (choices (plist-get field :choice))
+             (complete (plist-get field :complete))
              (value (or (alist-get name tabularium-entry--values) ""))
              (value-str (format "%s" value)))
         ;; Track first field line
@@ -5259,8 +5730,11 @@ Uses current form values for related field completion."
             (overlay-put ov 'tabularium-field name)
             (overlay-put ov 'tabularium-value value)
             (push (cons name ov) tabularium-entry--field-overlays)))
-        ;; Type hint for choice fields (respect right padding)
-        (when (and choices (eq type 'choice))
+        ;; Type hint for choice fields and fixed-completion text fields
+        ;; (respect right padding)
+        (when (and choices
+                   (or (eq type 'choice)
+                       (and (eq type 'text) (eq complete 'fixed))))
           (let* ((display-choices (if (<= (length choices) 5)
                                       (string-join choices ", ")
                                     (concat (string-join (seq-take choices 4) ", ") ", …")))
@@ -5284,7 +5758,7 @@ Uses current form values for related field completion."
             (propertize "p" 'face 'help-key-binding) " Line ↓/↑  "
             (propertize "RET" 'face 'help-key-binding) " Edit  "
             (propertize "x" 'face 'help-key-binding) " Clear  "
-            (propertize "X" 'face 'help-key-binding) " Clear+edit  "
+            (propertize "X" 'face 'help-key-binding) " Clear + Edit  "
             (propertize "=" 'face 'help-key-binding) " Default\n")
     (insert "  "
             (propertize "M-n" 'face 'help-key-binding) "/"
@@ -5312,6 +5786,8 @@ Uses current form values for related field completion."
                              (cl-find-if (lambda (f) (not (eq f primary-name))) fields)
                              (car fields))))
       (tabularium-entry--goto-field target-field))))
+
+;;; *** 6.1.1.3 Navigation
 
 (defun tabularium-entry--goto-field (field-name)
   "Move cursor to FIELD-NAME and highlight it."
@@ -5467,6 +5943,8 @@ Falls back to primary-key order when no source buffer exists."
               (setq tabularium-entry--source-buffer source)))
         (message "No previous entry")))))
 
+;;; *** 6.1.1.4 Field Editing
+
 (defun tabularium-entry--field-at-point ()
   "Return the field name at point, or nil if not on a field."
   (let ((overlays (overlays-at (point))))
@@ -5499,8 +5977,20 @@ Falls back to primary-key order when no source buffer exists."
   (setq tabularium-entry--submit-after-field t)
   (exit-minibuffer))
 
-(defun tabularium-entry--read-with-prev-field (prompt completions initial)
+(defun tabularium-entry--read-with-prev-field (prompt completions initial
+                                                       &optional require-match
+                                                       field-type)
   "Read input with PROMPT, COMPLETIONS, and INITIAL value.
+When REQUIRE-MATCH is non-nil and COMPLETIONS is non-empty, the
+user must select one of the completion candidates (no free text).
+
+FIELD-TYPE, when non-nil, enables type-based validation: \\='integer
+and \\='number reject non-numeric strings; \\='date warns on
+non-=YYYY-MM-DD= input; \\='boolean is already enforced via
+require-match elsewhere.  Empty input is always accepted (so users
+can clear a field).  The prompt re-loops on invalid input with a
+brief inline complaint.
+
 Returns the new value, or nil if aborted to go to the previous field."
   (setq tabularium-entry--goto-prev-field nil)
   (setq tabularium-entry--submit-after-field nil)
@@ -5519,9 +6009,25 @@ Returns the new value, or nil if aborted to go to the previous field."
         (progn
           (add-hook 'minibuffer-setup-hook setup-fn)
           (condition-case nil
-              (if completions
-                  (completing-read prompt completions nil nil initial)
-                (read-string prompt initial))
+              ;; Validation loop: keep prompting until a type-valid (or empty)
+              ;; value is entered.  Abort-to-prev breaks out via the quit
+              ;; handler below.
+              (let ((value nil)
+                    (current-initial initial)
+                    (done nil))
+                (while (not done)
+                  (setq value
+                        (if completions
+                            (completing-read prompt completions nil
+                                             require-match current-initial)
+                          (read-string prompt current-initial)))
+                  (let ((err (tabularium--validate-field-value value field-type)))
+                    (if (null err)
+                        (setq done t)
+                      (message "%s" err)
+                      (sit-for 1.0)
+                      (setq current-initial value))))
+                value)
             (quit
              (if tabularium-entry--goto-prev-field
                  nil
@@ -5550,7 +6056,7 @@ the minibuffer."
   ;; Use field at point if available, otherwise use highlighted field
   (let ((field-name (or (tabularium-entry--field-at-point)
                         tabularium-entry--current-field)))
-    (when-let* ((field (cl-find-if (lambda (f) (eq (plist-get f :name) field-name))
+    (when-let* ((field (cl-find-if (lambda (f) (eq (plist-get f :id) field-name))
                                    tabularium-entry--fields)))
       ;; Update current field to match what is being edited
       (setq tabularium-entry--current-field field-name)
@@ -5567,19 +6073,28 @@ the minibuffer."
                  (tabularium-entry--set-field-value field-name text)
                  (tabularium-entry-render)
                  (tabularium-entry--goto-field field-name)
-                 (message "Saved %s (%d chars)" (plist-get field :prompt)
+                 (message "Saved %s (%d chars)" (plist-get field :label)
                           (length text))))))
         ;; Normal field: minibuffer prompt
-        (let* ((prompt (plist-get field :prompt))
+        (let* ((prompt (plist-get field :label))
                (current-value (or (alist-get field-name tabularium-entry--values) ""))
                ;; Track if field was empty before editing
                (was-empty (tabularium-entry--field-empty-p field-name))
                (completions (tabularium-entry--get-field-completions field))
+               (field-type (plist-get field :type))
+               (field-complete (plist-get field :complete))
+               ;; Require strict completion for choice fields, boolean
+               ;; fields (locked to a single canonical pair), and text
+               ;; fields restricted to a fixed list of candidates.
+               (strict (or (eq field-type 'choice)
+                           (eq field-type 'boolean)
+                           (and (eq field-type 'text) (eq field-complete 'fixed))))
                (initial (if (stringp current-value)
                             current-value
                           (format "%s" current-value)))
                (new-value (tabularium-entry--read-with-prev-field
-                           (format "%s: " prompt) completions initial)))
+                           (format "%s: " prompt) completions initial strict
+                           field-type)))
           ;; Check if prior navigation to previous field
           (if (null new-value)
               (progn
@@ -5625,7 +6140,7 @@ co-occurrence exists for SOURCE-VALUE."
         (when tabularium-debug
           (message "DEBUG: No autofill targets for %s" source-field-name))
       (dolist (target-field target-fields)
-        (let* ((target-name (plist-get target-field :name))
+        (let* ((target-name (plist-get target-field :id))
                (current-target (alist-get target-name tabularium-entry--values)))
           (if (and current-target (stringp current-target) (not (string-empty-p current-target)))
               (when tabularium-debug
@@ -5638,19 +6153,19 @@ co-occurrence exists for SOURCE-VALUE."
                              source-field-name source-value target-name))
                 (tabularium-entry--set-field-value target-name autofill-value)
                 (message "Auto-filled %s: %s"
-                         (plist-get target-field :prompt) autofill-value)))))))))
+                         (plist-get target-field :label) autofill-value)))))))))
 
 (defun tabularium-entry-set-default ()
   "Set current field to its default value."
   (interactive)
   (when-let* ((field-name tabularium-entry--current-field)
-              (field (cl-find-if (lambda (f) (eq (plist-get f :name) field-name))
+              (field (cl-find-if (lambda (f) (eq (plist-get f :id) field-name))
                                  tabularium-entry--fields))
               (default (tabularium--compute-default field)))
     (tabularium-entry--set-field-value field-name default)
     (tabularium-entry-render)
     (tabularium-entry--goto-field field-name)
-    (message "Set %s to default: %s" (plist-get field :prompt) default)))
+    (message "Set %s to default: %s" (plist-get field :label) default)))
 
 (defun tabularium-entry-reset-field ()
   "Reset current field to empty."
@@ -5676,6 +6191,8 @@ existing value with something unrelated."
       (setq tabularium-entry--current-field field-name)
       (tabularium-entry-edit-field))))
 
+;;; *** 6.1.1.5 Lifecycle
+
 (defun tabularium-entry-submit ()
   "Submit the form and save the entry."
   (interactive)
@@ -5686,7 +6203,7 @@ existing value with something unrelated."
     ;; Validate required fields — both static (:required t) and dynamic
     ;; (declared by `tabularium-entry-required-field-functions').
     (dolist (field tabularium-entry--fields)
-      (let* ((name (plist-get field :name))
+      (let* ((name (plist-get field :id))
              (static-req (plist-get field :required))
              (dyn-req (and (not static-req)
                            (run-hook-with-args-until-success
@@ -5698,7 +6215,7 @@ existing value with something unrelated."
               (tabularium-entry--goto-field name)
               (user-error "%s field '%s' is empty"
                           (if static-req "Required" "Required for this entry type:")
-                          (plist-get field :prompt)))))))
+                          (plist-get field :label)))))))
     ;; Save
     (if tabularium-entry-editing-id
         ;; Update existing, and record old values for undo
@@ -5712,7 +6229,7 @@ existing value with something unrelated."
                   (new-val (cdr pair)))
               (unless (equal new-val (alist-get field old-data))
                 (push (list :type 'update
-                            :id tabularium-entry-editing-id
+                            :row tabularium-entry-editing-id
                             :field field
                             :old (alist-get field old-data)
                             :new new-val)
@@ -5730,7 +6247,7 @@ existing value with something unrelated."
       ;; Insert new
       (let ((new-id (alist-get (tabularium--primary-field-name) values)))
         (tabularium-db-insert tabularium--db tabularium-table-name values)
-        (tabularium--undo-push (list :type 'insert :id new-id :data values))
+        (tabularium--undo-push (list :type 'insert :row new-id :data values))
         (tabularium--invalidate-cache)
         (message "Entry added")))
     ;; Mark buffer clean — values now match what's on disk, so the
@@ -5849,7 +6366,7 @@ Only prompts for confirmation if changes have been made."
         (tabularium--ensure-db)
         ;; Record for undo
         (let ((old-data (tabularium--get-record-by-id id)))
-          (tabularium--undo-push (list :type 'delete :id id :data old-data)))
+          (tabularium--undo-push (list :type 'delete :row id :data old-data)))
         ;; Delete
         (tabularium-db-delete tabularium--db tabularium-table-name
                           (tabularium--primary-field-name) id)
@@ -5896,7 +6413,7 @@ Only works when editing an existing entry (not a new one)."
                (buf (get-buffer-create (format "*%s Form*" schema-name)))
                (initial-values
                 (mapcar (lambda (f)
-                          (let ((name (plist-get f :name)))
+                          (let ((name (plist-get f :id)))
                             (cons name
                                   (if (eq name primary-name)
                                       position  ; Use the insert position as ID
@@ -5965,7 +6482,7 @@ With prefix argument, prompts for ID to edit."
               (tabularium--get-record-by-id id)
             ;; New entry: compute defaults
             (mapcar (lambda (f)
-                      (let ((name (plist-get f :name)))
+                      (let ((name (plist-get f :id)))
                         (cons name
                               (if (eq name primary-name)
                                   (tabularium--next-id)
@@ -5989,6 +6506,80 @@ With prefix argument, prompts for ID to edit."
       (tabularium-entry-render))
     (tabularium--display-entry-buffer buf)))
 
+;;; *** 6.1.1.6 Long Field Editing
+
+(defvar-local tabularium-long--callback nil
+  "Function to call with the edited text when the long-field buffer is saved.")
+
+(defvar-local tabularium-long--field-name nil
+  "Field name being edited in this long-field buffer.")
+
+(defvar tabularium-long-edit-mode-map
+  (let ((map (make-sparse-keymap)))
+    (set-keymap-parent map text-mode-map)
+    (define-key map (kbd "C-c C-c") #'tabularium-long-save)
+    (define-key map (kbd "C-c C-k") #'tabularium-long-cancel)
+    map)
+  "Keymap for `tabularium-long-edit-mode'.")
+
+(define-derived-mode tabularium-long-edit-mode text-mode "Tabularium-Long"
+  "Major mode for editing long-form Tabularium fields.
+Derived from `text-mode' with visual-line-mode and outline support.
+\\{tabularium-long-edit-mode-map}"
+  (visual-line-mode 1)
+  (setq-local outline-regexp "[#*]+ ")
+  (outline-minor-mode 1))
+
+(defun tabularium-long-save ()
+  "Save the long-field buffer contents and close."
+  (interactive)
+  (let ((text (string-trim (buffer-substring-no-properties
+                            (point-min) (point-max))))
+        (callback tabularium-long--callback))
+    (quit-window t)
+    (when callback
+      (funcall callback text))))
+
+(defun tabularium-long-cancel ()
+  "Cancel long-field editing without saving."
+  (interactive)
+  (let ((in-recursive (> (recursion-depth) 0)))
+    (quit-window t)
+    (when in-recursive
+      (abort-recursive-edit))))
+
+(defun tabularium--edit-long-field (field-name initial callback)
+  "Open a buffer for editing long-form text for FIELD-NAME.
+INITIAL is the current value.  CALLBACK is called with the new text
+when the user saves via `tabularium-long-save'."
+  (let ((buf (get-buffer-create (format "*Tabularium: %s*" field-name))))
+    (with-current-buffer buf
+      (let ((inhibit-read-only t))
+        (erase-buffer)
+        (if (eq tabularium-long-field-mode 'text-mode)
+            (tabularium-long-edit-mode)
+          (funcall tabularium-long-field-mode)
+          ;; Add our keybindings as minor mode overlay
+          (local-set-key (kbd "C-c C-c") #'tabularium-long-save)
+          (local-set-key (kbd "C-c C-k") #'tabularium-long-cancel))
+        (setq tabularium-long--callback callback)
+        (setq tabularium-long--field-name field-name)
+        (when (and initial (not (string-empty-p initial)))
+          (insert initial))
+        (setq-local header-line-format
+                    (list " Editing: " (propertize field-name 'face 'bold)
+                          "  "
+                          (propertize "C-c C-c" 'face 'help-key-binding)
+                          " Save  "
+                          (propertize "C-c C-k" 'face 'help-key-binding)
+                          " Cancel"))
+        (goto-char (point-min))))
+    (select-window
+     (display-buffer-in-side-window
+      buf (if (eq tabularium-long-field-display 'side)
+              '((side . right) (window-width . 0.4))
+            '((side . bottom) (window-height . 0.4)))))))
+
 ;;; *** 6.1.2 Prompt Entry
 
 (defun tabularium--read-field (field &optional initial context)
@@ -5998,7 +6589,7 @@ CONTEXT is an alist of current field values for related completion.
 Fields with `:long t' open a dedicated editing buffer."
   (if (plist-get field :long)
       ;; Long field: open buffer, use recursive-edit to block
-      (let* ((field-name (symbol-name (plist-get field :name)))
+      (let* ((field-name (symbol-name (plist-get field :id)))
              (initial-str (if (and initial (not (string-empty-p (format "%s" initial))))
                               (format "%s" initial) ""))
              (result nil)
@@ -6016,7 +6607,7 @@ Fields with `:long t' open a dedicated editing buffer."
                   (lambda (text)
                     (setq result text)
                     (exit-recursive-edit)))
-            (when (not (string-empty-p initial-str))
+            (unless (string-empty-p initial-str)
               (insert initial-str))
             (setq-local header-line-format
                         (list " Editing: " (propertize field-name 'face 'bold)
@@ -6036,47 +6627,47 @@ Fields with `:long t' open a dedicated editing buffer."
           (error nil))
         (or result initial-str))
     ;; Normal field: minibuffer prompt
-    (let* ((prompt-base (plist-get field :prompt))
-         (field-type (plist-get field :type))
-         (required (plist-get field :required))
-         (default (or initial (tabularium--compute-default field)))
-         (prompt (format "%s%s%s: "
-                         prompt-base
-                         (if required "*" "")
-                         (if default (format " [%s]" default) "")))
-         value)
-    (setq value
-          (pcase field-type
-            ('date
-             (read-string prompt (or initial default)))
-            ('integer
-             (let ((input (read-string prompt (when (or initial default)
-                                                (format "%s" (or initial default))))))
-               (if (string-empty-p input)
-                   default
-                 (string-to-number input))))
-            ('number
-             (let ((input (read-string prompt (when (or initial default)
-                                                (format "%s" (or initial default))))))
-               (if (string-empty-p input)
-                   default
-                 (string-to-number input))))
-            ('choice
-             (let ((choices (plist-get field :choice)))
-               (completing-read prompt (append choices '("")) nil nil nil nil (or initial default))))
-            ('text
-             (if (plist-get field :complete)
-                 (let ((candidates (tabularium--get-completion-candidates field context)))
-                   (completing-read prompt candidates nil nil nil nil (or initial default)))
-               (read-string prompt (or initial default))))
-            (_ (read-string prompt (or initial default)))))
-    ;; Handle empty string (default)
-    (when (and (stringp value) (string-empty-p value))
-      (setq value default))
-    ;; Validate required
-    (when (and required (or (null value) (and (stringp value) (string-empty-p value))))
-      (user-error "Field '%s' is required" prompt-base))
-    value)))
+    (let* ((prompt-base (plist-get field :label))
+           (field-type (plist-get field :type))
+           (required (plist-get field :required))
+           (default (or initial (tabularium--compute-default field)))
+           (prompt (format "%s%s%s: "
+                           prompt-base
+                           (if required "*" "")
+                           (if default (format " [%s]" default) "")))
+           value)
+      (setq value
+            (pcase field-type
+              ('date
+               (read-string prompt (or initial default)))
+              ('integer
+               (let ((input (read-string prompt (when (or initial default)
+                                                  (format "%s" (or initial default))))))
+                 (if (string-empty-p input)
+                     default
+                   (string-to-number input))))
+              ('number
+               (let ((input (read-string prompt (when (or initial default)
+                                                  (format "%s" (or initial default))))))
+                 (if (string-empty-p input)
+                     default
+                   (string-to-number input))))
+              ('choice
+               (let ((choices (plist-get field :choice)))
+                 (completing-read prompt (append choices '("")) nil nil nil nil (or initial default))))
+              ('text
+               (if (plist-get field :complete)
+                   (let ((candidates (tabularium--get-completion-candidates field context)))
+                     (completing-read prompt candidates nil nil nil nil (or initial default)))
+                 (read-string prompt (or initial default))))
+              (_ (read-string prompt (or initial default)))))
+      ;; Handle empty string (default)
+      (when (and (stringp value) (string-empty-p value))
+        (setq value default))
+      ;; Validate required
+      (when (and required (or (null value) (and (stringp value) (string-empty-p value))))
+        (user-error "Field '%s' is required" prompt-base))
+      value)))
 
 ;;;###autoload
 (defun tabularium-prompt-entry ()
@@ -6089,7 +6680,7 @@ For form-based entry, use `tabularium-new-entry' instead."
     ;; Collect all field values, passing accumulated values as context
     (dolist (field (cl-remove-if #'tabularium--computed-field-p
                                  (tabularium--schema-fields)))
-      (let* ((name (plist-get field :name))
+      (let* ((name (plist-get field :id))
              (default (if (and (eq name primary-name)
                                (eq (plist-get field :type) 'integer))
                           (tabularium--next-id)
@@ -6111,7 +6702,7 @@ For form-based entry, use `tabularium-new-entry' instead."
   "Get the most recent record as an alist."
   (tabularium--ensure-db)
   (let* ((col-info (tabularium--get-table-columns))
-         (col-names (mapcar (lambda (c) (plist-get c :name)) col-info))
+         (col-names (mapcar (lambda (c) (plist-get c :id)) col-info))
          (sql (format "SELECT * FROM %s ORDER BY rowid DESC LIMIT 1"
                       tabularium-table-name))
          (row (tabularium-db-query-single tabularium--db sql)))
@@ -6126,12 +6717,12 @@ For form-based entry, use `tabularium-new-entry' instead."
   (let ((values '())
         (quick-fields (tabularium--schema-quick-fields))
         (all-fields (cl-remove-if #'tabularium--computed-field-p
-                                   (tabularium--schema-fields)))
+                                  (tabularium--schema-fields)))
         (primary-name (tabularium--primary-field-name))
         (recent-alist (tabularium--get-recent-record)))
     ;; Process each field, passing accumulated values as context
     (dolist (field all-fields)
-      (let* ((name (plist-get field :name))
+      (let* ((name (plist-get field :id))
              (in-quick (memq name quick-fields))
              (recent-val (alist-get name recent-alist))
              (default-val (tabularium--compute-default field)))
@@ -6152,7 +6743,42 @@ For form-based entry, use `tabularium-new-entry' instead."
       (revert-buffer))
     (message "Entry added")))
 
-;;; ** 6.2 Duplicate Entry
+;;; ** 6.2 Edit Entry
+
+(defun tabularium--edit-with-method (id &optional use-alt-method)
+  "Edit entry ID using preferred or alternative method.
+With USE-ALT-METHOD non-nil, use the alternative entry method."
+  (if (tabularium--use-form-p use-alt-method)
+      (tabularium-new-entry id)
+    (tabularium--edit id)))
+
+(defun tabularium--edit (id)
+  "Edit record ID, prompting for each field."
+  (interactive
+   (list (or (tabularium--id-at-point)
+             (read-number "Edit ID: "))))
+  (tabularium--ensure-db)
+  (let* ((primary-name (tabularium--primary-field-name))
+         (record-data (tabularium--get-record-by-id id)))
+    (unless record-data
+      (user-error "Record %s not found" id))
+    (let ((updates '()))
+      ;; Prompt for each field (skip computed fields)
+      (dolist (field (cl-remove-if #'tabularium--computed-field-p
+                                   (tabularium--schema-fields)))
+        (let* ((name (plist-get field :id))
+               (current (alist-get name record-data))
+               (new-value (tabularium--read-field field current)))
+          (unless (equal new-value current)
+            (push (cons name new-value) updates))))
+      ;; Apply updates
+      (when updates
+        (tabularium-db-update tabularium--db tabularium-table-name
+                              (nreverse updates) primary-name id)
+        (tabularium--invalidate-cache)
+        (message "Record %s updated." id)))))
+
+;;; ** 6.3 Duplicate Entry
 
 (defun tabularium--duplicate-with-method (id &optional use-alt-method)
   "Duplicate entry ID using preferred or alternative method.
@@ -6212,8 +6838,8 @@ or `tabularium-entry-duplicate' instead.  Selected by
     (let ((new-values '()))
       ;; Prompt for each field (skip computed fields)
       (dolist (field (cl-remove-if #'tabularium--computed-field-p
-                                    (tabularium--schema-fields)))
-        (let* ((name (plist-get field :name))
+                                   (tabularium--schema-fields)))
+        (let* ((name (plist-get field :id))
                (current (alist-get name record-data))
                ;; For primary key, suggest new ID
                (initial (if (eq name primary-name)
@@ -6224,41 +6850,6 @@ or `tabularium-entry-duplicate' instead.  Selected by
       (tabularium-db-insert tabularium--db tabularium-table-name (nreverse new-values))
       (tabularium--invalidate-cache)
       (message "Duplicated from %s" id))))
-
-;;; ** 6.3 Edit Entry
-
-(defun tabularium--edit-with-method (id &optional use-alt-method)
-  "Edit entry ID using preferred or alternative method.
-With USE-ALT-METHOD non-nil, use the alternative entry method."
-  (if (tabularium--use-form-p use-alt-method)
-      (tabularium-new-entry id)
-    (tabularium--edit id)))
-
-(defun tabularium--edit (id)
-  "Edit record ID, prompting for each field."
-  (interactive
-   (list (or (tabularium--id-at-point)
-             (read-number "Edit ID: "))))
-  (tabularium--ensure-db)
-  (let* ((primary-name (tabularium--primary-field-name))
-         (record-data (tabularium--get-record-by-id id)))
-    (unless record-data
-      (user-error "Record %s not found" id))
-    (let ((updates '()))
-      ;; Prompt for each field (skip computed fields)
-      (dolist (field (cl-remove-if #'tabularium--computed-field-p
-                                   (tabularium--schema-fields)))
-        (let* ((name (plist-get field :name))
-               (current (alist-get name record-data))
-               (new-value (tabularium--read-field field current)))
-          (unless (equal new-value current)
-            (push (cons name new-value) updates))))
-      ;; Apply updates
-      (when updates
-        (tabularium-db-update tabularium--db tabularium-table-name
-                              (nreverse updates) primary-name id)
-        (tabularium--invalidate-cache)
-        (message "Record %s updated." id)))))
 
 ;;; * 7 Data Manipulation
 
@@ -6272,7 +6863,8 @@ This ensures IDs stay sequential without gaps.
 WARNING: Enabling this breaks undo/redo functionality for those operations.
 Consider leaving this nil and using `tabularium-reindex' manually when needed."
   :type 'boolean
-  :group 'tabularium-database)
+  :group 'tabularium-database
+  :safe #'booleanp)
 
 (defun tabularium--reindex-silent ()
   "Reindex all entries sequentially without prompts or messages."
@@ -6372,7 +6964,7 @@ Otherwise, toggles the default primary-key sort direction."
    (let* ((existing (mapcar #'car tabularium--sort-columns))
           (fields (cl-remove-if
                    (lambda (name) (memq (intern name) existing))
-                   (mapcar (lambda (f) (symbol-name (plist-get f :name)))
+                   (mapcar (lambda (f) (symbol-name (plist-get f :id)))
                            (tabularium--schema-fields))))
           (prompt (if tabularium--sort-columns
                       (format "Sort [%s] + add: " (tabularium--sort-description))
@@ -6458,7 +7050,7 @@ Clears marks after cutting.  Undoable."
       (dolist (id ids)
         (when-let ((data (tabularium--get-record-by-id id)))
           (push data entries)
-          (push (list :type 'delete :id id :data data) ops)
+          (push (list :type 'delete :row id :data data) ops)
           (tabularium-db-delete tabularium--db tabularium-table-name
                             (tabularium--primary-field-name) id)))
       (setq entries (nreverse entries))
@@ -6556,7 +7148,7 @@ CONSUMED indicates whether batch was removed from kill ring (affects undo)."
           (let ((data (copy-alist entry)))
             (setf (alist-get primary-name data) new-id)
             (tabularium-db-insert tabularium--db tabularium-table-name data)
-            (push (list :type 'insert :id new-id :data data) ops)
+            (push (list :type 'insert :row new-id :data data) ops)
             (cl-incf new-id))))
       ;; Record undo - type depends on whether batch was consumed
       (if consumed
@@ -6693,7 +7285,7 @@ Clears marks after duplicating.  Undoable."
               (when data
                 (setf (alist-get primary-name data) new-id)
                 (tabularium-db-insert tabularium--db tabularium-table-name data)
-                (push (list :type 'insert :id new-id :data data) ops))))
+                (push (list :type 'insert :row new-id :data data) ops))))
           (tabularium--undo-push (list :type 'multi :ops (nreverse ops)))
           (setq tabularium--marked-entries nil)
           (tabularium--invalidate-cache)
@@ -6716,7 +7308,7 @@ Clears marks after deleting.  Undoable."
       (let ((ops '()))
         (dolist (id ids)
           (let ((data (tabularium--get-record-by-id id)))
-            (push (list :type 'delete :id id :data data) ops)
+            (push (list :type 'delete :row id :data data) ops)
             (tabularium-db-delete tabularium--db
                               tabularium-table-name
                               (tabularium--primary-field-name)
@@ -6757,7 +7349,7 @@ Opens form for data entry."
     (when (< position 1)
       (user-error "Position must be >= 1"))
     (when (> position (1+ max-id))
-      (user-error "Position %d is beyond current max (%d). Use new-entry instead." position max-id))
+      (user-error "Position %d is beyond current max (%d); use new-entry instead" position max-id))
     ;; Shift all entries from position onwards up by 1
     (let ((ids-to-shift (mapcar #'car
                                 (tabularium-db-query
@@ -6779,7 +7371,7 @@ Opens form for data entry."
            (buf (get-buffer-create (format "*%s Form*" schema-name)))
            (initial-values
             (mapcar (lambda (f)
-                      (let ((name (plist-get f :name)))
+                      (let ((name (plist-get f :id)))
                         (cons name
                               (if (eq name primary-name)
                                   position
@@ -6839,7 +7431,7 @@ Otherwise swaps entry at point with another.  Undoable."
      (format "UPDATE %s SET %s = ? WHERE %s = ?" tabularium-table-name primary-name primary-name)
      (list id2 temp-id))
     ;; Record undo (swap is its own inverse)
-    (tabularium--undo-push (list :type 'swap :id1 id1 :id2 id2))
+    (tabularium--undo-push (list :type 'swap :row1 id1 :row2 id2))
     ;; Clear marks
     (when tabularium--marked-entries
       (setq tabularium--marked-entries nil)
@@ -6926,7 +7518,7 @@ Clears marks after unpinning."
   (interactive)
   (let* ((fields (tabularium--schema-fields))
          (current-order (or tabularium--column-order
-                            (mapcar (lambda (f) (plist-get f :name)) fields)))
+                            (mapcar (lambda (f) (plist-get f :id)) fields)))
          (new-order '())
          (remaining (copy-sequence current-order)))
     ;; Build new order by repeated selection
@@ -6949,7 +7541,7 @@ Clears marks after unpinning."
   (let* ((col-idx (tabularium--current-column-index))
          (fields (tabularium--schema-fields))
          (order (or tabularium--column-order
-                    (mapcar (lambda (f) (plist-get f :name)) fields))))
+                    (mapcar (lambda (f) (plist-get f :id)) fields))))
     (when (and col-idx (> col-idx 0))
       (let ((col (nth col-idx order)))
         (setq order (delete col order))
@@ -6965,7 +7557,7 @@ Clears marks after unpinning."
   (let* ((col-idx (tabularium--current-column-index))
          (fields (tabularium--schema-fields))
          (order (or tabularium--column-order
-                    (mapcar (lambda (f) (plist-get f :name)) fields)))
+                    (mapcar (lambda (f) (plist-get f :id)) fields)))
          (max-idx (1- (length order))))
     (when (and col-idx (< col-idx max-idx))
       (let ((col (nth col-idx order)))
@@ -7004,7 +7596,7 @@ Clears marks after unpinning."
     (when-let ((idx (tabularium--current-column-index)))
       (let* ((fields (tabularium--schema-fields))
              (order (or tabularium--column-order
-                        (mapcar (lambda (f) (plist-get f :name)) fields)))
+                        (mapcar (lambda (f) (plist-get f :id)) fields)))
              ;; Filter to visible columns only
              (visible (cl-remove-if
                        (lambda (name)
@@ -7031,21 +7623,21 @@ This modifies both the database and the schema.  Undoable."
           (default-val (read-string "Default value (empty for none): "))
           ;; Build position candidates
           (fields (tabularium--schema-fields))
-          (col-names (mapcar (lambda (f) (symbol-name (plist-get f :name))) fields))
+          (col-names (mapcar (lambda (f) (symbol-name (plist-get f :id))) fields))
           (at-point-name (when (derived-mode-p 'tabularium-view-mode)
                            (tabularium--column-name-at-point)))
           (candidates (append (when at-point-name
-                               (list (format "<POINT> %s" (symbol-name at-point-name))))
-                             (list "<<FIRST>>" "<<LAST>>")
-                             col-names))
+                                (list (format "<<POINT>> %s" (symbol-name at-point-name))))
+                              (list "<<FIRST>>" "<<LAST>>")
+                              col-names))
           (pos-default (if at-point-name
-                           (format "<POINT> %s" (symbol-name at-point-name))
+                           (format "<<POINT>> %s" (symbol-name at-point-name))
                          "<<LAST>>"))
           (choice (completing-read "Insert after: " candidates nil t nil nil pos-default))
           (after (cond
                   ((string= choice "<<LAST>>") nil)
                   ((string= choice "<<FIRST>>") '__first__)
-                  ((string-prefix-p "<POINT> " choice) at-point-name)
+                  ((string-prefix-p "<<POINT>> " choice) at-point-name)
                   (t (intern choice)))))
      (list (intern name) type prompt
            (if (string-empty-p default-val) nil default-val)
@@ -7073,7 +7665,7 @@ This modifies both the database and the schema.  Undoable."
     (let* ((schema (assoc schema-name tabularium-schemas))
            (plist (cdr schema))
            (fields (plist-get plist :fields))
-           (new-field (list :name name :type type :prompt prompt :width width
+           (new-field (list :id name :type type :label prompt :width width
                             :complete (if (eq type 'text) 'historical nil))))
       (when default
         (setq new-field (plist-put new-field :default default)))
@@ -7082,7 +7674,7 @@ This modifies both the database and the schema.  Undoable."
        ((eq after-column '__first__)
         ;; After primary key column
         (let ((pk-pos (or (cl-position-if
-                           (lambda (f) (eq (plist-get f :name) primary))
+                           (lambda (f) (eq (plist-get f :id) primary))
                            fields)
                           0)))
           (setq fields (append (seq-take fields (1+ pk-pos))
@@ -7090,7 +7682,7 @@ This modifies both the database and the schema.  Undoable."
                                (seq-drop fields (1+ pk-pos))))))
        (after-column
         (let ((pos (cl-position-if
-                    (lambda (f) (eq (plist-get f :name) after-column))
+                    (lambda (f) (eq (plist-get f :id) after-column))
                     fields)))
           (if pos
               (setq fields (append (seq-take fields (1+ pos))
@@ -7104,7 +7696,7 @@ This modifies both the database and the schema.  Undoable."
       (tabularium--save-schema-to-file schema-name)
       ;; Push undo
       (tabularium--undo-push
-       (list :type 'add-column :name name :field-plist new-field)))
+       (list :type 'add-column :column name :field-plist new-field)))
     (tabularium--invalidate-cache)
     (when (derived-mode-p 'tabularium-view-mode)
       (let ((saved-id (tabulated-list-get-id)))
@@ -7125,20 +7717,20 @@ The primary key column cannot be deleted.  Undoable."
    (let* ((fields (tabularium--schema-fields))
           (primary (tabularium--primary-field-name))
           (deletable (cl-remove-if
-                      (lambda (f) (eq (plist-get f :name) primary))
+                      (lambda (f) (eq (plist-get f :id) primary))
                       fields))
-          (choices (mapcar (lambda (f) (symbol-name (plist-get f :name))) deletable))
+          (choices (mapcar (lambda (f) (symbol-name (plist-get f :id))) deletable))
           (at-point-name (when (derived-mode-p 'tabularium-view-mode)
                            (let ((col (tabularium--column-name-at-point)))
                              (when (and col (not (eq col primary)))
                                col))))
           (candidates (append (when at-point-name
-                               (list (format "<POINT> %s"
-                                             (symbol-name at-point-name))))
-                             choices))
+                                (list (format "<<POINT>> %s"
+                                              (symbol-name at-point-name))))
+                              choices))
           (selected (completing-read-multiple "Delete column(s): " candidates nil t))
           (resolved (mapcar (lambda (s)
-                              (if (string-prefix-p "<POINT> " s)
+                              (if (string-prefix-p "<<POINT>> " s)
                                   at-point-name
                                 (intern s)))
                             selected)))
@@ -7148,23 +7740,23 @@ The primary key column cannot be deleted.  Undoable."
          ;; Save visible column order before deletion for cursor fallback
          (pre-visible
           (when (derived-mode-p 'tabularium-view-mode)
-            (mapcar (lambda (f) (plist-get f :name))
+            (mapcar (lambda (f) (plist-get f :id))
                     (cl-remove-if-not #'tabularium-view--field-visible-p
                                       (tabularium--schema-fields))))))
     (dolist (name names)
       (when (eq name primary-name)
         (user-error "Cannot delete primary key column")))
     (unless (yes-or-no-p (format "Delete %d column%s and all %s data? "
-                                  (length names)
-                                  (if (= 1 (length names)) "" "s")
-                                  (if (= 1 (length names)) "its" "their")))
+                                 (length names)
+                                 (if (= 1 (length names)) "" "s")
+                                 (if (= 1 (length names)) "its" "their")))
       (user-error "Canceled"))
     (let ((ops '()))
       (dolist (name names)
         (let* ((schema-name (tabularium--schema-name))
                (fields (tabularium--schema-fields))
                (name-str (symbol-name name))
-               (field-plist (cl-find-if (lambda (f) (eq (plist-get f :name) name)) fields))
+               (field-plist (cl-find-if (lambda (f) (eq (plist-get f :id) name)) fields))
                (position (cl-position field-plist fields :test #'equal))
                (primary-str (symbol-name primary-name))
                (rows (tabularium-db-query
@@ -7175,8 +7767,8 @@ The primary key column cannot be deleted.  Undoable."
                       nil))
                (col-data (mapcar (lambda (row) (cons (car row) (cadr row))) rows)))
           ;; Recreate table without this column
-          (let* ((keep-fields (cl-remove-if (lambda (f) (eq (plist-get f :name) name)) fields))
-                 (keep-names (mapcar (lambda (f) (symbol-name (plist-get f :name))) keep-fields))
+          (let* ((keep-fields (cl-remove-if (lambda (f) (eq (plist-get f :id) name)) fields))
+                 (keep-names (mapcar (lambda (f) (symbol-name (plist-get f :id))) keep-fields))
                  (cols-str (string-join keep-names ", ")))
             (tabularium-db-execute tabularium--db
                                    (format "CREATE TABLE %s_backup AS SELECT %s FROM %s"
@@ -7192,11 +7784,11 @@ The primary key column cannot be deleted.  Undoable."
           ;; Update schema in memory
           (let* ((schema (assoc schema-name tabularium-schemas))
                  (plist (cdr schema))
-                 (new-fields (cl-remove-if (lambda (f) (eq (plist-get f :name) name))
+                 (new-fields (cl-remove-if (lambda (f) (eq (plist-get f :id) name))
                                            (plist-get plist :fields))))
             (setf (cdr schema) (plist-put plist :fields new-fields))
             (tabularium--save-schema-to-file schema-name))
-          (push (list :type 'delete-column :name name
+          (push (list :type 'delete-column :column name
                       :field-plist field-plist :position position
                       :data col-data)
                 ops)))
@@ -7225,7 +7817,7 @@ The primary key column cannot be deleted.  Undoable."
                     (let ((prev nil))
                       (dolist (col pre-visible)
                         (if (member col names)
-                            (when (not result) (setq result prev))
+                            (unless result (setq result prev))
                           (setq prev col)))))
                   result))))
         (revert-buffer)
@@ -7244,22 +7836,22 @@ This reorders the schema and saves.  Undoable."
   (interactive
    (let* ((fields (tabularium--schema-fields))
           (primary (tabularium--primary-field-name))
-          (all-names (mapcar (lambda (f) (symbol-name (plist-get f :name))) fields))
+          (all-names (mapcar (lambda (f) (symbol-name (plist-get f :id))) fields))
           (movable (cl-remove-if
-                    (lambda (f) (eq (plist-get f :name) primary))
+                    (lambda (f) (eq (plist-get f :id) primary))
                     fields))
-          (movable-names (mapcar (lambda (f) (symbol-name (plist-get f :name))) movable))
+          (movable-names (mapcar (lambda (f) (symbol-name (plist-get f :id))) movable))
           (at-point-name (when (derived-mode-p 'tabularium-view-mode)
                            (let ((col (tabularium--column-name-at-point)))
                              (when (and col (not (eq col primary)))
                                col))))
           (sel-candidates (append (when at-point-name
-                                   (list (format "<POINT> %s"
-                                                 (symbol-name at-point-name))))
-                                 movable-names))
+                                    (list (format "<<POINT>> %s"
+                                                  (symbol-name at-point-name))))
+                                  movable-names))
           (selected (completing-read-multiple "Move columns: " sel-candidates nil t))
           (sel-syms (mapcar (lambda (s)
-                              (if (string-prefix-p "<POINT> " s)
+                              (if (string-prefix-p "<<POINT>> " s)
                                   at-point-name
                                 (intern s)))
                             selected))
@@ -7272,19 +7864,19 @@ This reorders the schema and saves.  Undoable."
                                    (member (symbol-name at-point-name) remaining))
                           at-point-name))
           (tgt-candidates (append (when tgt-at-point
-                                   (list (format "<POINT> %s"
-                                                 (symbol-name tgt-at-point))))
-                                 (list "<<FIRST>>" "<<LAST>>")
-                                 remaining))
+                                    (list (format "<<POINT>> %s"
+                                                  (symbol-name tgt-at-point))))
+                                  (list "<<FIRST>>" "<<LAST>>")
+                                  remaining))
           (tgt-default (if tgt-at-point
-                           (format "<POINT> %s" (symbol-name tgt-at-point))
+                           (format "<<POINT>> %s" (symbol-name tgt-at-point))
                          "<<FIRST>>"))
           (target-choice (completing-read "Move before: " tgt-candidates nil t
                                           nil nil tgt-default))
           (before-col (cond
                        ((string= target-choice "<<FIRST>>") '__first__)
                        ((string= target-choice "<<LAST>>") nil)
-                       ((string-prefix-p "<POINT> " target-choice) tgt-at-point)
+                       ((string-prefix-p "<<POINT>> " target-choice) tgt-at-point)
                        (t (intern target-choice)))))
      (list sel-syms before-col)))
   (tabularium--ensure-db)
@@ -7292,30 +7884,30 @@ This reorders the schema and saves.  Undoable."
          (schema (assoc schema-name tabularium-schemas))
          (plist (cdr schema))
          (fields (plist-get plist :fields))
-         (old-order (mapcar (lambda (f) (plist-get f :name)) fields))
+         (old-order (mapcar (lambda (f) (plist-get f :id)) fields))
          (primary (tabularium--primary-field-name))
          ;; Ensure columns is a proper list of symbols
          (columns (if (listp columns) columns (list columns)))
          ;; Remove selected columns from the list
          (remaining (cl-remove-if (lambda (f)
-                                    (member (plist-get f :name) columns))
+                                    (member (plist-get f :id) columns))
                                   fields))
          (moved-fields (cl-remove-if-not (lambda (f)
-                                           (member (plist-get f :name) columns))
+                                           (member (plist-get f :id) columns))
                                          fields))
          ;; Convert before-column to insertion position
          (pos (cond
                ;; __first__: after primary key
                ((eq target '__first__)
                 (1+ (or (cl-position-if
-                         (lambda (f) (eq (plist-get f :name) primary))
+                         (lambda (f) (eq (plist-get f :id) primary))
                          remaining)
                         0)))
                ;; nil: at end
                ((null target) (length remaining))
                ;; Named column: before it (find its position in remaining)
                (t (or (cl-position-if
-                       (lambda (f) (eq (plist-get f :name) target))
+                       (lambda (f) (eq (plist-get f :id) target))
                        remaining)
                       (length remaining)))))
          (new-fields (append (seq-take remaining pos)
@@ -7339,14 +7931,14 @@ This reorders the schema and saves.  Undoable."
 Undoable."
   (interactive
    (let* ((fields (tabularium--schema-fields))
-          (all-names (mapcar (lambda (f) (symbol-name (plist-get f :name))) fields))
+          (all-names (mapcar (lambda (f) (symbol-name (plist-get f :id))) fields))
           (at-point-name (when (derived-mode-p 'tabularium-view-mode)
                            (tabularium--column-name-at-point)))
           (first-candidates (append (when at-point-name
-                                     (list (format "<POINT> %s" (symbol-name at-point-name))))
+                                     (list (format "<<POINT>> %s" (symbol-name at-point-name))))
                                    all-names))
           (first-choice (completing-read "Swap column: " first-candidates nil t))
-          (first (if (string-prefix-p "<POINT> " first-choice)
+          (first (if (string-prefix-p "<<POINT>> " first-choice)
                      at-point-name
                    (intern first-choice)))
           (rest (cl-remove (symbol-name first) all-names :test #'string=))
@@ -7358,9 +7950,9 @@ Undoable."
          (schema (assoc schema-name tabularium-schemas))
          (plist (cdr schema))
          (fields (plist-get plist :fields))
-         (old-order (mapcar (lambda (f) (plist-get f :name)) fields))
-         (idx-a (cl-position-if (lambda (f) (eq (plist-get f :name) col-a)) fields))
-         (idx-b (cl-position-if (lambda (f) (eq (plist-get f :name) col-b)) fields)))
+         (old-order (mapcar (lambda (f) (plist-get f :id)) fields))
+         (idx-a (cl-position-if (lambda (f) (eq (plist-get f :id) col-a)) fields))
+         (idx-b (cl-position-if (lambda (f) (eq (plist-get f :id) col-b)) fields)))
     (unless (and idx-a idx-b)
       (user-error "Column not found"))
     (let ((field-a (nth idx-a fields))
@@ -7384,7 +7976,7 @@ Undoable."
 Stores schema and data for each column as a column batch."
   (interactive
    (let* ((fields (tabularium--schema-fields))
-          (all-names (mapcar (lambda (f) (symbol-name (plist-get f :name))) fields))
+          (all-names (mapcar (lambda (f) (symbol-name (plist-get f :id))) fields))
           (selected (completing-read-multiple "Copy columns: " all-names nil t)))
      (list (mapcar #'intern selected))))
   (tabularium--ensure-db)
@@ -7400,7 +7992,7 @@ Stores schema and data for each column as a column batch."
                             name-str name-str)
                     nil))
              (col-data (mapcar (lambda (row) (cons (car row) (cadr row))) rows)))
-        (push (list :name col :field-plist (copy-sequence field-plist) :data col-data)
+        (push (list :column col :field-plist (copy-sequence field-plist) :data col-data)
               entries)))
     (tabularium--add-to-kill-ring (tabularium--schema-name)
                                    (nreverse entries) 'columns)
@@ -7413,17 +8005,17 @@ Copies the column schema and all data.  The new column is placed
 immediately after the source column.  Undoable."
   (interactive
    (let* ((fields (tabularium--schema-fields))
-          (col-names (mapcar (lambda (f) (symbol-name (plist-get f :name))) fields))
+          (col-names (mapcar (lambda (f) (symbol-name (plist-get f :id))) fields))
           (at-point (when (derived-mode-p 'tabularium-view-mode)
                       (tabularium--column-name-at-point)))
           (candidates (append (when at-point
-                                (list (format "<POINT> %s" (symbol-name at-point))))
+                                (list (format "<<POINT>> %s" (symbol-name at-point))))
                               col-names))
           (default (if at-point
-                       (format "<POINT> %s" (symbol-name at-point))
+                       (format "<<POINT>> %s" (symbol-name at-point))
                      (car col-names)))
           (choice (completing-read "Duplicate column: " candidates nil t nil nil default))
-          (source (if (string-prefix-p "<POINT> " choice)
+          (source (if (string-prefix-p "<<POINT>> " choice)
                       at-point
                     (intern choice)))
           (new (intern (read-string (format "New column name (copy of %s): " source)
@@ -7441,11 +8033,11 @@ immediately after the source column.  Undoable."
                      (_ "TEXT")))
          ;; Build new field plist from source
          (new-field (copy-sequence field-plist)))
-    (setq new-field (plist-put new-field :name new-name))
-    (setq new-field (plist-put new-field :prompt
+    (setq new-field (plist-put new-field :id new-name))
+    (setq new-field (plist-put new-field :label
                                (or (read-string
                                     (format "Prompt for %s: " new-name)
-                                    (plist-get field-plist :prompt))
+                                    (plist-get field-plist :label))
                                    (capitalize new-str))))
     ;; Add column to database
     (tabularium-db-execute tabularium--db
@@ -7462,7 +8054,7 @@ immediately after the source column.  Undoable."
            (plist (cdr schema))
            (fields (plist-get plist :fields))
            (pos (cl-position-if
-                 (lambda (f) (eq (plist-get f :name) source-col))
+                 (lambda (f) (eq (plist-get f :id) source-col))
                  fields)))
       (if pos
           (setq fields (append (seq-take fields (1+ pos))
@@ -7474,7 +8066,7 @@ immediately after the source column.  Undoable."
       (tabularium--save-schema-to-file schema-name)
       ;; Push undo
       (tabularium--undo-push
-       (list :type 'add-column :name new-name :field-plist new-field)))
+       (list :type 'add-column :column new-name :field-plist new-field)))
     (tabularium--invalidate-cache)
     (when (derived-mode-p 'tabularium-view-mode)
       (let ((saved-id (tabulated-list-get-id)))
@@ -7489,20 +8081,20 @@ The primary key column cannot be cut.  Undoable."
    (let* ((fields (tabularium--schema-fields))
           (primary (tabularium--primary-field-name))
           (deletable (cl-remove-if
-                      (lambda (f) (eq (plist-get f :name) primary))
+                      (lambda (f) (eq (plist-get f :id) primary))
                       fields))
-          (choices (mapcar (lambda (f) (symbol-name (plist-get f :name))) deletable))
+          (choices (mapcar (lambda (f) (symbol-name (plist-get f :id))) deletable))
           (at-point-name (when (derived-mode-p 'tabularium-view-mode)
                            (let ((col (tabularium--column-name-at-point)))
                              (when (and col (not (eq col primary)))
                                col))))
           (candidates (append (when at-point-name
-                               (list (format "<POINT> %s"
+                               (list (format "<<POINT>> %s"
                                              (symbol-name at-point-name))))
                              choices))
           (selected (completing-read-multiple "Cut columns: " candidates nil t))
           (resolved (mapcar (lambda (s)
-                              (if (string-prefix-p "<POINT> " s)
+                              (if (string-prefix-p "<<POINT>> " s)
                                   at-point-name
                                 (intern s)))
                             selected)))
@@ -7511,7 +8103,7 @@ The primary key column cannot be cut.  Undoable."
   ;; Save visible order before cut for cursor fallback
   (let ((pre-visible
          (when (derived-mode-p 'tabularium-view-mode)
-           (mapcar (lambda (f) (plist-get f :name))
+           (mapcar (lambda (f) (plist-get f :id))
                    (cl-remove-if-not #'tabularium-view--field-visible-p
                                      (tabularium--schema-fields))))))
     ;; First copy to kill ring
@@ -7521,7 +8113,7 @@ The primary key column cannot be cut.  Undoable."
     (dolist (col columns)
       (let* ((schema-name (tabularium--schema-name))
              (fields (tabularium--schema-fields))
-             (field-plist (cl-find-if (lambda (f) (eq (plist-get f :name) col)) fields))
+             (field-plist (cl-find-if (lambda (f) (eq (plist-get f :id) col)) fields))
              (position (cl-position field-plist fields :test #'equal))
              (name-str (symbol-name col))
              (primary-str (symbol-name (tabularium--primary-field-name)))
@@ -7534,9 +8126,9 @@ The primary key column cannot be cut.  Undoable."
              (col-data (mapcar (lambda (row) (cons (car row) (cadr row))) rows)))
         ;; Recreate table without this column
         (let* ((current-fields (tabularium--schema-fields))
-               (keep-fields (cl-remove-if (lambda (f) (eq (plist-get f :name) col))
+               (keep-fields (cl-remove-if (lambda (f) (eq (plist-get f :id) col))
                                            current-fields))
-               (keep-names (mapcar (lambda (f) (symbol-name (plist-get f :name)))
+               (keep-names (mapcar (lambda (f) (symbol-name (plist-get f :id)))
                                     keep-fields))
                (cols-str (string-join keep-names ", ")))
           (tabularium-db-execute tabularium--db
@@ -7553,11 +8145,11 @@ The primary key column cannot be cut.  Undoable."
         ;; Update schema
         (let* ((schema (assoc schema-name tabularium-schemas))
                (plist (cdr schema))
-               (new-fields (cl-remove-if (lambda (f) (eq (plist-get f :name) col))
+               (new-fields (cl-remove-if (lambda (f) (eq (plist-get f :id) col))
                                           (plist-get plist :fields))))
           (setf (cdr schema) (plist-put plist :fields new-fields))
           (tabularium--save-schema-to-file schema-name))
-        (push (list :type 'delete-column :name col
+        (push (list :type 'delete-column :column col
                     :field-plist field-plist :position position
                     :data col-data)
               ops)))
@@ -7583,7 +8175,7 @@ The primary key column cannot be cut.  Undoable."
                     (let ((prev nil))
                       (dolist (col pre-visible)
                         (if (member col columns)
-                            (when (not result) (setq result prev))
+                            (unless result (setq result prev))
                           (setq prev col)))))
                   result))))
         (revert-buffer)
@@ -7619,7 +8211,7 @@ or nil (prompt the user)."
          (schema-name (tabularium--schema-name))
          (primary (tabularium--primary-field-name))
          (fields (tabularium--schema-fields))
-         (col-names (mapcar (lambda (f) (symbol-name (plist-get f :name))) fields))
+         (col-names (mapcar (lambda (f) (symbol-name (plist-get f :id))) fields))
          (at-point-name (when (derived-mode-p 'tabularium-view-mode)
                           (tabularium--column-name-at-point)))
          (before-column
@@ -7631,18 +8223,18 @@ or nil (prompt the user)."
            ;; Otherwise prompt
            (t
             (let* ((candidates (append (when at-point-name
-                                         (list (format "<POINT> %s"
+                                         (list (format "<<POINT>> %s"
                                                        (symbol-name at-point-name))))
                                        (list "<<FIRST>>" "<<LAST>>")
                                        col-names))
                    (pos-default (if at-point-name
-                                    (format "<POINT> %s" (symbol-name at-point-name))
+                                    (format "<<POINT>> %s" (symbol-name at-point-name))
                                   "<<FIRST>>"))
                    (choice (completing-read "Paste before: " candidates nil t nil nil pos-default)))
               (cond
                ((string= choice "<<LAST>>") nil)
                ((string= choice "<<FIRST>>") '__first__)
-               ((string-prefix-p "<POINT> " choice) at-point-name)
+               ((string-prefix-p "<<POINT>> " choice) at-point-name)
                (t (intern choice)))))))
          ;; Convert before-column to after-column
          (after-column
@@ -7653,15 +8245,15 @@ or nil (prompt the user)."
            ((eq before-column '__first__) '__first__)
            ;; Named column: find the column before it
            (t (let ((pos (cl-position-if
-                          (lambda (f) (eq (plist-get f :name) before-column))
+                          (lambda (f) (eq (plist-get f :id) before-column))
                           fields)))
                 (if (or (null pos) (<= pos 0))
                     '__first__  ; before first data column = after PK
-                  (plist-get (nth (1- pos) fields) :name))))))
+                  (plist-get (nth (1- pos) fields) :id))))))
          (ops '())
          (renamed '()))
     (dolist (entry columns)
-      (let* ((orig-name (plist-get entry :name))
+      (let* ((orig-name (plist-get entry :column))
              (name (tabularium--unique-column-name orig-name))
              (field-plist (copy-sequence (plist-get entry :field-plist)))
              (col-data (plist-get entry :data))
@@ -7676,7 +8268,7 @@ or nil (prompt the user)."
         (unless (eq orig-name name)
           (push (cons orig-name name) renamed))
         ;; Update field-plist with the (possibly new) name
-        (setq field-plist (plist-put field-plist :name name))
+        (setq field-plist (plist-put field-plist :id name))
         ;; Add column to DB
         (tabularium-db-execute tabularium--db
                                (format "ALTER TABLE %s ADD COLUMN %s %s"
@@ -7696,12 +8288,12 @@ or nil (prompt the user)."
                (pos (cond
                      ((eq after-column '__first__)
                       (1+ (or (cl-position-if
-                               (lambda (f) (eq (plist-get f :name) primary))
+                               (lambda (f) (eq (plist-get f :id) primary))
                                cur-fields)
                               0)))
                      (after-column
                       (1+ (or (cl-position-if
-                               (lambda (f) (eq (plist-get f :name) after-column))
+                               (lambda (f) (eq (plist-get f :id) after-column))
                                cur-fields)
                               (length cur-fields))))
                      (t (length cur-fields))))
@@ -7711,7 +8303,7 @@ or nil (prompt the user)."
           (setf (cdr schema) (plist-put plist :fields new-fields))
           ;; Update after-column for the next pasted column to go after this one
           (setq after-column name))
-        (push (list :type 'add-column :name name :field-plist field-plist) ops)))
+        (push (list :type 'add-column :column name :field-plist field-plist) ops)))
     (tabularium--save-schema-to-file schema-name)
     ;; Push undo
     (tabularium--undo-push
@@ -7776,21 +8368,21 @@ Modifies the column in both the database and the schema.  Undoable."
    (let* ((fields (tabularium--schema-fields))
           (primary (tabularium--primary-field-name))
           (editable (cl-remove-if
-                     (lambda (f) (eq (plist-get f :name) primary))
+                     (lambda (f) (eq (plist-get f :id) primary))
                      fields))
-          (choices (mapcar (lambda (f) (symbol-name (plist-get f :name))) editable))
+          (choices (mapcar (lambda (f) (symbol-name (plist-get f :id))) editable))
           (at-point-name (when (derived-mode-p 'tabularium-view-mode)
                            (let ((col (tabularium--column-name-at-point)))
                              (when (and col (not (eq col primary)))
                                col))))
           (candidates (append (when at-point-name
-                                (list (format "<POINT> %s"
+                                (list (format "<<POINT>> %s"
                                               (symbol-name at-point-name))))
                               choices))
           (selected (completing-read-multiple "Edit column(s): " candidates nil t))
           (sel-syms (delete-dups
                      (mapcar (lambda (s)
-                               (if (string-prefix-p "<POINT> " s)
+                               (if (string-prefix-p "<<POINT>> " s)
                                    at-point-name
                                  (intern s)))
                              selected)))
@@ -7798,7 +8390,7 @@ Modifies the column in both the database and the schema.  Undoable."
            (mapcar
             (lambda (old-sym)
               (let* ((field (tabularium--field-by-name old-sym))
-                     (old-prompt (or (plist-get field :prompt)
+                     (old-prompt (or (plist-get field :label)
                                      (capitalize (symbol-name old-sym))))
                      (old-type (symbol-name (plist-get field :type)))
                      (old-default (or (plist-get field :default) ""))
@@ -7839,7 +8431,7 @@ Modifies the column in both the database and the schema.  Undoable."
              (schema (assoc schema-name tabularium-schemas))
              (plist (cdr schema))
              (cur-fields (plist-get plist :fields))
-             (field (cl-find-if (lambda (f) (eq (plist-get f :name) old-name))
+             (field (cl-find-if (lambda (f) (eq (plist-get f :id) old-name))
                                 cur-fields))
              ;; Save old state for undo
              (old-field-plist (copy-sequence field))
@@ -7857,11 +8449,11 @@ Modifies the column in both the database and the schema.  Undoable."
                    tabularium-table-name
                    (symbol-name old-name) (symbol-name new-name))
            nil)
-          (plist-put field :name new-name)
+          (plist-put field :id new-name)
           (push (format "%s→%s" old-name new-name) changed))
         ;; Update prompt
-        (when (and new-prompt (not (string= new-prompt (plist-get field :prompt))))
-          (plist-put field :prompt new-prompt)
+        (when (and new-prompt (not (string= new-prompt (plist-get field :label))))
+          (plist-put field :label new-prompt)
           (push (format "prompt='%s'" new-prompt) changed))
         ;; Update type
         (when (and new-type (not (eq new-type (plist-get field :type))))
@@ -7942,41 +8534,41 @@ Like `tabularium-view-column-add' but inserts before rather than after."
           (prompt (read-string "Prompt: " (capitalize name)))
           (default-val (read-string "Default value (empty for none): "))
           (fields (tabularium--schema-fields))
-          (col-names (mapcar (lambda (f) (symbol-name (plist-get f :name))) fields))
+          (col-names (mapcar (lambda (f) (symbol-name (plist-get f :id))) fields))
           (at-point-name (when (derived-mode-p 'tabularium-view-mode)
                            (tabularium--column-name-at-point)))
           (candidates (append (when at-point-name
-                                (list (format "<POINT> %s"
+                                (list (format "<<POINT>> %s"
                                               (symbol-name at-point-name))))
                               (list "<<FIRST>>" "<<LAST>>")
                               col-names))
           (pos-default (if at-point-name
-                           (format "<POINT> %s" (symbol-name at-point-name))
+                           (format "<<<POINT>>> %s" (symbol-name at-point-name))
                          "<<FIRST>>"))
           (choice (completing-read "Insert before: " candidates nil t nil nil pos-default))
           (before (cond
                    ((string= choice "<<FIRST>>") '__first__)
                    ((string= choice "<<LAST>>") nil)
-                   ((string-prefix-p "<POINT> " choice) at-point-name)
+                   ((string-prefix-p "<<POINT>> " choice) at-point-name)
                    (t (intern choice)))))
      (list (intern name) type prompt
            (if (string-empty-p default-val) nil default-val)
            before)))
   (cond
-   ;; <LAST>: append at end
+   ;; <<LAST>>: append at end
    ((null before-column)
     (tabularium-view-column-add name type prompt default nil))
-   ;; <FIRST>: after primary key
+   ;; <<FIRST>>: after primary key
    ((eq before-column '__first__)
     (tabularium-view-column-add name type prompt default '__first__))
    ;; Named column: find the column before it and delegate
    (t
     (let* ((fields (tabularium--schema-fields))
            (pos (cl-position-if
-                 (lambda (f) (eq (plist-get f :name) before-column))
+                 (lambda (f) (eq (plist-get f :id) before-column))
                  fields))
            (after (when (and pos (> pos 0))
-                    (plist-get (nth (1- pos) fields) :name))))
+                    (plist-get (nth (1- pos) fields) :id))))
       (if (or (null pos) (= pos 0))
           ;; Before the first column, after primary key
           (tabularium-view-column-add name type prompt default '__first__)
@@ -8088,7 +8680,7 @@ When no filters exist, this becomes the base layer.  When filters
 already exist, prompts for a join operator (AND, OR, AND NOT, OR NOT).
 Works on all field types including numbers and dates."
   (interactive
-   (let* ((field-names (mapcar (lambda (f) (symbol-name (plist-get f :name)))
+   (let* ((field-names (mapcar (lambda (f) (symbol-name (plist-get f :id)))
                                (cl-remove-if #'tabularium--computed-field-p
                                              (tabularium--schema-fields))))
           (field (completing-read
@@ -8129,7 +8721,7 @@ Returns a join symbol or nil for the first layer."
 Unlike `tabularium-view-filter', matches the complete cell value
 rather than a substring."
   (interactive
-   (let* ((field-names (mapcar (lambda (f) (symbol-name (plist-get f :name)))
+   (let* ((field-names (mapcar (lambda (f) (symbol-name (plist-get f :id)))
                                (cl-remove-if #'tabularium--computed-field-p
                                              (tabularium--schema-fields))))
           (field (completing-read
@@ -8154,7 +8746,7 @@ OP is one of >, >=, <, <=."
                              (and (memq (plist-get f :type) '(integer number))
                                   (not (tabularium--computed-field-p f))))
                            (tabularium--schema-fields)))
-          (field-names (mapcar (lambda (f) (symbol-name (plist-get f :name)))
+          (field-names (mapcar (lambda (f) (symbol-name (plist-get f :id)))
                                numeric-fields))
           (field (completing-read
                   (if tabularium--filter-layers
@@ -8237,7 +8829,7 @@ Cycles through: and → or → and-not → or-not → and."
 If FIELDS is nil, searches all fields.  When filters already exist,
 prompts for a join operator."
   (interactive
-   (let* ((value (read-string "Search for value: "))
+   (let* ((value (read-string "Search for value: " nil 'tabularium-search-history))
           (fields (tabularium--field-crm)))
      (if fields (cons value fields) (list value))))
   (tabularium--ensure-db)
@@ -8251,6 +8843,25 @@ prompts for a join operator."
 (defvar tabularium--replace-scope nil
   "Scope description for replace messages: nil, \"marked\", or \"visible\".")
 
+(defvar tabularium-search-history nil
+  "Minibuffer history for tabularium search and substring-match prompts.
+Shared across `tabularium-replace-substring', `tabularium-replace-exact',
+`tabularium-replace-query', the `tabularium-view-mark-*' family, the
+~tabularium-aggregate-count~ value prompt, and their visible-scope
+variants.  Press \\[previous-history-element] in any of these prompts
+to recall a previous search term.")
+
+(defvar tabularium-replace-history nil
+  "Minibuffer history for tabularium replacement-value prompts.
+Used for the `with:' prompt in every replace command and visible-scope
+variant.  Distinct from `tabularium-search-history' so search terms and
+replacement terms can be recalled independently.")
+
+(defvar tabularium-regexp-history nil
+  "Minibuffer history for tabularium regexp prompts.
+Shared across `tabularium-replace-regexp', `tabularium-view-mark-regexp',
+and their visible-scope variants.")
+
 (defun tabularium-toggle-case-sensitive ()
   "Toggle case sensitivity for replace and mark operations."
   (interactive)
@@ -8262,8 +8873,8 @@ prompts for a join operator."
 FIELDS is a list of field name strings.  If nil, searches all fields.
 If rows are marked, only operates on marked rows; marks are cleared after."
   (interactive
-   (let* ((old-value (read-string "Replace value: "))
-          (new-value (read-string (format "Replace '%s' with: " old-value)))
+   (let* ((old-value (read-string "Replace value: " nil 'tabularium-search-history))
+          (new-value (read-string (format "Replace '%s' with: " old-value) nil 'tabularium-replace-history))
           (fields (tabularium--field-crm)))
      (list old-value new-value fields)))
   (tabularium--ensure-db)
@@ -8323,7 +8934,7 @@ If rows are marked, only operates on marked rows; marks are cleared after."
                         (tabularium-db-update tabularium--db tabularium-table-name
                                           (list (cons (intern field) updated-val))
                                           (tabularium--primary-field-name) id)
-                        (push (list :type 'update :id id :field (intern field)
+                        (push (list :type 'update :row id :field (intern field)
                                     :old current-val :new updated-val)
                               all-undo-ops))
                     (error
@@ -8357,8 +8968,8 @@ Unlike `tabularium-replace-substring', matches the entire cell value.
 FIELDS is a list of field name strings.  If nil, searches all fields.
 If rows are marked, only operates on marked rows; marks are cleared after."
   (interactive
-   (let* ((old-value (read-string "Replace exact value: "))
-          (new-value (read-string (format "Replace '%s' with: " old-value)))
+   (let* ((old-value (read-string "Replace exact value: " nil 'tabularium-search-history))
+          (new-value (read-string (format "Replace '%s' with: " old-value) nil 'tabularium-replace-history))
           (fields (tabularium--field-crm)))
      (list old-value new-value fields)))
   (tabularium--ensure-db)
@@ -8411,7 +9022,7 @@ If rows are marked, only operates on marked rows; marks are cleared after."
                       (tabularium-db-update tabularium--db tabularium-table-name
                                         (list (cons (intern field) new-value))
                                         (tabularium--primary-field-name) id)
-                      (push (list :type 'update :id id :field (intern field)
+                      (push (list :type 'update :row id :field (intern field)
                                   :old old-value :new new-value)
                             all-undo-ops))
                   (error
@@ -8444,7 +9055,7 @@ If rows are marked, only operates on marked rows; marks are cleared after."
 Uses GLOB or LIKE per `tabularium-case-sensitive'.  Nil FIELDS means all."
   (interactive
    (let* ((pattern (read-string (format "SQL %s pattern: " (tabularium-db-like-op tabularium-case-sensitive))))
-          (replacement (read-string (format "Replace matches of '%s' with: " pattern)))
+          (replacement (read-string (format "Replace matches of '%s' with: " pattern) nil 'tabularium-replace-history))
           (fields (tabularium--field-crm)))
      (list pattern replacement fields)))
   (tabularium--ensure-db)
@@ -8499,7 +9110,7 @@ Uses GLOB or LIKE per `tabularium-case-sensitive'.  Nil FIELDS means all."
                       (tabularium-db-update tabularium--db tabularium-table-name
                                         (list (cons (intern field) replacement))
                                         (tabularium--primary-field-name) id)
-                      (push (list :type 'update :id id :field (intern field)
+                      (push (list :type 'update :row id :field (intern field)
                                   :old old-val :new replacement)
                             all-undo-ops))
                   (error
@@ -8531,8 +9142,8 @@ Uses GLOB or LIKE per `tabularium-case-sensitive'.  Nil FIELDS means all."
   "Replace cells matching Emacs REGEXP with REPLACEMENT across FIELDS.
 REPLACEMENT can include \\\\& and \\\\N.  Nil FIELDS means all."
   (interactive
-   (let* ((regexp (read-string "Replace regexp: "))
-          (replacement (read-string (format "Replace matches of '%s' with: " regexp)))
+   (let* ((regexp (read-string "Replace regexp: " nil 'tabularium-regexp-history))
+          (replacement (read-string (format "Replace matches of '%s' with: " regexp) nil 'tabularium-replace-history))
           (fields (tabularium--field-crm)))
      (list regexp replacement fields)))
   (tabularium--ensure-db)
@@ -8574,7 +9185,7 @@ REPLACEMENT can include \\\\& and \\\\N.  Nil FIELDS means all."
                                           (list (cons (intern field) new-val))
                                           (tabularium--primary-field-name) id)
                         (cl-incf total-replaced)
-                        (push (list :type 'update :id id :field (intern field)
+                        (push (list :type 'update :row id :field (intern field)
                                     :old val :new new-val)
                               all-undo-ops))
                     (error
@@ -8611,8 +9222,8 @@ REPLACEMENT can include \\\\& and \\\\N.  Nil FIELDS means all."
   "Interactive query-replace OLD-VALUE with NEW-VALUE across FIELDS.
 Prompts y/n/!/q at each match.  Nil FIELDS means all."
   (interactive
-   (let* ((old-value (read-string "Query replace: "))
-          (new-value (read-string (format "Replace '%s' with: " old-value)))
+   (let* ((old-value (read-string "Query replace: " nil 'tabularium-search-history))
+          (new-value (read-string (format "Replace '%s' with: " old-value) nil 'tabularium-replace-history))
           (fields (tabularium--field-crm)))
      (list old-value new-value fields)))
   (tabularium--ensure-db)
@@ -8640,7 +9251,7 @@ Prompts y/n/!/q at each match.  Nil FIELDS means all."
           ;; Build field position map for sort order (schema column order)
           (field-positions (let ((pos 0))
                             (mapcar (lambda (f)
-                                      (prog1 (cons (symbol-name (plist-get f :name)) pos)
+                                      (prog1 (cons (symbol-name (plist-get f :id)) pos)
                                         (cl-incf pos)))
                                     (tabularium--schema-fields)))))
       (dolist (field search-fields)
@@ -8702,7 +9313,7 @@ Prompts y/n/!/q at each match.  Nil FIELDS means all."
                                 (tabularium-db-update tabularium--db tabularium-table-name
                                                   (list (cons (intern field) updated-value))
                                                   (tabularium--primary-field-name) id)
-                                (push (list :type 'update :id id :field (intern field)
+                                (push (list :type 'update :row id :field (intern field)
                                             :old current-value :new updated-value)
                                       undo-ops)
                                 (cl-incf replaced)
@@ -8752,9 +9363,9 @@ Returns the overlay, or nil if not in view mode or not found."
     ;; Find column index for this field
     (let* ((schema-fields (tabularium--schema-fields))
            (field-prompt
-            (let ((f (cl-find-if (lambda (f) (string= (symbol-name (plist-get f :name)) field-name))
+            (let ((f (cl-find-if (lambda (f) (string= (symbol-name (plist-get f :id)) field-name))
                                  schema-fields)))
-              (when f (plist-get f :prompt))))
+              (when f (plist-get f :label))))
            (col-idx nil)
            (col-start 0))
       ;; Map prompt to column index
@@ -8800,8 +9411,8 @@ Returns the overlay, or nil if not in view mode or not found."
 Like `tabularium-replace-substring' but scoped to the current view
 \(respecting filters and range limits)."
   (interactive
-   (let* ((old-value (read-string "Replace (visible): "))
-          (new-value (read-string (format "Replace '%s' with: " old-value)))
+   (let* ((old-value (read-string "Replace (visible): " nil 'tabularium-search-history))
+          (new-value (read-string (format "Replace '%s' with: " old-value) nil 'tabularium-replace-history))
           (fields (tabularium--field-crm)))
      (list old-value new-value fields)))
   (let ((tabularium--marked-entries (tabularium--visible-row-ids))
@@ -8812,8 +9423,8 @@ Like `tabularium-replace-substring' but scoped to the current view
   "Replace exact OLD-VALUE with NEW-VALUE in visible rows.
 Like `tabularium-replace-exact' but scoped to the current view."
   (interactive
-   (let* ((old-value (read-string "Replace exact (visible): "))
-          (new-value (read-string (format "Replace '%s' with: " old-value)))
+   (let* ((old-value (read-string "Replace exact (visible): " nil 'tabularium-search-history))
+          (new-value (read-string (format "Replace '%s' with: " old-value) nil 'tabularium-replace-history))
           (fields (tabularium--field-crm)))
      (list old-value new-value fields)))
   (let ((tabularium--marked-entries (tabularium--visible-row-ids))
@@ -8824,8 +9435,8 @@ Like `tabularium-replace-exact' but scoped to the current view."
   "Replace REGEXP with REPLACEMENT in visible rows.
 Like `tabularium-replace-regexp' but scoped to the current view."
   (interactive
-   (let* ((regexp (read-string "Replace regexp (visible): "))
-          (replacement (read-string (format "Replace '%s' with: " regexp)))
+   (let* ((regexp (read-string "Replace regexp (visible): " nil 'tabularium-regexp-history))
+          (replacement (read-string (format "Replace '%s' with: " regexp) nil 'tabularium-replace-history))
           (fields (tabularium--field-crm)))
      (list regexp replacement fields)))
   (let ((tabularium--marked-entries (tabularium--visible-row-ids))
@@ -8836,8 +9447,8 @@ Like `tabularium-replace-regexp' but scoped to the current view."
   "Interactive query-replace OLD-VALUE with NEW-VALUE in visible rows.
 Like `tabularium-replace-query' but scoped to the current view."
   (interactive
-   (let* ((old-value (read-string "Query replace (visible): "))
-          (new-value (read-string (format "Replace '%s' with: " old-value)))
+   (let* ((old-value (read-string "Query replace (visible): " nil 'tabularium-search-history))
+          (new-value (read-string (format "Replace '%s' with: " old-value) nil 'tabularium-replace-history))
           (fields (tabularium--field-crm)))
      (list old-value new-value fields)))
   (let ((tabularium--marked-entries (tabularium--visible-row-ids))
@@ -8879,7 +9490,7 @@ Optional EXTRA-FIELD and EXTRA-VALUE for additional filtering."
   "Count records where VALUE appears in any of FIELDS.
 If FIELDS is nil, searches all fields."
   (interactive
-   (let* ((value (read-string "Count value: "))
+   (let* ((value (read-string "Count value: " nil 'tabularium-search-history))
           (fields (tabularium--field-crm)))
      (if fields (cons value fields) (list value))))
   (tabularium--ensure-db)
@@ -8913,7 +9524,7 @@ Optionally filter by FILTER-FIELD matching FILTER-VALUE."
                              (and (memq (plist-get f :type) '(integer number))
                                   (not (tabularium--computed-field-p f))))
                            (tabularium--schema-fields)))
-          (field-names (mapcar (lambda (f) (symbol-name (plist-get f :name)))
+          (field-names (mapcar (lambda (f) (symbol-name (plist-get f :id)))
                                numeric-fields))
           (field (completing-read "Sum field: " field-names nil t)))
      (if current-prefix-arg
@@ -8942,7 +9553,7 @@ Optionally filter by FILTER-FIELD matching FILTER-VALUE."
                              (and (memq (plist-get f :type) '(integer number))
                                   (not (tabularium--computed-field-p f))))
                            (tabularium--schema-fields)))
-          (field-names (mapcar (lambda (f) (symbol-name (plist-get f :name)))
+          (field-names (mapcar (lambda (f) (symbol-name (plist-get f :id)))
                                numeric-fields))
           (field (completing-read "Min/Max field: " field-names nil t)))
      (if current-prefix-arg
@@ -9014,7 +9625,7 @@ Optionally filter by FILTER-FIELD matching FILTER-VALUE."
                              (and (memq (plist-get f :type) '(integer number))
                                   (not (tabularium--computed-field-p f))))
                            (tabularium--schema-fields)))
-          (field-names (mapcar (lambda (f) (symbol-name (plist-get f :name)))
+          (field-names (mapcar (lambda (f) (symbol-name (plist-get f :id)))
                                numeric-fields))
           (field (completing-read "Mean ± SD field: " field-names nil t)))
      (if current-prefix-arg
@@ -9044,7 +9655,7 @@ Optionally filter by FILTER-FIELD matching FILTER-VALUE."
                              (and (memq (plist-get f :type) '(integer number))
                                   (not (tabularium--computed-field-p f))))
                            (tabularium--schema-fields)))
-          (field-names (mapcar (lambda (f) (symbol-name (plist-get f :name)))
+          (field-names (mapcar (lambda (f) (symbol-name (plist-get f :id)))
                                numeric-fields))
           (field (completing-read "Median [Q1, Q3] field: " field-names nil t)))
      (if current-prefix-arg
@@ -9078,9 +9689,9 @@ Optionally filter by FILTER-FIELD matching FILTER-VALUE."
                             (and (memq (plist-get f :type) '(integer number))
                                  (not (plist-get f :hidden))))
                           (tabularium--schema-fields)))
-         (field-names (mapcar (lambda (f) (symbol-name (plist-get f :name))) numeric-fields))
+         (field-names (mapcar (lambda (f) (symbol-name (plist-get f :id))) numeric-fields))
          (prompt (completing-read "Sum field: " field-names nil t))
-         (field (cl-find-if (lambda (f) (string= (symbol-name (plist-get f :name)) prompt))
+         (field (cl-find-if (lambda (f) (string= (symbol-name (plist-get f :id)) prompt))
                             numeric-fields))
          (field-idx (cl-position field
                                  (cl-remove-if (lambda (f) (plist-get f :hidden))
@@ -9110,9 +9721,9 @@ Returns (PROMPT FIELD-IDX FIELD-TYPE)."
                             (and (memq (plist-get f :type) '(integer number))
                                  (not (plist-get f :hidden))))
                           (tabularium--schema-fields)))
-         (field-names (mapcar (lambda (f) (symbol-name (plist-get f :name))) numeric-fields))
+         (field-names (mapcar (lambda (f) (symbol-name (plist-get f :id))) numeric-fields))
          (prompt (completing-read "Field: " field-names nil t))
-         (field (cl-find-if (lambda (f) (string= (symbol-name (plist-get f :name)) prompt))
+         (field (cl-find-if (lambda (f) (string= (symbol-name (plist-get f :id)) prompt))
                             numeric-fields))
          (field-idx (cl-position field
                                  (cl-remove-if (lambda (f) (plist-get f :hidden))
@@ -9188,7 +9799,7 @@ top 10 and bottom 5)."
   (tabularium--ensure-db)
   (let* ((schema-name (tabularium--schema-name))
          (field-spec (cl-find field (tabularium--schema-fields)
-                              :key (lambda (f) (symbol-name (plist-get f :name)))
+                              :key (lambda (f) (symbol-name (plist-get f :id)))
                               :test #'string=))
          (field-type (or (and field-spec (plist-get field-spec :type)) 'text))
          (numericp (memq field-type '(integer number)))
@@ -9436,7 +10047,7 @@ SOURCE-VALUE is not among the allowed choices."
         (let* ((record (tabularium--get-record-by-id id))
                (old-value (alist-get field-sym record)))
           (unless (equal old-value source-value)
-            (push (list :type 'update :id id :field field-sym
+            (push (list :type 'update :row id :field field-sym
                         :old old-value :new source-value)
                   ops)
             (tabularium-db-update tabularium--db tabularium-table-name
@@ -9516,7 +10127,7 @@ Undoable."
     (unless fill-value
       (user-error "No value found above to fill from"))
     ;; When cell is non-blank, start filling from the next row
-    (when (not cell-blank)
+    (unless cell-blank
       (forward-line 1))
     (tabularium--fill-execute field fill-value 'down)))
 
@@ -9526,7 +10137,7 @@ Undoable.  When called interactively, offers choice of copying
 from a row, entering manually, or picking from existing values."
   (interactive
    (let* ((field (completing-read "Fill down field: "
-                                  (mapcar (lambda (f) (symbol-name (plist-get f :name)))
+                                  (mapcar (lambda (f) (symbol-name (plist-get f :id)))
                                           (tabularium--schema-fields))
                                   nil t))
           (value (tabularium--fill-source-choice field)))
@@ -9539,7 +10150,7 @@ Undoable.  When called interactively, offers choice of copying
 from a row, entering manually, or picking from existing values."
   (interactive
    (let* ((field (completing-read "Fill up field: "
-                                  (mapcar (lambda (f) (symbol-name (plist-get f :name)))
+                                  (mapcar (lambda (f) (symbol-name (plist-get f :id)))
                                           (tabularium--schema-fields))
                                   nil t))
           (value (tabularium--fill-source-choice field)))
@@ -9602,12 +10213,12 @@ Undoable."
   (interactive
    (let* ((fillable-types '(integer number date))
           (field (completing-read "Fill series in field: "
-                                  (mapcar (lambda (f) (symbol-name (plist-get f :name)))
+                                  (mapcar (lambda (f) (symbol-name (plist-get f :id)))
                                           (cl-remove-if-not
                                            (lambda (f) (memq (plist-get f :type) fillable-types))
                                            (tabularium--schema-fields)))
                                   nil t))
-          (field-def (cl-find-if (lambda (f) (string= (symbol-name (plist-get f :name)) field))
+          (field-def (cl-find-if (lambda (f) (string= (symbol-name (plist-get f :id)) field))
                                  (tabularium--schema-fields)))
           (field-type (plist-get field-def :type))
           (existing (tabularium--get-historical-values field 20))
@@ -9650,7 +10261,7 @@ Undoable."
          (list field start increment)))))
   (let* ((has-marks (and tabularium--marked-entries
                          (> (length tabularium--marked-entries) 0)))
-         (field-def (cl-find-if (lambda (f) (string= (symbol-name (plist-get f :name)) field))
+         (field-def (cl-find-if (lambda (f) (string= (symbol-name (plist-get f :id)) field))
                                 (tabularium--schema-fields)))
          (field-type (plist-get field-def :type))
          (is-date (eq field-type 'date))
@@ -9709,7 +10320,7 @@ Undoable."
                    (new-value (if is-date
                                   (format-time-string tabularium-date-format current-val)
                                 current-val)))
-              (push (list :type 'update :id id :field field-sym
+              (push (list :type 'update :row id :field field-sym
                           :old old-value :new new-value)
                     ops)
               (tabularium-db-update tabularium--db tabularium-table-name
@@ -9768,7 +10379,7 @@ current column in marked rows instead.  Undoable."
           (let* ((record (tabularium--get-record-by-id id))
                  (old-value (alist-get col-name record)))
             (when (and old-value (not (string-empty-p (format "%s" old-value))))
-              (push (list :type 'update :id id :field col-name
+              (push (list :type 'update :row id :field col-name
                           :old old-value :new "")
                     ops)
               (tabularium-db-update tabularium--db tabularium-table-name
@@ -9836,7 +10447,7 @@ column in marked rows instead.  Undoable."
           (let* ((record (tabularium--get-record-by-id id))
                  (old-value (alist-get col-name record)))
             (when (and old-value (not (string-empty-p (format "%s" old-value))))
-              (push (list :type 'update :id id :field col-name
+              (push (list :type 'update :row id :field col-name
                           :old old-value :new "")
                     ops)
               (tabularium-db-update tabularium--db tabularium-table-name
@@ -9923,7 +10534,7 @@ If no database is open, prompts for database file and schema handling
          (alist '()))
     (cl-loop for field in fields
              for value in values
-             for name = (plist-get field :name)
+             for name = (plist-get field :id)
              for type = (plist-get field :type)
              do (push (cons name
                             (pcase type
@@ -9976,7 +10587,7 @@ Exports marked rows if any, otherwise all records."
          (sep-char (string-to-char sep))
          (fields (cl-remove-if #'tabularium--computed-field-p
                                (tabularium--schema-fields)))
-         (col-names (mapcar (lambda (f) (symbol-name (plist-get f :name))) fields))
+         (col-names (mapcar (lambda (f) (symbol-name (plist-get f :id))) fields))
          (primary-name (symbol-name (tabularium--primary-field-name)))
          (marked-ids tabularium--marked-entries)
          (sql (if marked-ids
@@ -10065,9 +10676,9 @@ If no primary column is specified, an `id' column is prepended automatically."
              (type (tabularium-import--infer-type values))
              (width (tabularium-import--estimate-width values name))
              (is-primary (and primary-col (= i primary-col)))
-             (field (list :name (intern name)
+             (field (list :id (intern name)
                           :type type
-                          :prompt header
+                          :label header
                           :width width)))
         (when is-primary
           (setq field (plist-put field :primary t)))
@@ -10081,7 +10692,7 @@ If no primary column is specified, an `id' column is prepended automatically."
     (setq fields (nreverse fields))
     ;; If no primary key was assigned, prepend an auto-increment id field
     (unless (cl-find-if (lambda (f) (plist-get f :primary)) fields)
-      (push (list :name 'id :type 'integer :primary t :prompt "ID" :width 5)
+      (push (list :id 'rn :type 'integer :primary t :label "rn" :width 5)
             fields))
     fields))
 
@@ -10123,7 +10734,7 @@ If no primary column is specified, an `id' column is prepended automatically."
 
 (defun tabularium-import--insert-rows (rows fields)
   "Insert ROWS into the current Tabularium database using FIELDS schema."
-  (let ((field-names (mapcar (lambda (f) (plist-get f :name)) fields))
+  (let ((field-names (mapcar (lambda (f) (plist-get f :id)) fields))
         (imported 0)
         (errors 0))
     (dolist (row rows)
@@ -10186,23 +10797,29 @@ description like \"Table at line 42\", and POSITION is the buffer position."
     (let ((tables '()))
       (while (re-search-forward "^|" nil t)
         (beginning-of-line)
-        (when (org-at-table-p)
-          (let* ((pos (point))
-                 (line-num (line-number-at-pos))
-                 ;; Check for #+NAME: on previous line(s)
-                 (name (save-excursion
-                         (forward-line -1)
-                         (if (looking-at "^#\\+NAME:\\s-*\\(.+\\)\\s-*$")
-                             (match-string-no-properties 1)
-                           ;; Also check 2 lines up (in case of blank line)
+        (if (org-at-table-p)
+            (let* ((pos (point))
+                   (line-num (line-number-at-pos))
+                   ;; Check for #+NAME: on previous line(s)
+                   (name (save-excursion
                            (forward-line -1)
-                           (when (looking-at "^#\\+NAME:\\s-*\\(.+\\)\\s-*$")
-                             (match-string-no-properties 1)))))
-                 (display-name (or name
-                                   (format "Unnamed table at line %d" line-num))))
-            (push (cons display-name pos) tables)
-            ;; Skip past this table
-            (org-table-end))))
+                           (if (looking-at "^#\\+NAME:\\s-*\\(.+\\)\\s-*$")
+                               (match-string-no-properties 1)
+                             ;; Also check 2 lines up (in case of blank line)
+                             (forward-line -1)
+                             (when (looking-at "^#\\+NAME:\\s-*\\(.+\\)\\s-*$")
+                               (match-string-no-properties 1)))))
+                   (display-name (or name
+                                     (format "Unnamed table at line %d" line-num))))
+              (push (cons display-name pos) tables)
+              ;; `org-table-end' returns a position but does not move point.
+              ;; Jump there explicitly so the next iteration starts beyond
+              ;; this table — otherwise we'd loop forever re-finding the
+              ;; same first row.
+              (goto-char (org-table-end)))
+          ;; Not at a table — advance past the matched `|' so the search
+          ;; doesn't re-find the same position on the next iteration.
+          (forward-line 1)))
       (nreverse tables))))
 
 ;;;###autoload
@@ -10828,11 +11445,11 @@ list of schema fields with their types and constraints."
                             'face '(:weight bold)))
         (insert (make-string 78 ?─) "\n")
         (let ((max-name (apply #'max 8 (mapcar (lambda (f)
-                                                 (length (symbol-name (plist-get f :name))))
+                                                 (length (symbol-name (plist-get f :id))))
                                                fields)))
               (max-type 8))
           (dolist (field fields)
-            (let* ((fname (symbol-name (plist-get field :name)))
+            (let* ((fname (symbol-name (plist-get field :id)))
                    (ftype (plist-get field :type))
                    (primary (plist-get field :primary))
                    (required (plist-get field :required))
@@ -10881,9 +11498,9 @@ list of schema fields with their types and constraints."
   (let ((map (make-sparse-keymap)))
     (define-key map "." #'tabularium-schema-edit)
     (define-key map "s" #'tabularium-schema-show)
-    (define-key map "r" #'tabularium-schema-reload)
+    (define-key map "=" #'tabularium-schema-reload)
     (define-key map "w" #'tabularium-schema-switch)
-    (define-key map "n" #'tabularium-schema-rename-field)
+    (define-key map "$" #'tabularium-schema-rename-field)
     (define-key map "+" #'tabularium-view-column-add)
     map)
   "Prefix keymap for tabularium schema commands.
