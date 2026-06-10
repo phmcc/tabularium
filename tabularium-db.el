@@ -4,7 +4,7 @@
 
 ;; Author: Paul H. McClelland <paulhmcclelland@protonmail.com>
 ;; Maintainer: Paul H. McClelland <paulhmcclelland@protonmail.com>
-;; Version: 0.4.8
+;; Version: 0.5.0
 ;; Package-Requires: ((emacs "29.1"))
 ;; Keywords: data
 ;; URL: https://codeberg.org/phmcc/tabularium
@@ -29,8 +29,8 @@
 ;; Database backend abstraction layer for Tabularium using EIEIO generics.
 ;; Backends dispatch on the backend object, not the raw connection.
 ;;
-;; Implemented: sqlite (Emacs 29+ built-in)
-;; Planned: postgresql, mysql (via emacsql)
+;; Implemented: sqlite (Emacs 29+ built-in), postgresql (optional, via emacsql-pg)
+;; Planned: mysql
 
 ;;; Code:
 
@@ -64,22 +64,22 @@
   "Return non-nil if TABLE-NAME exists in BACKEND's database.")
 
 (cl-defgeneric tabularium-db-table-columns (backend table-name)
-  "Return column info plists (:id :type) for TABLE-NAME.")
+  "Return column info plists (:id :type) for TABLE-NAME on BACKEND.")
 
 (cl-defgeneric tabularium-db-create-table (backend table-name columns)
   "Create TABLE-NAME in BACKEND with COLUMNS definition plists.")
 
 (cl-defgeneric tabularium-db-create-index (backend table-name column-name)
-  "Create index on COLUMN-NAME in TABLE-NAME.")
+  "Create index on COLUMN-NAME in TABLE-NAME on BACKEND.")
 
 (cl-defgeneric tabularium-db-insert (backend table-name alist)
-  "Insert row into TABLE-NAME from ALIST of (column . value) pairs.")
+  "Insert row into TABLE-NAME on BACKEND from ALIST of (column . value) pairs.")
 
 (cl-defgeneric tabularium-db-update (backend table-name alist where-column where-value)
-  "Update TABLE-NAME with ALIST where WHERE-COLUMN = WHERE-VALUE.")
+  "Update TABLE-NAME on BACKEND with ALIST where WHERE-COLUMN = WHERE-VALUE.")
 
 (cl-defgeneric tabularium-db-delete (backend table-name where-column where-value)
-  "Delete from TABLE-NAME where WHERE-COLUMN = WHERE-VALUE.")
+  "Delete from TABLE-NAME on BACKEND where WHERE-COLUMN = WHERE-VALUE.")
 
 (cl-defgeneric tabularium-db-last-insert-id (backend)
   "Return the last inserted row ID for BACKEND.")
@@ -88,13 +88,24 @@
   "Return a unique identifier string for BACKEND's connection.")
 
 (cl-defgeneric tabularium-db-sql-type (backend field-type)
-  "Convert Tabularium FIELD-TYPE symbol to backend-specific SQL type string.")
+  "Convert Tabularium FIELD-TYPE symbol to a SQL type string for BACKEND.")
 
 (cl-defgeneric tabularium-db-date-function (backend)
   "Return SQL expression for current date/time on BACKEND.")
 
 (cl-defgeneric tabularium-db-backend-name (backend)
   "Return human-readable name of BACKEND.")
+
+(cl-defgeneric tabularium-db-begin-transaction (backend)
+  "Begin a database transaction on BACKEND.
+Backends that do not support transactions leave this a no-op, in
+which case statements simply auto-commit as before.")
+
+(cl-defgeneric tabularium-db-commit-transaction (backend)
+  "Commit the current transaction on BACKEND.")
+
+(cl-defgeneric tabularium-db-rollback-transaction (backend)
+  "Roll back the current transaction on BACKEND.")
 
 ;;; * 2 Backend Base Class
 
@@ -105,8 +116,57 @@
   :abstract t)
 
 (cl-defmethod tabularium-db-backend-name ((backend tabularium-db-backend))
-  "Return the backend name."
+  "Return the name of BACKEND."
   (oref backend name))
+
+;; Transactions are a no-op by default, so a backend that has not
+;; implemented them keeps its previous statement-at-a-time
+;; auto-commit behavior with no change in semantics.  Backends that
+;; support transactions (e.g. SQLite) override the three methods
+;; below; `tabularium-db-with-transaction' then batches the writes.
+(cl-defmethod tabularium-db-begin-transaction ((_backend tabularium-db-backend))
+  "Default: no transaction support, so do nothing."
+  nil)
+
+(cl-defmethod tabularium-db-commit-transaction
+  ((_backend tabularium-db-backend))
+  "Default: no transaction support, so do nothing."
+  nil)
+
+(cl-defmethod tabularium-db-rollback-transaction
+  ((_backend tabularium-db-backend))
+  "Default: no transaction support, so do nothing."
+  nil)
+
+(defvar tabularium-db--in-transaction nil
+  "Non-nil while a `tabularium-db-with-transaction' body is running.
+Used to make the macro reentrant: a nested invocation runs its
+body within the transaction already opened by the outer one,
+rather than issuing a second BEGIN (which SQLite forbids).")
+
+(defmacro tabularium-db-with-transaction (backend &rest body)
+  "Run BODY inside a single transaction on BACKEND.
+Commit when BODY returns normally; roll back and re-signal if BODY
+errors, so a failed bulk operation leaves the database unchanged.
+Reentrant: a nested use runs BODY within the enclosing
+transaction.  On a backend without transaction support the three
+transaction methods are no-ops, so BODY runs exactly as it would
+have without this macro.  Returns BODY's value."
+  (declare (indent 1) (debug (form body)))
+  (let ((db (make-symbol "db"))
+        (ok (make-symbol "ok")))
+    `(let ((,db ,backend))
+       (if tabularium-db--in-transaction
+           (progn ,@body)
+         (let ((,ok nil)
+               (tabularium-db--in-transaction t))
+           (tabularium-db-begin-transaction ,db)
+           (unwind-protect
+               (prog1 (progn ,@body)
+                 (tabularium-db-commit-transaction ,db)
+                 (setq ,ok t))
+             (unless ,ok
+               (ignore-errors (tabularium-db-rollback-transaction ,db)))))))))
 
 ;;; * 3 SQLite Backend
 
@@ -128,7 +188,7 @@ Merges write-ahead log into the main file for clean syncing."
   "SQLite backend using Emacs 29+ built-in sqlite.el.")
 
 (cl-defmethod tabularium-db-connect ((backend tabularium-db-sqlite) config)
-  "Connect to SQLite database specified by :file in CONFIG."
+  "Connect BACKEND to the SQLite database specified by :file in CONFIG."
   (unless (and (fboundp 'sqlite-available-p) (sqlite-available-p))
     (user-error "Tabularium requires Emacs compiled with SQLite support (--with-sqlite3)"))
   (let* ((file (expand-file-name (plist-get config :file)))
@@ -146,7 +206,7 @@ Merges write-ahead log into the main file for clean syncing."
       backend)))
 
 (cl-defmethod tabularium-db-disconnect ((backend tabularium-db-sqlite))
-  "Disconnect from SQLite database."
+  "Disconnect BACKEND from its SQLite database."
   (let ((conn (oref backend connection)))
     (when (and conn (sqlitep conn))
       (when tabularium-db-sqlite-checkpoint-on-close
@@ -156,37 +216,37 @@ Merges write-ahead log into the main file for clean syncing."
       (oset backend connection nil))))
 
 (cl-defmethod tabularium-db-connected-p ((backend tabularium-db-sqlite))
-  "Check if SQLite connection is active."
+  "Return non-nil if BACKEND's SQLite connection is active."
   (let ((conn (oref backend connection)))
     (and conn (sqlitep conn))))
 
 (cl-defmethod tabularium-db-execute ((backend tabularium-db-sqlite) sql &optional params)
-  "Execute SQL on SQLite."
+  "Execute SQL on BACKEND, with optional PARAMS."
   (let ((conn (oref backend connection)))
     (if params (sqlite-execute conn sql params) (sqlite-execute conn sql))))
 
 (cl-defmethod tabularium-db-query ((backend tabularium-db-sqlite) sql &optional params)
-  "Query SQLite, returning rows."
+  "Query BACKEND with SQL and optional PARAMS, returning rows."
   (let ((conn (oref backend connection)))
     (if params (sqlite-select conn sql params) (sqlite-select conn sql))))
 
 (cl-defmethod tabularium-db-query-single ((backend tabularium-db-sqlite) sql &optional params)
-  "Query SQLite, returning first row."
+  "Query BACKEND with SQL and optional PARAMS, returning the first row."
   (car (tabularium-db-query backend sql params)))
 
 (cl-defmethod tabularium-db-query-scalar ((backend tabularium-db-sqlite) sql &optional params)
-  "Query SQLite, returning first value."
+  "Query BACKEND with SQL and optional PARAMS, returning the first value."
   (caar (tabularium-db-query backend sql params)))
 
 (cl-defmethod tabularium-db-table-exists-p ((backend tabularium-db-sqlite) table-name)
-  "Check if TABLE-NAME exists in SQLite."
+  "Return non-nil if TABLE-NAME exists in BACKEND's database."
   (not (null (tabularium-db-query
               backend
               "SELECT name FROM sqlite_master WHERE type='table' AND name=?"
               (list table-name)))))
 
 (cl-defmethod tabularium-db-table-columns ((backend tabularium-db-sqlite) table-name)
-  "Get column info for SQLite TABLE-NAME."
+  "Return column info for TABLE-NAME on BACKEND."
   (mapcar (lambda (row)
             (list :id (intern (nth 1 row))
                   :type (nth 2 row)
@@ -196,7 +256,7 @@ Merges write-ahead log into the main file for clean syncing."
           (tabularium-db-query backend (format "PRAGMA table_info(%s)" table-name))))
 
 (cl-defmethod tabularium-db-create-table ((backend tabularium-db-sqlite) table-name columns)
-  "Create TABLE-NAME in SQLite with COLUMNS."
+  "Create TABLE-NAME on BACKEND with COLUMNS."
   (let* ((col-defs
           (mapcar (lambda (col)
                     (let ((name (symbol-name (plist-get col :id)))
@@ -212,14 +272,14 @@ Merges write-ahead log into the main file for clean syncing."
     (tabularium-db-execute backend sql)))
 
 (cl-defmethod tabularium-db-create-index ((backend tabularium-db-sqlite) table-name column-name)
-  "Create index on COLUMN-NAME in SQLite TABLE-NAME."
+  "Create an index on COLUMN-NAME in TABLE-NAME on BACKEND."
   (tabularium-db-execute
    backend
    (format "CREATE INDEX IF NOT EXISTS idx_%s_%s ON %s(%s)"
            table-name column-name table-name column-name)))
 
 (cl-defmethod tabularium-db-insert ((backend tabularium-db-sqlite) table-name alist)
-  "Insert row into SQLite TABLE-NAME from ALIST."
+  "Insert a row into TABLE-NAME on BACKEND from ALIST."
   (let* ((fields (mapcar #'car alist))
          (values (mapcar #'cdr alist))
          (placeholders (mapconcat (lambda (_) "?") fields ", "))
@@ -230,7 +290,7 @@ Merges write-ahead log into the main file for clean syncing."
                     values)))
 
 (cl-defmethod tabularium-db-update ((backend tabularium-db-sqlite) table-name alist where-column where-value)
-  "Update SQLite TABLE-NAME with ALIST."
+  "Update TABLE-NAME on BACKEND from ALIST where WHERE-COLUMN = WHERE-VALUE."
   (when alist
     (let* ((set-clauses (mapconcat (lambda (pair)
                                      (format "%s = ?" (symbol-name (car pair))))
@@ -242,27 +302,40 @@ Merges write-ahead log into the main file for clean syncing."
                       values))))
 
 (cl-defmethod tabularium-db-delete ((backend tabularium-db-sqlite) table-name where-column where-value)
-  "Delete from SQLite TABLE-NAME."
+  "Delete from TABLE-NAME on BACKEND where WHERE-COLUMN = WHERE-VALUE."
   (sqlite-execute (oref backend connection)
                   (format "DELETE FROM %s WHERE %s = ?" table-name (symbol-name where-column))
                   (list where-value)))
 
 (cl-defmethod tabularium-db-last-insert-id ((backend tabularium-db-sqlite))
-  "Get last insert row ID from SQLite."
+  "Return the last inserted row ID for BACKEND."
   (caar (sqlite-select (oref backend connection) "SELECT last_insert_rowid()")))
 
 (cl-defmethod tabularium-db-identifier ((backend tabularium-db-sqlite))
-  "Return database file path as identifier."
+  "Return BACKEND's database file path as its identifier."
   (oref backend file))
 
 (cl-defmethod tabularium-db-sql-type ((_backend tabularium-db-sqlite) field-type)
-  "Convert FIELD-TYPE to SQLite type."
+  "Convert FIELD-TYPE to SQLite type.
+Dates, times, and datetimes are stored as TEXT in ISO 8601 form."
   (pcase field-type
     ('integer "INTEGER") ('number "REAL") (_ "TEXT")))
 
 (cl-defmethod tabularium-db-date-function ((_backend tabularium-db-sqlite))
   "Return SQLite datetime function."
   "datetime('now')")
+
+(cl-defmethod tabularium-db-begin-transaction ((backend tabularium-db-sqlite))
+  "Begin a transaction on the SQLite BACKEND."
+  (sqlite-transaction (oref backend connection)))
+
+(cl-defmethod tabularium-db-commit-transaction ((backend tabularium-db-sqlite))
+  "Commit the current transaction on the SQLite BACKEND."
+  (sqlite-commit (oref backend connection)))
+
+(cl-defmethod tabularium-db-rollback-transaction ((backend tabularium-db-sqlite))
+  "Roll back the current transaction on the SQLite BACKEND."
+  (sqlite-rollback (oref backend connection)))
 
 ;;; * 4 Backend Registry
 

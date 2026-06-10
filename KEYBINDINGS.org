@@ -15,6 +15,7 @@ This file documents the default keybindings for ~tabularium~.  All bindings can 
 | ={= / =}=                | First / last row (same column)                |
 | =[= / =]=                | Line beginning / end                          |
 | =M-n= / =M-p=            | Jump to different value ↓ / ↑                 |
+| =M-}= / =M-{=            | Jump to different value ↓ / ↑                 |
 | =M-<down>= / =M-<up>=    | Jump to different value ↓ / ↑                 |
 | =M-]= / =M-[=            | Jump to different value → / ←                 |
 | =M-<right>= / =M-<left>= | Jump to different value → / ←                 |
@@ -24,7 +25,7 @@ This file documents the default keybindings for ~tabularium~.  All bindings can 
 | =/=                    | Fuzzy find                                    |
 | =g=                    | Refresh                                       |
 
-Cell-jump navigation (=M-n=, =M-p=, =M-]=, =M-[=, and the =M-<arrow>= variants) moves to the next cell with a different value, useful for grouped or sorted data.  A prefix argument (e.g., =C-u 3 M-n=) jumps multiple value transitions.
+Cell-jump navigation moves to the next cell with a different value, useful for grouped or sorted data: =M-]=/=M-[= step right/left, =M-}=/=M-{= step down/up, with =M-n=/=M-p= and the =M-<arrow>= variants kept as alternatives.  A prefix argument (e.g., =C-u 3 M-}=) jumps multiple value transitions.
 
 Page navigation (=C-<down>= / =C-<up>=) jumps by the configured page size in either direction.  Column scroll (=C-<right>= / =C-<left>=) shifts the visible portion of the buffer one column at a time, useful when columns overflow the window.
 
@@ -67,7 +68,7 @@ Page navigation (=C-<down>= / =C-<up>=) jumps by the configured page size in eit
 | =* *= | Mark matching (substring) |
 | =* == | Mark exact                |
 | =* p= | Mark pattern (SQL LIKE)   |
-| =* x= | Mark regexp               |
+| =* r= | Mark regexp               |
 | =* #= | Count marked              |
 
 ** Replace (=R= prefix)
@@ -99,6 +100,8 @@ Uppercase variants scope to visible rows only.  Lowercase variants act on marked
 
 Sort layers are additive: each =s s= adds a new column to the sort.  Already-sorted columns are excluded from the prompt.
 
+Left-clicking a column header (=mouse-1=) layers a sort the same way the =s= commands do: a first click adds the column as a new ascending layer, a second click on the same column flips its direction, and clicking an already-sorted earlier column promotes it to the most recent key.  Right-clicking a header (=mouse-3=) removes that column's sort layer.  The =↑=/=↓= header indicator reflects the result.
+
 ** Fill (=F= prefix)
 
 | Key | Command                                |
@@ -108,37 +111,64 @@ Sort layers are additive: each =s s= adds a new column to the sort.  Already-sor
 | =F n= | Fill next ↓ (prompted)                 |
 | =F p= | Fill prev ↑ (prompted)                 |
 | =F s= | Fill series (number or date)           |
+| =F .= | Fill ↓ to point (source above)          |
+| =F ,= | Fill ↑ to point (source below)          |
 | =F d= | Delete run (clear same-value cells)    |
 | =F x= | Clear to row (prompted target)         |
 
-=F F= and =F f= are zero-prompt: they infer the column and fill value from context.  =F n= and =F p= prompt for field and value.  =F d= clears the same-value run from point; =F x= clears to a prompted row ID.
+=F F= and =F f= are zero-prompt: they infer the column and fill value from context.  =F n= and =F p= prompt for field and value.  =F .= and =F ,= are also zero-prompt and point-anchored: =F .= takes the nearest non-blank cell above and fills downward to point, while =F ,= takes the nearest non-blank cell below and fills upward to point.  =F d= clears the same-value run from point; =F x= clears to a prompted row ID.
 
 Without marks, fill operations auto-detect blank ranges from point.  With marks, they fill marked rows (prompting before overwriting non-blank cells).
+
+** Highlight (=h= prefix)
+
+| =h h= | Quick-highlight marked rows (or the row at point) |
+| =h \= | Quick-highlight the column at point       |
+| =h |= | Quick-highlight columns (=<<ALL>>= / comma-separated) |
+| =h a= | New highlight rule (dispatches on rule type) |
+| =h n= | Highlight by numeric/value/date comparison (> < >= <= = !=) |
+| =h d= | Highlight duplicate values                |
+| =h r= | Highlight cells matching a regexp         |
+| =h l= | Open the Highlight Rules List buffer      |
+| =h x= | Remove highlight rules (=<<ALL>>=, =<<UNSAVED>>=, or one rule) |
+| =h X= | Expunge saved highlight rules from the schema |
+| =h s= | Save one runtime highlight rule to the schema |
+| =h S= | Save all current highlight rules to the schema |
+
+=h h=, =h \=, and =h |= are quick highlights for fast on-the-fly work: =h h= prompts only for a face and tints the marked rows (or the row at point); =h \= tints the column under point; =h |= tints columns chosen from the selector.  All three add a real rule to the Highlight Rules List, so they can be removed, reordered, or saved like any other.  =h a= is the full dispatcher: it prompts for the rule type, then runs the matching command.  Each rule command prompts for the target columns with a comma-separated =completing-read-multiple= selector — the =<<ALL>>= sentinel (or an empty answer) targets every visible column, the same field-selection paradigm the filter and mark commands use; the chosen columns are echoed back in a =[...]= hint.  =h n= offers only columns where a comparison is meaningful — integer, number, date, time, and datetime — and because ISO date/time strings order chronologically as text, the same rule expresses "later/earlier than" for date columns.  Rules are additive and *stack*: when several rules match the same cell their faces compose, so one rule can add a background color, another a foreground color, a third bold.  Rules are numbered in evaluation order so the stacking hierarchy is visible.  =h x= removes rules — its prompt lists every rule, runtime and saved alike, and defaults to =<<ALL>>= (remove every rule); it also offers =<<UNSAVED>>= (remove only the session's unsaved rules) and each individual rule; removal never touches the schema file.  =h s= prompts for one runtime rule and persists just that rule; =h S= persists the whole view state; =h X= expunges the saved rules from the schema — these three are the only highlight commands that write the file.  =h l= opens the Highlight Rules List buffer, an interactive list where rules can be marked, removed, reordered, modified, added, and saved or expunged, all in one place.
 
 ** Filter (=f= prefix)
 
 | Key | Command                         |
 |-----+---------------------------------|
-| =f f= | Substring filter                |
+| =f f= | New filter layer (dispatches on filter type) |
+| =f s= | Substring filter                |
 | =f == | Exact match filter              |
-| =f #= | Numeric comparison (> >= < <=)  |
-| =f @= | Filter across columns           |
-| =f d= | Delete filter layer             |
-| =f s= | Toggle join logic (∧/∨/∧¬/∨¬)   |
-| =f x= | Clear all filters               |
-| =f 0= | Clear all filters (same as =f x=) |
+| =f n= | Numeric comparison (> >= < <= = !=) |
+| =f l= | Open the Filter Rules List buffer |
+| =f c= | Cycle the logical connective (∧/∨/∧¬/∨¬) |
+| =f x= | Remove filter layers (=<<ALL>>= or one layer) |
 
-Filters are progressive layers with logical operators.  The first filter sets the base layer; subsequent calls prompt for a join operator (AND, OR, AND NOT, OR NOT).  The modeline shows the filter stack: =(genre = Fiction) ∧ (price > 20) ∧¬ (status ~ inactive)=.
+=f f= is a single entry point that prompts for the filter type — substring, exact, or numeric — then runs the matching command, parallel to the =h a= highlight dispatcher.  Every filter command prompts for its columns with the same =<<ALL>>= / comma-separated selector: pick one column, several, or all.  Filtering several columns ORs the test across them, so the old separate "filter across" command is no longer needed.  Filters are progressive layers combined with logical connectives — the first sets the base layer; subsequent calls prompt for a connective (AND, OR, AND NOT, OR NOT).  The modeline shows the filter stack: =(genre = Fiction) ∧ (price > 20) ∧¬ (status ≈ inactive)=; when more than three layers are active the middle is elided to keep the modeline compact (=(genre = Fiction) … ∧ (year < 2000)=).
 
-** Views
+=f l= opens the Filter Rules List buffer — an interactive list of every filter layer, numbered in evaluation order with its logical connective in a dedicated column.  From it, =m=/=u=/=U= mark and unmark layers, =t= toggles all marks, =x= removes the marked layers (or the one at point), =c= cycles the connective of the layer at point, =RET= modifies a layer, and =M-p=/=M-n= move a layer up or down the stack.  The buffer refreshes automatically as the filter stack changes.
 
-| Key   | Command                      |
-|-------+------------------------------|
-| =v v=   | Select saved view            |
-| =v s=   | Save current visible state   |
-| =v x=   | Clear all (filter/sort/cols) |
-| =0=     | Reset view (same as =v x=)     |
-| =1=–=9= | Apply schema view by number  |
+** Views (=v= prefix)
+
+| Key     | Command                              |
+|---------+--------------------------------------|
+| =v v=   | Select saved view                    |
+| =v s=   | Save current visible state           |
+| =v 0=   | Clear all (filter/sort/cols)         |
+| =v 1=–=v 9= | Apply schema view by number      |
+| =v x=   | Clear all (filter/sort/cols)         |
+| =v >=   | Show more rows                       |
+| =v a=   | Show all rows (no constraints)       |
+| =v +=   | Show all rows in current view        |
+| =v r=   | Show ID range                        |
+| =v ==   | Reset row limit to default page size |
+
+=v 0= and =v x= both clear the active filter, column visibility, and sort back to defaults; =v 1= through =v 9= apply the corresponding numbered view from the schema.  The row-expansion keys control how many rows are shown: =v >= reveals the next page, =v a= drops every constraint, =v += lifts only the page-size limit and ID range while keeping the active filter, =v r= restricts to an explicit ID range, and =v == restores the default page size.
 
 ** Freeze rows (=z= prefix)
 
@@ -175,20 +205,6 @@ Frozen rows always render at the top of the view, marked with a =∙= indicator.
 | =| X= | Cut columns              |
 | =| V= | Paste columns            |
 | =| A= | Paste columns at end     |
-
-** View expansion (=v= prefix)
-
-| Key | Command                        |
-|-----+--------------------------------|
-| =v v= | Select view                    |
-| =v s= | Save current                   |
-| =v 0= | Reset views                    |
-| =v x= | Clear all views                |
-| =v >= | Show more rows                 |
-| =v a= | Show all rows (no constraints) |
-| =v += | Show all rows in current view  |
-| =v r= | Show ID range                  |
-| =v == | Reset to default               |
 
 ** Math (=#= prefix)
 
@@ -235,14 +251,22 @@ Uppercase variants scope to visible rows only.
 
 ** Other
 
-| Key     | Command                        |
-|---------+--------------------------------|
-| =e=       | Export (prompts for TSV / CSV) |
-| =i=       | Import                         |
-| =o=       | Open another database          |
-| =O=       | Open and view                  |
-| =?= / =SPC= | Open menu                      |
-| =q=       | Quit                           |
+| Key   | Command                                    |
+|-------+--------------------------------------------|
+| =i i= | Import a file as a new database            |
+| =i a= | Append a file to the current database      |
+| =e e= | Export marked rows, or all if none marked  |
+| =e a= | Export all — whole table (ignores marks)   |
+| =e v= | Export visible view                        |
+| =e r= | Export range (row IDs / columns)           |
+| =o=   | Open another database                      |
+| =O=   | Open and view                              |
+| =$=   | Rename database                            |
+| =?=   | Describe database                          |
+| =SPC= | Open menu                                  |
+| =q=   | Quit                                       |
+
+The import and export prefixes have alternatives: =<= mirrors =i= and =>= mirrors =e=, so =< i=, =< a=, => e=, => a=, => v=, => r= work identically to their =i=/=e= counterparts.  In the registry buffer the same applies to the single-key bindings — =<= imports and =>= exports the database at point, alongside =i= and =e=.
 
 * Entry Mode (~tabularium-entry-mode~)
 
@@ -293,18 +317,44 @@ Fields with ~:long t~ open a dedicated editing buffer instead of the minibuffer.
 
 * Registry Mode (~tabularium-registry-mode~)
 
-| Key       | Command                      |
-|-----------+------------------------------|
-| =RET= / =o=   | Open database at point       |
-| =O=         | Open and view                |
-| =v=         | View database at point       |
-| =C=         | Create new database          |
-| =+=         | Register existing database   |
-| =$= / =R=     | Rename database              |
-| =D=         | Forget database (keep files) |
-| =X=         | Expunge (delete files too)   |
-| =.= / =e=     | Edit schema file             |
-| =g= / ===     | Refresh listing              |
-| =n= / =TAB=   | Next entry                   |
-| =p= / =S-TAB= | Previous entry               |
-| =q=         | Quit                         |
+Action keys (=$=, =d=, =D=, =X=, =e=) act on the marked databases when any are
+marked, otherwise on the database at point.  =i= imports a file as a new
+database (it does not depend on the database at point).
+
+| Key         | Command                                  |
+|-------------+------------------------------------------|
+| =RET= / =O= / =v= | Open and view database at point          |
+| =o=           | Open database (no view)                  |
+| =C=           | Create new database                      |
+| =+=           | Register existing database               |
+| =$=           | Rename (marked, or database at point)    |
+| =d=           | Duplicate (marked, or database at point) |
+| =D=           | Forget — keep files (marked, or at point) |
+| =X=           | Expunge — delete files (marked, or at point) |
+| =i= / =<=       | Import a file as a new database          |
+| =e= / =>=       | Export (marked, or database at point)    |
+| =.=           | Edit schema file at point                |
+| =/=           | Visit database directory in Dired (other window) |
+| =?=           | Describe database at point               |
+| =m=           | Mark database at point                   |
+| =u=           | Unmark database at point                 |
+| =U=           | Unmark all                               |
+| =t=           | Toggle all marks                         |
+| =x=           | Action menu (rename/duplicate/delete/expunge) |
+| =g= / ===       | Refresh listing                          |
+| =n= / =TAB=     | Next entry                               |
+| =p= / =S-TAB=   | Previous entry                           |
+| =q=           | Quit                                     |
+
+* Kill Ring Mode (~tabularium-kill-ring-mode~)
+
+Opened with =y= from view mode; lists the row/column batches available to paste.
+
+| Key         | Command                          |
+|-------------+----------------------------------|
+| =V=           | Paste the selected batch         |
+| =X=           | Clear the kill ring              |
+| =g= / ===       | Refresh listing                  |
+| =n= / =TAB=     | Next batch                       |
+| =p= / =S-TAB=   | Previous batch                   |
+| =q=           | Quit                             |

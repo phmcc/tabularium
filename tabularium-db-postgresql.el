@@ -4,7 +4,7 @@
 
 ;; Author: Paul H. McClelland <paulhmcclelland@protonmail.com>
 ;; Maintainer: Paul H. McClelland <paulhmcclelland@protonmail.com>
-;; Version: 0.4.8
+;; Version: 0.5.0
 ;; Package-Requires: ((emacs "29.1") (emacsql "4.0") (emacsql-pg "1.0"))
 ;; Keywords: data
 ;; URL: https://codeberg.org/phmcc/tabularium
@@ -211,6 +211,8 @@
       ('integer "INTEGER")
       ('number "DOUBLE PRECISION")
       ('date "DATE")
+      ('time "TIME")
+      ('datetime "TIMESTAMP")
       (_ "TEXT")))
 
   (cl-defmethod tabularium-db-date-function ((_backend tabularium-db-postgresql))

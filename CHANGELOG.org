@@ -4,6 +4,51 @@
 
 All notable changes to ~tabularium~ are documented in this file.
 
+* 0.5.0 (2026-05-18)
+
+** Added
+
+- Highlighting (conditional formatting): a schema-level ~:highlight~ property and an interactive =h=-prefix command set that color rows and cells in view mode.  Rules are plists (~:scope~ ~row~/~cell~, a ~:face~, and a ~:test~ lambda, ~:value~ literal, or pure-data ~:builtin~ keyword); the three built-in cell types — ~compare~, ~duplicates~, ~regex~ — round-trip through the schema file.  =h h= quick-highlights the marked rows, =h n= numeric/comparison, =h d= duplicates, =h r= regexp, =h a= the full new-rule dispatcher, =h l= an interactive Highlight Rules List buffer, =h x= remove, =h X= expunge, =h s= / =h S= save one/all.  Matching rules stack — background, foreground, and style faces compose — from the customizable ~tabularium-highlight-faces~ palette (ten WCAG-AAA hues × bg/fg, plus styles).  Add/remove is on the undo ring
+- New ~time~ and ~datetime~ field types (=HH:MM[:SS]= and ISO 8601 timestamps), with ~:default now~ resolving per type via ~tabularium-time-format~ / ~tabularium-date-format~ / ~tabularium-datetime-format~
+- Date/time arithmetic helpers for ~:computed~ lambdas, all nil-safe: ~tabularium-fn-time-now~, ~-datetime-now~, ~-time-add~, ~-time-diff~, ~-datetime-add~, ~-datetime-diff~, ~-datetime-date~, ~-datetime-time~, ~-datetime-combine~, ~-duration-format~
+- Field-level validation properties: ~:pattern~ (case-sensitive regex), ~:pattern-help~, and ~:validate~ (predicate).  Validation runs type → pattern → custom on every prompted edit; the first failure shows inline and re-prompts with the rejected value
+- Three new database-creation paths alongside the wizard, under a =C= sub-menu and as ~tabularium-create-database-quick~ (one-line =id:type:flag= spec), ~-from-header~ (pasted header row), and ~-from-schema-file~ (a "Save As" mirroring an existing schema's fields, views, highlights, and backend)
+- Registry-mode marking with marked-or-at-point operations: =m= / =u= / =U= / =t= mark, and =$= rename, =d= duplicate, =D= delete, =X= expunge, =e= export, =i= import act on the marked set or the database at point
+- Field-type hints in entry prompts and (optionally, via ~tabularium-entry-show-type-hints~) in the form buffer
+- Registry =/= opens the database's directory in Dired
+
+** Changed
+
+- Export is a four-way =e= prefix: =e e= ~tabularium-export~ (marked rows or whole table), =e a= ~-export-all~ (whole table), =e v= ~-export-visible~ (the on-screen view), =e r= ~-export-range~ (an explicit =3-7,12= ID spec and a column selection).  All four resolve computed columns and honor the TSV/CSV choice; =e e= now prompts for columns
+- Import is split under an =i= prefix: ~tabularium-import~ (=i i=) always imports a file as a new, registered database; ~tabularium-import-append~ (=i a=) appends a file's rows to the open database, matching columns by field id then label and never writing the primary key
+- Filter, highlight, and mark commands share one ~completing-read-multiple~ field selector (with a =<<ALL>>= sentinel); multi-column filtering is now built in, so ~tabularium-view-filter-across~ is removed.  =f f= is a type dispatcher (substring/exact/numeric); the substring command is ~tabularium-view-filter-substring~.  Filter layers carry ~:fields~ and an optional ~:op~ on one code path
+- Logical-connective terminology replaces "join" throughout: ~tabularium-view-filter-cycle-connective~ (=f c=), the "Logical connective:" prompt, and the internal ~:connective~ key
+- Clicking a column header sorts by it (=mouse-1= adds/flips an ascending/descending layer, =mouse-3= removes it), layering into ~tabularium--sort-columns~; sorted columns show a ~↑~ / ~↓~ indicator
+- Saved views also capture the row restriction (~:rows~) alongside filters, columns, and sort; ~tabularium-view-show-range~ accepts the same =3-7,12= spec as ~-export-range~
+- The auto-prepended primary-key field is renamed ~row_id~ (label ~ID~) from ~rn~; the docs call the concept the *row ID*.  Pre-release, so no compatibility alias
+- ~tabularium-fn-now~ is renamed ~tabularium-fn-datetime-now~ and emits the space-separated form; pre-release breaking change with no alias
+- The rules-list buffer commands are renamed for discoverability (~tabularium-highlight-*~ / ~tabularium-filter-*~, modes ~tabularium-highlight-mode~ / ~tabularium-filter-mode~); a *Filter Rules List* buffer (=f l=) parallels the highlight one
+- ~tabularium-describe-database~ is reachable via =?= consistently (=SPC= stays the view menu), profiles an unopened database from disk, and gains the box ornament
+- New ~tabularium-faces~ group consolidating all faces, with six new ones (list header, frozen row, sort indicator, modeline filter)
+- The main menu orders import before export; =<= / =>= are alternative prefixes for import / export
+- British spellings are corrected to American English throughout, the project's standard
+- Performance on large datasets: bulk operations that write many rows — find/replace, fill, reindex, row move/cut/delete/duplicate/paste, import, and bulk undo/redo — are wrapped in a single database transaction instead of committing once per row, and view highlighting resolves its active rule set once per refresh rather than once per cell.  An EIEIO-level transaction protocol (`tabularium-db-with-transaction`) backs this, defaulting to a no-op on backends without transaction support
+
+** Fixed
+
+- Computed fields are now safe across read, insert, update, and export: ~tabularium-entry-submit~ strips computed fields before writing, ~tabularium--build-select-with-computed~ emits ~NULL AS name~ placeholders for elisp-computed fields, ~tabularium-export-range~ computes over the full row before projecting to selected columns, and import skips computed fields when aligning columns
+- Prompt-entry and quick-entry now validate input the same way the form does, so malformed ~date~ / ~time~ / ~datetime~ / ~integer~ / ~number~ values are re-prompted rather than written; ~tabularium-fn-date-diff~ and ~-datetime-diff~ return nil on unparseable input
+- ~tabularium-rename-database~ is now transactional and updates the registry under the correct ~:name~ key (closing connection, renaming the database/schema/WAL sidecars, rewriting the embedded schema, and reopening if needed)
+- Duplicating a database with a symbol- or list-valued schema property (e.g. ~:default-sort~) now quotes such values, producing a loadable copy that registers correctly
+- ~tabularium-describe-database~ now reads ~:file~ and ~:backend~ from the schema plist correctly (previously dropped the first key, masking PostgreSQL backends)
+- ~tabularium-rename--make-slug~ now strips all punctuation via =[^a-z0-9]+=
+- Cell-jump navigation is consistent in all four directions: column boundaries account for ~tabulated-list-padding~ and derive from one helper, movement uses ~move-to-column~ (robust to trimmed short rows), and the spurious back-step in the backward/up variants is removed
+- Moving a filter layer no longer emits connective-less SQL; the connective invariant is restored after a swap and defended in ~tabularium--build-filter-clause~
+- ~tabularium-view-fill-clear~ includes row #1 when it is the far end of the range
+- Deleting a row in view mode keeps point on the same visual row
+- Invalid-type error messages for ~integer~/~number~ are shortened to just the rejected value
+
+
 * 0.4.8 (2026-05-17)
 
 ** Added
@@ -58,7 +103,7 @@ All notable changes to ~tabularium~ are documented in this file.
 ** Changed
 
 - All interactive field-mutation paths (~tabularium-entry-edit-field~, ~-set-default~, ~-reset-field~, ~-clear-and-edit~, the long-edit commit, and autofill cascades) now route through a new internal helper ~tabularium-entry--set-field-value~ that fires the field-changed hook
-- Completion sentinels (=<<ALL>>=, =<<FIRST>>=, =<<LAST>>=, =<<ROW>>=, =<<TSV>>=, =<<CSV>>=) now use double angle brackets to stand out more clearly from regular completion candidates
+- Completion sentinels (=<<ALL>>=, =<<FIRST>>=, =<<LAST>>=, =<<ROW>>=, =<<POINT>>=) now use double angle brackets to stand out more clearly from regular completion candidates
 
 * 0.4.6 (2026-04-30)
 

@@ -8,34 +8,36 @@ The following features are tentatively planned for future releases:
 
 ** v0.5.0
 
-- [ ] Conditional Formatting
-  - [ ] Row highlighting based on field values
-  - [ ] Color-coded status indicators
+- [X] Conditional Formatting
+  - [X] Row highlighting based on field values
+  - [X] Color-coded status indicators
 
-- [ ] Field Validation
-  - [ ] Reject invalid data on entry
-  - [ ] Custom validation functions
-  - [ ] Regex patterns for text fields
+- [X] Field Validation
+  - [X] Reject invalid data on entry
+  - [X] Custom validation functions
+  - [X] Regex patterns for text fields
 
-- [ ] ~time~ field type
-  - [ ] Stored as ISO 8601 HH:MM[:SS]
-  - [ ] Validation and default-to-now option
+- [X] ~time~ and ~datetime~ field types
+  - [X] ~time~ stored as ISO 8601 HH:MM[:SS]
+  - [X] ~datetime~ stored as ISO 8601 YYYY-MM-DD HH:MM[:SS] (accepts T or space separator)
+  - [X] Validation and default-to-now option
+  - [X] Date/time/datetime arithmetic helpers (=fn-time-add=, =fn-datetime-diff=, =fn-duration-format=, etc.)
 
-- [ ] Quick-startup wizard
-  - [ ] One-shot prompt for all fields at once (e.g. =name:text:required age:integer date:date=)
-  - [ ] Schema generation from a pasted header row
+- [X] Quick-startup wizard
+  - [X] One-shot prompt for all fields at once (e.g. =name:text:required age:integer date:date=)
+  - [X] Schema generation from a pasted header row
 
-- [ ] Generate database from existing schema file
-  - [ ] Build the =.db= file by reading a hand-written or imported =.schema.el=
-  - [ ] Useful when the schema is moved between machines or restored from version control
+- [X] Generate database from existing schema file
+  - [X] Build the =.db= file by reading a hand-written or imported =.schema.el=
+  - [X] Useful when the schema is moved between machines or restored from version control
 
-- [ ] Face customization via ~defface~ / ~defcustom~
-  - [ ] Tabulated-list header face
-  - [ ] Marked-row face
-  - [ ] Frozen-row face
-  - [ ] Sort-indicator face
-  - [ ] Filter / view-status face in the modeline
-  - [ ] Group all under a ~tabularium-faces~ customize group
+- [X] Face customization via ~defface~ / ~defcustom~
+  - [X] Tabulated-list header face
+  - [X] Marked-row face
+  - [X] Frozen-row face
+  - [X] Sort-indicator face
+  - [X] Filter / view-status face in the modeline
+  - [X] Group all under a ~tabularium-faces~ customize group
 
 ** v0.6.0
 
@@ -50,6 +52,10 @@ The following features are tentatively planned for future releases:
   - [ ] Page layout options
 
 ** Future
+
+- [ ] Frozen Columns
+  - [ ] Pin leftmost columns so they stay visible while scrolling horizontally
+  - [ ] Requires working around tabulated-list-mode's single-line-per-row rendering (no native frozen-column concept) — likely an hscroll/overlay approach or a side-by-side window arrangement
 
 - [ ] Pivot Tables
   - [ ] Aggregate summaries

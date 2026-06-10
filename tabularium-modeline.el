@@ -4,7 +4,7 @@
 
 ;; Author: Paul H. McClelland <paulhmcclelland@protonmail.com>
 ;; Maintainer: Paul H. McClelland <paulhmcclelland@protonmail.com>
-;; Version: 0.4.8
+;; Version: 0.5.0
 ;; Package-Requires: ((emacs "29.1"))
 ;; Keywords: data, faces
 ;; URL: https://codeberg.org/phmcc/tabularium
@@ -108,13 +108,6 @@
   :group 'tabularium
   :prefix "tabularium-modeline-")
 
-(defcustom tabularium-mode-line-format
-  '(:eval (tabularium-modeline-string-with-props))
-  "Mode line construct for displaying current database.
-Set to nil to disable.  This is used by `tabularium-modeline-mode'."
-  :type 'sexp
-  :group 'tabularium-modeline)
-
 (defcustom tabularium-modeline-use-icon nil
   "Whether to use an icon in the modeline segment.
 When non-nil, displays an icon (from `tabularium-modeline-icon' or a
@@ -164,22 +157,29 @@ When nil and using icons: [<icon> DatabaseName]"
 (defface tabularium-modeline-database
   '((t (:inherit font-lock-constant-face :weight bold)))
   "Face for database name in modeline."
-  :group 'tabularium-modeline)
+  :group 'tabularium-faces)
 
 (defface tabularium-modeline-schema
   '((t (:inherit font-lock-type-face)))
   "Face for schema/table name in modeline."
-  :group 'tabularium-modeline)
+  :group 'tabularium-faces)
 
 (defface tabularium-modeline-icon-face
   '((t (:inherit font-lock-keyword-face)))
   "Face for icon in modeline."
-  :group 'tabularium-modeline)
+  :group 'tabularium-faces)
 
 (defface tabularium-modeline-bracket
   '((t (:inherit shadow)))
   "Face for brackets in modeline."
-  :group 'tabularium-modeline)
+  :group 'tabularium-faces)
+
+(defface tabularium-modeline-filter-face
+  '((t (:inherit font-lock-warning-face)))
+  "Face for active filter / view-status description in the modeline.
+Used by `tabularium--filter-update-modeline' to set apart the
+filter description embedded in `mode-name'."
+  :group 'tabularium-faces)
 
 ;;; * 3 Core Functions
 
