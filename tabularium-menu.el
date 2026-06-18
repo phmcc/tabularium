@@ -89,7 +89,7 @@
  ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   [_o_] Open              [_N_] New (form)          [_v_] View all              [_i_/_<_] Import…           [_._] Schema…
   [_O_] Open + View       [_P_] Prompt              [_/_] Fuzzy find            [_e_/_>_] Export…
-  [_x_] Close             [_Q_] Quick               [_l_] Last match            [_+_] Register
+  [_c_] Close             [_Q_] Quick               [_l_] Last match            [_+_] Register
   [_C_] Create…                                   [_#_] Calculate…            [_s_] Sync prep
   [_r_] Registry
   [_$_] Rename
@@ -101,7 +101,7 @@
     ;; Database
     ("o" tabularium-open)
     ("O" tabularium-open-and-view)
-    ("x" tabularium-close)
+    ("c" tabularium-close)
     ("C" tabularium-create-hydra/body)
     ("r" tabularium-registry)
     ("$" tabularium-rename-database)
@@ -400,19 +400,22 @@
   Rules                  Manage
  ────────────────────────────────────────────────────────────────────────────────
   [_a_] Add rule…          [_l_] Rules list
-  [_s_] Substring          [_c_] Cycle connective
-  [_e_] Exact match        [_x_] Remove
+  [_f_] At point           [_c_] Cycle connective
+  [_s_] Substring          [_x_] Remove
+  [_e_] Exact match        [_X_] Remove all
   [_n_] Numeric
  ────────────────────────────────────────────────────────────────────────────────
   [_q_] Quit
 "
-    ("f" tabularium-view-filter)
+    ("a" tabularium-view-filter-add)
+    ("f" tabularium-view-filter-at-point)
     ("s" tabularium-view-filter-substring)
     ("e" tabularium-view-filter-exact)
     ("n" tabularium-view-filter-numeric)
     ("l" tabularium-view-filter-buffer)
     ("c" tabularium-view-filter-cycle-connective)
     ("x" tabularium-view-filter-remove)
+    ("X" tabularium-view-filter-remove-all)
     ("q" tabularium-view-hydra/body :color blue))
 
   ;; Sort sub-hydra
@@ -421,18 +424,22 @@
 ┌──────┐
 │ Sort │  %s(tabularium--hydra-db-info)   %s(tabularium--hydra-sort-info)
 └──────┘
-  Rules                 Other
+  Rules                 Manage
  ────────────────────────────────────────────────────────────────────────────────
-  [_a_] Add rule…         [_s_] Reverse
-  [_x_] Delete rule
-  [_X_] Clear sort
+  [_a_] Add rule…         [_l_] Rules list
+  [_s_] By column         [_c_] Cycle order
+  [_`_] By index          [_x_] Remove
+                          [_X_] Remove all
  ────────────────────────────────────────────────────────────────────────────────
   [_q_] Quit
 "
     ("a" tabularium-view-sort-add)
-    ("x" tabularium-view-sort-delete)
-    ("X" tabularium-view-sort-clear)
     ("s" tabularium-view-sort-reverse)
+    ("`" tabularium-view-sort-index)
+    ("c" tabularium-view-sort-cycle)
+    ("x" tabularium-view-sort-remove)
+    ("X" tabularium-view-sort-remove-all)
+    ("l" tabularium-view-sort-buffer)
     ("q" tabularium-view-hydra/body :color blue))
 
   ;; Fill sub-hydra
@@ -444,8 +451,8 @@
   Fill                    Delete
  ────────────────────────────────────────────────────────────────────────────────
   [_F_] Fill back ↑         [_D_] Delete run
-  [_f_] Fill forward ↓      [_X_] Clear to row
-  [_p_] Fill prev ↑
+  [_f_] Fill forward ↓      [_x_] Clear up to row
+  [_p_] Fill prev ↑         [_X_] Clear incl. row
   [_n_] Fill next ↓
   [_,_] To point ↑
   [_._] To point ↓
@@ -461,6 +468,7 @@
     ("." tabularium-view-fill-down-to-point)
     ("s" tabularium-view-fill-series)
     ("D" tabularium-view-fill-delete)
+    ("x" tabularium-view-fill-clear-to-point)
     ("X" tabularium-view-fill-clear)
     ("q" tabularium-view-hydra/body :color blue))
 
@@ -523,17 +531,17 @@
  ────────────────────────────────────────────────────────────────────────────────
   [_t_] Toggle              [_r_] Reorder               [_N_] New
   [_h_] Hide                [_<_] Move left             [_I_] Insert
-  [_o_] Show only           [_>_] Move right            [_D_] Delete
-  [_a_] Show all            [_=_] Reset order           [_E_] Edit
-                          [_M_/_W_] Move/Swap           [_d_] Duplicate
+  [_s_] Show                [_>_] Move right            [_D_] Delete
+  [_o_] Show only           [_=_] Reset order           [_E_] Edit
+  [_a_] Show all            [_M_/_W_] Move/Swap          [_d_] Duplicate
                                                     [_X_/_C_] Cut/Copy
-                                                    [_V_/_A_] Paste/Append
  ────────────────────────────────────────────────────────────────────────────────
   [_q_] Quit
 "
     ;; Visibility
     ("t" tabularium-view-toggle-column)
     ("h" tabularium-view-hide-columns)
+    ("s" tabularium-view-show-columns)
     ("o" tabularium-view-show-only-columns)
     ("a" tabularium-view-show-all-columns)
     ;; Ordering
@@ -551,8 +559,6 @@
     ("d" tabularium-view-column-duplicate)
     ("C" tabularium-view-column-copy)
     ("X" tabularium-view-column-cut)
-    ("V" tabularium-view-column-paste)
-    ("A" tabularium-view-column-paste-append)
     ("q" tabularium-view-hydra/body :color blue))
 
   ;; Goto sub-hydra
@@ -596,7 +602,6 @@
     ("c" tabularium-aggregate-count)
     ("C" tabularium-aggregate-visible-count)
     ("*" tabularium-view-count-marked)
-    ("@" tabularium-view-count-across)
     ;; Aggregate (all)
     ("s" tabularium-aggregate-sum)
     ("m" tabularium-aggregate-min-max)
@@ -662,18 +667,18 @@
                             ["Database"
                              ("o" "Open" tabularium-open)
                              ("O" "Open + View" tabularium-open-and-view)
-                             ("x" "Close" tabularium-close)
+                             ("c" "Close" tabularium-close)
                              ("C" "Create…" tabularium-create-transient)
                              ("r" "List databases" tabularium-registry)
                              ("$" "Rename" tabularium-rename-database)
                              ("?" "Describe" tabularium-describe-database)]
                             ["Schema"
                              (". ." "Edit" tabularium-schema-edit)
-                             (". s" "Show" tabularium-schema-show)
-                             (". r" "Reload" tabularium-schema-reload)
+                             (". v" "View" tabularium-schema-view)
+                             (". =" "Reload" tabularium-schema-reload)
                              (". w" "Switch" tabularium-schema-switch)
                              (". +" "Add field" tabularium-view-column-add)
-                             (". n" "Rename field" tabularium-schema-rename-field)]
+                             (". $" "Rename field" tabularium-schema-rename-field)]
                             ["Entry"
                              ("N" "New (form)" tabularium-new-entry)
                              ("P" "Prompt entry" tabularium-prompt-entry)
@@ -793,13 +798,15 @@
       ("h s" "Save one highlight" tabularium-view-highlight-save)
       ("h S" "Save all highlights" tabularium-view-highlight-save-all)]
      ["View" :pad-keys t
-      ("f f" "New filter" tabularium-view-filter)
+      ("f a" "Add rule" tabularium-view-filter-add)
+      ("f f" "At point" tabularium-view-filter-at-point)
       ("f s" "Substring" tabularium-view-filter-substring)
       ("f e" "Exact match" tabularium-view-filter-exact)
       ("f n" "Numeric" tabularium-view-filter-numeric)
-      ("f l" "Filter rules list" tabularium-view-filter-buffer)
+      ("f l" "Rules list" tabularium-view-filter-buffer)
       ("f c" "Cycle connective" tabularium-view-filter-cycle-connective)
       ("f x" "Remove filter" tabularium-view-filter-remove)
+      ("f X" "Remove all filters" tabularium-view-filter-remove-all)
       ("v v" "Select view" tabularium-select-view)
       ("v s" "Save current" tabularium-view-save)
       ("v 0" "Reset views" tabularium-view-0)
@@ -809,10 +816,13 @@
       ("v +" "Show all in view" tabularium-view-show-all-in-view)
       ("v r" "Show range" tabularium-view-show-range)
       ("v =" "Reset limit" tabularium-view-reset-limit)
-      ("s" "Reverse sort" tabularium-view-sort-reverse)
-      ("s s" "Add sort" tabularium-view-sort-add)
-      ("s x" "Delete sort" tabularium-view-sort-delete)
-      ("s X" "Clear sort" tabularium-view-sort-clear)
+      ("s a" "Add rule" tabularium-view-sort-add)
+      ("s s" "Sort by column" tabularium-view-sort-reverse)
+      ("s `" "Sort by index" tabularium-view-sort-index)
+      ("s c" "Cycle order" tabularium-view-sort-cycle)
+      ("s l" "Rules list" tabularium-view-sort-buffer)
+      ("s x" "Remove sort" tabularium-view-sort-remove)
+      ("s X" "Remove all sorts" tabularium-view-sort-remove-all)
       ("z z" "Freeze row" tabularium-view-freeze)
       ("z u" "Unfreeze row" tabularium-view-unfreeze)
       ("z U" "Unfreeze all" tabularium-view-unfreeze-all)
@@ -823,8 +833,8 @@
       ("R e" "Replace exact" tabularium-replace-exact)
       ("R E" "Visible: exact" tabularium-replace-visible-exact)
       ("R p" "Replace pattern" tabularium-replace-pattern)
-      ("R x" "Replace regexp" tabularium-replace-regexp)
-      ("R X" "Visible: regexp" tabularium-replace-visible-regexp)
+      ("R r" "Replace regexp" tabularium-replace-regexp)
+      ("R R" "Visible: regexp" tabularium-replace-visible-regexp)
       ("R /" "Query-replace" tabularium-replace-query)
       ("R ?" "Visible: query" tabularium-replace-visible-query)
       ("R c" "Case toggle" tabularium-toggle-case-sensitive)
@@ -836,12 +846,12 @@
       ("F ." "To point ↓" tabularium-view-fill-down-to-point)
       ("F s" "Fill series" tabularium-view-fill-series)
       ("F D" "Delete run" tabularium-view-fill-delete)
-      ("F X" "Clear to row" tabularium-view-fill-clear)]
+      ("F x" "Clear up to row" tabularium-view-fill-clear-to-point)
+      ("F X" "Clear incl. row" tabularium-view-fill-clear)]
      ["Calculate (# prefix)"
       ("# c" "Count query" tabularium-aggregate-count)
-      ("# V" "Count visible" tabularium-aggregate-visible-count)
+      ("# C" "Count visible" tabularium-aggregate-visible-count)
       ("# *" "Count marked" tabularium-view-count-marked)
-      ("# @" "Count across" tabularium-view-count-across)
       ("# s" "Sum" tabularium-aggregate-sum)
       ("# S" "Visible: Sum" tabularium-aggregate-visible-sum)
       ("# m" "Min/Max" tabularium-aggregate-min-max)
@@ -854,6 +864,7 @@
      ["Columns (| prefix)" :pad-keys t
       ("| t" "Toggle" tabularium-view-toggle-column)
       ("| h" "Hide" tabularium-view-hide-columns)
+      ("| s" "Show" tabularium-view-show-columns)
       ("| o" "Show only" tabularium-view-show-only-columns)
       ("| a" "Show all" tabularium-view-show-all-columns)
       ("| r" "Reorder" tabularium-view-reorder-columns)
@@ -868,9 +879,7 @@
       ("| M" "Move cols" tabularium-view-column-move)
       ("| W" "Swap cols" tabularium-view-column-swap)
       ("| C" "Copy cols" tabularium-view-column-copy)
-      ("| X" "Cut cols" tabularium-view-column-cut)
-      ("| V" "Paste cols" tabularium-view-column-paste)
-      ("| A" "Append cols" tabularium-view-column-paste-append)]
+      ("| X" "Cut cols" tabularium-view-column-cut)]
      ["Database"
       ("o" "Open" tabularium-open)
       ("O" "Open + View" tabularium-open-and-view)
@@ -882,11 +891,11 @@
       ("?" "Describe DB" tabularium-describe-database)]
      ["Schema"
       (". ." "Edit" tabularium-schema-edit)
-      (". s" "Show" tabularium-schema-show)
-      (". r" "Reload" tabularium-schema-reload)
+      (". v" "View" tabularium-schema-view)
+      (". =" "Reload" tabularium-schema-reload)
       (". w" "Switch" tabularium-schema-switch)
       (". +" "Add field" tabularium-view-column-add)
-      (". n" "Rename field" tabularium-schema-rename-field)]])
+      (". $" "Rename field" tabularium-schema-rename-field)]])
 
   ;; Goto transient (for view mode)
   (transient-define-prefix tabularium-view-goto-transient ()

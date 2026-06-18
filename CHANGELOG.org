@@ -4,6 +4,50 @@
 
 All notable changes to ~tabularium~ are documented in this file.
 
+* 0.5.1 (2026-06-18)
+
+** Added
+
+- =f f= (~tabularium-view-filter-at-point~) adds an exact-match filter on the cell value at point; computed columns, having no stored value, are rejected
+- A *Sort Rules List* buffer (=s l=, ~tabularium-view-sort-buffer~) parallels the Filter and Highlight rules-list buffers, with the same marking, removal, reorder, and direction-cycle keys
+- The database registry flags the open database with a =+= in the mark column and re-renders on open so the just-opened entry sorts to the top under point
+- All three rules-list buffers (sort, filter, highlight) gain =M-p= / =M-n= (and =M-<up>= / =M-<down>=) to move the rule at point
+- =s `= (~tabularium-view-sort-index~) sorts by the primary-key column; =s s= (~tabularium-view-sort-reverse~) now sorts by the column at point, the keyboard equivalent of clicking a header
+- "Remove all" commands for sort (=s X=) and filter (=f X=), plus =X= in their rules-list buffers
+- =F x= (~tabularium-view-fill-clear-to-point~) clears the column up to but not including point; the inclusive clear moves to =F X=
+- =| s= (~tabularium-view-show-columns~) reveals hidden columns, the inverse of =| h=
+- ~tabularium-close~ is bound to =c= in the main menu, the bare command map, and the registry
+- =z x= is an extra unfreeze alias alongside =z u=
+
+** Changed
+
+- Sorting now follows the same rules paradigm as filtering and highlighting: =s s= reverses, =s a= adds a key, =s c= cycles a key's direction, =s x= removes one key or all, and =s l= opens the rules-list buffer.  Views remain the way to persist a sort
+- "Layers" terminology is retired for "rules" throughout the filter code and UI: ~tabularium-view-filter~ becomes ~tabularium-view-filter-add~, the internal stack is ~tabularium--filter-rules~, and sort, filter, and highlight now share one vocabulary
+- =f a= is the filter-type dispatcher (was =f f=); in the Filter Rules List buffer =c= cycles the logical connective (was =j=)
+- In all three rules-list buffers the plain arrows stay within the list and the cursor starts on the first rule
+- A view's sort, filters, and visible columns persist across a quit (=q=) and reopen while the database stays open; closing the database resets them
+- Counting folds "count across" into ~tabularium-aggregate-count~ (=# c=), which counts a single column or several via a ~completing-read-multiple~ with an =<<ALL>>= sentinel
+- "Freeze marked" and "unfreeze marked" merge into ~tabularium-view-freeze~ / ~tabularium-view-unfreeze~, which act on the marked rows or the row at point
+- ~tabularium-view-column-add~ follows the creation wizard's order (label, then slug) and always appends; use ~tabularium-view-column-insert~ to choose a position.  ~tabularium-view-column-edit~ matches that order
+- Pasting a column mirrors row paste: =V= inserts at point, =A= appends
+- ~tabularium-view-move-column-left~ / ~-right~ now register undo/redo, affecting only the buffer's display order
+- Keybinding-consistency pass with the hydra displays as the source of truth: replace =R s= / =R S= / =R r= / =R R=, mark =* s= / =* e=, filter exact =f e=, visible count =# C=, fill delete-run =F D=
+- The column-summary buffer uses the standard 80-character box width and a flat-indent layout with aligned =Value= / =Count= / =%= columns
+
+** Removed
+
+- Column-header click-to-sort (=mouse-1= / =mouse-3=) and its helpers; =^= is no longer bound
+- The redundant column-specific paste commands =| V= / =| A=; standard =V= / =A= now handle columns
+- ~tabularium-customize~ from the bare command map (still available via =M-x=)
+
+** Fixed
+
+- Hiding a column that a computed column depends on no longer blanks the computed column
+- Removing a column in a table with computed columns no longer errors; this also fixes undoing a created column and cutting a column in such tables
+- =<backtab>= no longer jumps multiple cells in tables with computed columns or near highlighted cells, and the spurious "Push this button" message is gone—faced cells are now propertized strings rather than buttons
+- A stale ~tabularium-schema-show~ reference in the transient menus is corrected to ~tabularium-schema-view~
+- The redo message now names the action being redone rather than its inverse
+
 * 0.5.0 (2026-05-18)
 
 ** Added
@@ -47,7 +91,6 @@ All notable changes to ~tabularium~ are documented in this file.
 - ~tabularium-view-fill-clear~ includes row #1 when it is the far end of the range
 - Deleting a row in view mode keeps point on the same visual row
 - Invalid-type error messages for ~integer~/~number~ are shortened to just the rejected value
-
 
 * 0.4.8 (2026-05-17)
 
