@@ -147,16 +147,20 @@ Cell-jump commands accept a prefix argument to jump across multiple value transi
 
 | Command                              | Description                                                         |
 |--------------------------------------+---------------------------------------------------------------------|
-| ~tabularium-view-fill~                 | Fill gap: propagate nearest value above into blanks up to point     |
-| ~tabularium-view-fill-forward~         | Fill forward: propagate value at point (or above) into blanks below |
-| ~tabularium-view-fill-down~            | Prompted fill downward: choose field and value                      |
-| ~tabularium-view-fill-up~              | Prompted fill upward: choose field and value                        |
-| ~tabularium-view-fill-series~          | Fill with a numeric or date series                                  |
-| ~tabularium-view-fill-down-to-point~   | Fill down to point: propagate nearest value above into blanks       |
-| ~tabularium-view-fill-up-to-point~     | Fill up to point: propagate nearest value below into blanks         |
-| ~tabularium-view-fill-delete~          | Delete run: clear consecutive same-value cells from point           |
-| ~tabularium-view-fill-clear~           | Clear through row: blank the current column from point through a target |
-| ~tabularium-view-fill-clear-to-point~  | Clear up to row: blank the current column up to (not including) point   |
+| ~tabularium-view-fill-forward~       | Fill forward (context): propagate the value at point into the blank run below |
+| ~tabularium-view-fill-backward~      | Fill backward (context): propagate the value at point into the blank run above |
+| ~tabularium-view-fill-down~          | Prompted fill downward: choose field and value                      |
+| ~tabularium-view-fill-up~            | Prompted fill upward: choose field and value                        |
+| ~tabularium-view-fill-down-to-point~ | Fill down to point: propagate the nearest value above into blanks down to point |
+| ~tabularium-view-fill-up-to-point~   | Fill up to point: propagate the nearest value below into blanks up to point |
+| ~tabularium-view-fill-series~        | Fill a numeric or date series downward                              |
+| ~tabularium-view-fill-series-up~     | Fill a numeric or date series upward                                |
+| ~tabularium-view-fill-delete~        | Delete run downward: clear consecutive same-value cells from point  |
+| ~tabularium-view-fill-delete-up~     | Delete run upward: clear consecutive same-value cells from point    |
+| ~tabularium-view-fill-replace~       | Replace run downward: set consecutive same-value cells to a prompted value |
+| ~tabularium-view-fill-replace-up~    | Replace run upward: set consecutive same-value cells to a prompted value |
+| ~tabularium-view-fill-clear~         | Clear through row: blank the current column from point through a target |
+| ~tabularium-view-fill-clear-to-point~ | Clear up to row: blank the current column up to (not including) point |
 | ~tabularium-replace-substring~         | Replace substring across selected fields                            |
 | ~tabularium-replace-exact~             | Replace exact value across selected fields                          |
 | ~tabularium-replace-pattern~           | Replace values matching a glob pattern across selected fields       |

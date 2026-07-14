@@ -4,7 +4,7 @@
 
 ;; Author: Paul H. McClelland <paulhmcclelland@protonmail.com>
 ;; Maintainer: Paul H. McClelland <paulhmcclelland@protonmail.com>
-;; Version: 0.5.0
+;; Version: 0.5.1
 ;; Package-Requires: ((emacs "29.1"))
 ;; Keywords: data, sql, tables
 ;; URL: https://codeberg.org/phmcc/tabularium
@@ -6750,14 +6750,18 @@ can be customized without affecting unrelated buffers."
     (define-key map (kbd "f x") #'tabularium-view-filter-remove)
     (define-key map (kbd "f X") #'tabularium-view-filter-remove-all)
     ;; Fill operations
-    (define-key map (kbd "F F") #'tabularium-view-fill)
     (define-key map (kbd "F f") #'tabularium-view-fill-forward)
+    (define-key map (kbd "F F") #'tabularium-view-fill-backward)
     (define-key map (kbd "F n") #'tabularium-view-fill-down)
     (define-key map (kbd "F p") #'tabularium-view-fill-up)
     (define-key map (kbd "F ,") #'tabularium-view-fill-up-to-point)
     (define-key map (kbd "F .") #'tabularium-view-fill-down-to-point)
     (define-key map (kbd "F s") #'tabularium-view-fill-series)
-    (define-key map (kbd "F D") #'tabularium-view-fill-delete)
+    (define-key map (kbd "F S") #'tabularium-view-fill-series-up)
+    (define-key map (kbd "F d") #'tabularium-view-fill-delete)
+    (define-key map (kbd "F D") #'tabularium-view-fill-delete-up)
+    (define-key map (kbd "F r") #'tabularium-view-fill-replace)
+    (define-key map (kbd "F R") #'tabularium-view-fill-replace-up)
     (define-key map (kbd "F x") #'tabularium-view-fill-clear-to-point)
     (define-key map (kbd "F X") #'tabularium-view-fill-clear)
     ;; Highlight (conditional formatting) — `h' prefix.  Each command
@@ -6807,6 +6811,7 @@ can be customized without affecting unrelated buffers."
     (define-key map (kbd "z u") #'tabularium-view-unfreeze)
     (define-key map (kbd "z x") #'tabularium-view-unfreeze)
     (define-key map (kbd "z U") #'tabularium-view-unfreeze-all)
+    (define-key map (kbd "z X") #'tabularium-view-unfreeze-all)
 
     ;; === Constructive/Destructive ===
     ;; Create
@@ -8222,7 +8227,7 @@ Presents a completion menu of available operations."
                     ("duplicate"    . tabularium-view-duplicate)
                     ("edit"         . tabularium-view-edit)
                     ("export"       . tabularium-export)
-                    ("fill"         . tabularium-view-fill)
+                    ("fill"         . tabularium-view-fill-forward)
                     ("freeze"          . tabularium-view-freeze)
                     ("move"         . tabularium-view-move)
                     ("swap"         . tabularium-view-swap)))
@@ -14068,34 +14073,42 @@ SOURCE-VALUE is not among the allowed choices."
       (revert-buffer)
       (message "Filled %d row%s" filled (if (= filled 1) "" "s")))))
 
-(defun tabularium-view-fill ()
-  "Fill the blank gap above point in the current column.
-Scans upward to find the nearest non-blank value, then fills all
-blank cells between that value and point (inclusive) with it.
-With marks, fills the marked rows instead.  Undoable."
+(defun tabularium-view-fill-backward ()
+  "Fill backward from point: propagate a value into blank cells above.
+Uses the current column.  If the cell at point is non-blank, fills
+consecutive blank cells above with its value.  If the cell at point
+is blank, finds the nearest non-blank value below and fills from
+point upward.  With marks, fills the marked rows instead.  The
+mirror of `tabularium-view-fill-forward'.  Undoable."
   (interactive)
   (let* ((col-name (or (tabularium--column-name-at-point)
                        (user-error "No column at point")))
          (field (symbol-name col-name))
-         (has-marks (and tabularium--marked-entries
-                         (> (length tabularium--marked-entries) 0)))
-         ;; Scan upward for nearest non-blank value
+         (id (tabularium--id-at-point))
+         (record (when id (tabularium--get-record-by-id id)))
+         (cell-val (when record (alist-get col-name record)))
+         (cell-blank (or (null cell-val)
+                         (string-empty-p (format "%s" cell-val))))
+         ;; Determine fill value
          (fill-value
-          (save-excursion
-            (let ((found nil))
-              (while (and (not found) (zerop (forward-line -1)))
-                (when-let ((rid (tabulated-list-get-id)))
-                  (let* ((rec (tabularium--get-record-by-id rid))
-                         (val (alist-get col-name rec)))
-                    (when (and val (not (string-empty-p (format "%s" val))))
-                      (setq found (format "%s" val))))))
-              found))))
+          (if (not cell-blank)
+              (format "%s" cell-val)
+            ;; Scan downward for nearest non-blank value in this column
+            (save-excursion
+              (let ((found nil))
+                (while (and (not found) (zerop (forward-line 1)))
+                  (when-let ((rid (tabulated-list-get-id)))
+                    (let* ((rec (tabularium--get-record-by-id rid))
+                           (val (alist-get col-name rec)))
+                      (when (and val (not (string-empty-p (format "%s" val))))
+                        (setq found (format "%s" val))))))
+                found)))))
     (unless fill-value
-      (user-error "No value found above to fill from"))
-    (if has-marks
-        (tabularium--fill-execute field fill-value)
-      ;; Fill blank cells upward from point to the source row
-      (tabularium--fill-execute field fill-value 'up))))
+      (user-error "No value found below to fill from"))
+    ;; When cell is non-blank, start filling from the previous row
+    (unless cell-blank
+      (forward-line -1))
+    (tabularium--fill-execute field fill-value 'up)))
 
 (defun tabularium-view-fill-forward ()
   "Fill forward from point: propagate a value into blank cells below.
@@ -14208,60 +14221,66 @@ the filled range.  Undoable."
       (user-error "No value found below to fill from"))
     (tabularium--fill-execute field fill-value 'down)))
 
-(defun tabularium-view-fill-series (field start increment)
-  "Fill FIELD with a series starting at START with INCREMENT.
-For numeric fields (integer, number), START and INCREMENT are numbers.
-For date fields, START is a date string and INCREMENT is a number of days.
-Undoable."
-  (interactive
-   (let* ((fillable-types '(integer number date))
-          (field (completing-read "Fill series in field: "
-                                  (mapcar (lambda (f) (symbol-name (plist-get f :id)))
-                                          (cl-remove-if-not
-                                           (lambda (f) (memq (plist-get f :type) fillable-types))
-                                           (tabularium--schema-fields)))
-                                  nil t))
-          (field-def (cl-find-if (lambda (f) (string= (symbol-name (plist-get f :id)) field))
-                                 (tabularium--schema-fields)))
-          (field-type (plist-get field-def :type))
-          (existing (tabularium--get-historical-values field 20))
-          (has-data (and existing (car existing)
-                         (not (string-empty-p (format "%s" (car existing)))))))
-     (if (eq field-type 'date)
-         ;; Date field: smart source selection
-         (let* ((today (format-time-string tabularium-date-format))
-                (source-choices (append (when has-data '("<<ROW>>"))
-                                        (mapcar (lambda (v) (format "%s" v)) existing)))
-                (choice (completing-read (format "Start date for '%s': " field)
-                                         source-choices nil nil nil nil
-                                         (if has-data "<<ROW>>" today)))
-                (start (cond
-                        ((string= choice "<<ROW>>")
-                         (let* ((default-id (tabularium--id-at-point))
-                                (source-id (read-number "Source row ID: " default-id))
-                                (record (tabularium--get-record-by-id source-id)))
-                           (format "%s" (alist-get (intern field) record))))
-                        (t (if (string-empty-p choice) today choice))))
-                (increment (read-number "Increment (days): " 1)))
-           (list field start increment))
-       ;; Numeric field: smart source selection
-       (let* ((source-choices (append (when has-data '("<<ROW>>"))
-                                      (mapcar (lambda (v) (format "%s" v)) existing)))
-              (choice (completing-read (format "Start value for '%s': " field)
-                                       source-choices nil nil nil nil nil))
-              (start (cond
-                      ((string= choice "<<ROW>>")
-                       (let* ((default-id (tabularium--id-at-point))
-                              (source-id (read-number "Source row ID: " default-id))
-                              (record (tabularium--get-record-by-id source-id))
-                              (val (alist-get (intern field) record)))
-                         (if (numberp val) val
-                           (string-to-number (format "%s" val)))))
-                      ((or (null choice) (string-empty-p choice))
-                       (read-number "Start value: " 1))
-                      (t (string-to-number choice))))
-              (increment (read-number "Increment: " 1)))
-         (list field start increment)))))
+(defun tabularium--fill-series-read-args ()
+  "Read FIELD, START, and INCREMENT for a fill-series command.
+Returns a list (FIELD START INCREMENT) for the interactive spec of
+the fill-series commands.  START may be copied from a row, picked
+from existing values, or entered directly."
+  (let* ((fillable-types '(integer number date))
+         (field (completing-read "Fill series in field: "
+                                 (mapcar (lambda (f) (symbol-name (plist-get f :id)))
+                                         (cl-remove-if-not
+                                          (lambda (f) (memq (plist-get f :type) fillable-types))
+                                          (tabularium--schema-fields)))
+                                 nil t))
+         (field-def (cl-find-if (lambda (f) (string= (symbol-name (plist-get f :id)) field))
+                                (tabularium--schema-fields)))
+         (field-type (plist-get field-def :type))
+         (existing (tabularium--get-historical-values field 20))
+         (has-data (and existing (car existing)
+                        (not (string-empty-p (format "%s" (car existing)))))))
+    (if (eq field-type 'date)
+        ;; Date field: smart source selection
+        (let* ((today (format-time-string tabularium-date-format))
+               (source-choices (append (when has-data '("<<ROW>>"))
+                                       (mapcar (lambda (v) (format "%s" v)) existing)))
+               (choice (completing-read (format "Start date for '%s': " field)
+                                        source-choices nil nil nil nil
+                                        (if has-data "<<ROW>>" today)))
+               (start (cond
+                       ((string= choice "<<ROW>>")
+                        (let* ((default-id (tabularium--id-at-point))
+                               (source-id (read-number "Source row ID: " default-id))
+                               (record (tabularium--get-record-by-id source-id)))
+                          (format "%s" (alist-get (intern field) record))))
+                       (t (if (string-empty-p choice) today choice))))
+               (increment (read-number "Increment (days): " 1)))
+          (list field start increment))
+      ;; Numeric field: smart source selection
+      (let* ((source-choices (append (when has-data '("<<ROW>>"))
+                                     (mapcar (lambda (v) (format "%s" v)) existing)))
+             (choice (completing-read (format "Start value for '%s': " field)
+                                      source-choices nil nil nil nil nil))
+             (start (cond
+                     ((string= choice "<<ROW>>")
+                      (let* ((default-id (tabularium--id-at-point))
+                             (source-id (read-number "Source row ID: " default-id))
+                             (record (tabularium--get-record-by-id source-id))
+                             (val (alist-get (intern field) record)))
+                        (if (numberp val) val
+                          (string-to-number (format "%s" val)))))
+                     ((or (null choice) (string-empty-p choice))
+                      (read-number "Start value: " 1))
+                     (t (string-to-number choice))))
+             (increment (read-number "Increment: " 1)))
+        (list field start increment)))))
+
+(defun tabularium--fill-series-fill (field start increment direction)
+  "Fill FIELD with a series from point in DIRECTION (\\='down or \\='up).
+START is the value at point; successive cells away from point in
+DIRECTION step by INCREMENT.  For date fields START is a date string
+and INCREMENT a number of days.  With marks, fills the marked rows in
+ascending ID order.  Undoable."
   (let* ((has-marks (and tabularium--marked-entries
                          (> (length tabularium--marked-entries) 0)))
          (field-def (cl-find-if (lambda (f) (string= (symbol-name (plist-get f :id)) field))
@@ -14269,10 +14288,13 @@ Undoable."
          (field-type (plist-get field-def :type))
          (is-date (eq field-type 'date))
          (field-sym (intern field))
-         (ids (if has-marks
-                  (cl-sort (copy-sequence tabularium--marked-entries) #'<)
-                ;; Auto-detect blank range from point
-                (tabularium--find-blank-range-down field)))
+         (ids (cond
+               (has-marks
+                (cl-sort (copy-sequence tabularium--marked-entries) #'<))
+               ((eq direction 'up)
+                (reverse (tabularium--find-blank-range-up field)))
+               (t
+                (tabularium--find-blank-range-down field))))
          ;; For dates, parse the start date to a time value for incrementing
          (date-time (when is-date
                       (let ((parsed (parse-time-string start)))
@@ -14342,65 +14364,114 @@ Undoable."
         (revert-buffer)
         (message "Filled series in %d rows" count)))))
 
+(defun tabularium-view-fill-series (field start increment)
+  "Fill FIELD downward with a series starting at START with INCREMENT.
+For numeric fields (integer, number), START and INCREMENT are numbers.
+For date fields, START is a date string and INCREMENT is a number of days.
+The mirror of `tabularium-view-fill-series-up'.  Undoable."
+  (interactive (tabularium--fill-series-read-args))
+  (tabularium--fill-series-fill field start increment 'down))
+
+(defun tabularium-view-fill-series-up (field start increment)
+  "Fill FIELD upward with a series starting at START with INCREMENT.
+Like `tabularium-view-fill-series' but fills the blank run above
+point; START is the value at point and successive cells upward step
+by INCREMENT.  Undoable."
+  (interactive (tabularium--fill-series-read-args))
+  (tabularium--fill-series-fill field start increment 'up))
+
+(defun tabularium--fill-run-ids (col-name direction)
+  "Return row IDs of the same-value run from point in DIRECTION.
+DIRECTION is \\='down or \\='up.  The run is the maximal block of
+consecutive rows (starting at point and moving in DIRECTION) whose
+COL-NAME value equals the value at point.  With marked rows active,
+returns those instead (DIRECTION is ignored)."
+  (let ((has-marks (and tabularium--marked-entries
+                        (> (length tabularium--marked-entries) 0))))
+    (if has-marks
+        (copy-sequence tabularium--marked-entries)
+      (let* ((current-id (or (tabulated-list-get-id)
+                             (user-error "No row at point")))
+             (start-rec (tabularium--get-record-by-id current-id))
+             (ref-val (format "%s" (or (alist-get col-name start-rec) "")))
+             (run '()))
+        (save-excursion
+          (if (eq direction 'up)
+              ;; Read the current row *before* the `bobp' check so row #1
+              ;; (which may sit at `point-min') is not skipped.
+              (cl-block bwd
+                (while t
+                  (when-let ((id (tabulated-list-get-id)))
+                    (let* ((rec (tabularium--get-record-by-id id))
+                           (val (format "%s" (or (alist-get col-name rec) ""))))
+                      (if (string= val ref-val)
+                          (push id run)
+                        (cl-return-from bwd))))
+                  (when (bobp) (cl-return-from bwd))
+                  (forward-line -1)))
+            (cl-block fwd
+              (while t
+                (when-let ((id (tabulated-list-get-id)))
+                  (let* ((rec (tabularium--get-record-by-id id))
+                         (val (format "%s" (or (alist-get col-name rec) ""))))
+                    (if (string= val ref-val)
+                        (push id run)
+                      (cl-return-from fwd))))
+                (when (eobp) (cl-return-from fwd))
+                (forward-line 1)
+                (when (eobp) (cl-return-from fwd))))))
+        (when (or (null run)
+                  (and (= 1 (length run)) (string-empty-p ref-val)))
+          (user-error "No matching cells from point"))
+        run))))
+
 (defun tabularium-view-fill-delete ()
-  "Delete a same-value run in the current column from point.
-Scans downward through consecutive cells that share the same value
-as the cell at point, and clears them all.  With marks, clears the
-current column in marked rows instead.  Undoable."
+  "Delete a same-value run in the current column downward from point.
+Scans downward through consecutive cells that share the value at
+point and clears them all.  With marks, clears the current column in
+marked rows instead.  The mirror of `tabularium-view-fill-delete-up'.
+Undoable."
+  (interactive)
+  (let ((col-name (or (tabularium--column-name-at-point)
+                      (user-error "No column at point"))))
+    (tabularium--fill-clear (tabularium--fill-run-ids col-name 'down) col-name)))
+
+(defun tabularium-view-fill-delete-up ()
+  "Delete a same-value run in the current column upward from point.
+Scans upward through consecutive cells that share the value at point
+and clears them all.  With marks, clears the current column in marked
+rows instead.  Undoable."
+  (interactive)
+  (let ((col-name (or (tabularium--column-name-at-point)
+                      (user-error "No column at point"))))
+    (tabularium--fill-clear (tabularium--fill-run-ids col-name 'up) col-name)))
+
+(defun tabularium-view-fill-replace ()
+  "Replace a same-value run in the current column downward from point.
+Scans downward through consecutive cells that share the value at
+point and sets them all to a prompted replacement value.  With marks,
+replaces the current column in marked rows instead.  The mirror of
+`tabularium-view-fill-replace-up'.  Undoable."
   (interactive)
   (let* ((col-name (or (tabularium--column-name-at-point)
                        (user-error "No column at point")))
          (field (symbol-name col-name))
-         (has-marks (and tabularium--marked-entries
-                         (> (length tabularium--marked-entries) 0)))
-         (ids
-          (if has-marks
-              (copy-sequence tabularium--marked-entries)
-            ;; Scan same-value run downward
-            (let* ((current-id (or (tabulated-list-get-id)
-                                   (user-error "No row at point")))
-                   (start-rec (tabularium--get-record-by-id current-id)))
-              (let ((ref-val (format "%s" (or (alist-get col-name start-rec) "")))
-                    (run '()))
-                (save-excursion
-                  (while (and (not (eobp))
-                              (when-let ((id (tabulated-list-get-id)))
-                                (let* ((rec (tabularium--get-record-by-id id))
-                                       (val (format "%s" (or (alist-get col-name rec) ""))))
-                                  (when (string= val ref-val)
-                                    (push id run)
-                                    t))))
-                    (forward-line 1)))
-                (when (or (null run)
-                          (and (= 1 (length run))
-                               (string-empty-p ref-val)))
-                  (user-error "No filled cells to delete from point"))
-                (nreverse run))))))
-    (when (yes-or-no-p (format "Clear '%s' in %d rows? " field (length ids)))
-      (let ((ops '())
-            (cleared 0))
-        (tabularium-db-with-transaction tabularium--db
-          (dolist (id ids)
-            (let* ((record (tabularium--get-record-by-id id))
-                   (old-value (alist-get col-name record)))
-              (when (and old-value (not (string-empty-p (format "%s" old-value))))
-                (push (list :type 'update :row id :field col-name
-                            :old old-value :new "")
-                      ops)
-                (tabularium-db-update tabularium--db tabularium-table-name
-                                  (list (cons col-name ""))
-                                  (tabularium--primary-field-name) id)
-                (cl-incf cleared)))))
-        (when ops
-          (tabularium--undo-push (if (= 1 (length ops))
-                                 (car ops)
-                               (list :type 'multi :ops (nreverse ops)))))
-        (tabularium--invalidate-cache)
-        (when has-marks
-          (setq tabularium--marked-entries nil)
-          (tabularium-view--update-mark-display))
-        (revert-buffer)
-        (message "Cleared %d row%s" cleared (if (= cleared 1) "" "s"))))))
+         (ids (tabularium--fill-run-ids col-name 'down))
+         (value (tabularium--fill-source-choice field)))
+    (tabularium--fill-set-rows ids col-name value "Replace" "Replaced")))
+
+(defun tabularium-view-fill-replace-up ()
+  "Replace a same-value run in the current column upward from point.
+Scans upward through consecutive cells that share the value at point
+and sets them all to a prompted replacement value.  With marks,
+replaces the current column in marked rows instead.  Undoable."
+  (interactive)
+  (let* ((col-name (or (tabularium--column-name-at-point)
+                       (user-error "No column at point")))
+         (field (symbol-name col-name))
+         (ids (tabularium--fill-run-ids col-name 'up))
+         (value (tabularium--fill-source-choice field)))
+    (tabularium--fill-set-rows ids col-name value "Replace" "Replaced")))
 
 (defun tabularium--fill-clear-rows (target-id include-point)
   "Return the row IDs to clear for a fill-clear command.
@@ -14475,6 +14546,43 @@ Shared worker for the fill-clear commands."
           (tabularium-view--update-mark-display))
         (revert-buffer)
         (message "Cleared %d row%s" cleared (if (= cleared 1) "" "s"))))))
+
+(defun tabularium--fill-set-rows (ids col-name value prompt-verb done-verb)
+  "Set COL-NAME to VALUE in the rows whose IDs are in IDS.  Undoable.
+PROMPT-VERB (e.g. \"Replace\") heads the confirmation prompt and
+DONE-VERB (e.g. \"Replaced\") the result message.  Cells already
+holding VALUE are skipped.  With marked rows active, marks are
+cleared afterward.  Shared worker for the fill-replace commands."
+  (let* ((field (symbol-name col-name))
+         (has-marks (and tabularium--marked-entries
+                         (> (length tabularium--marked-entries) 0)))
+         (value-str (format "%s" value)))
+    (when (yes-or-no-p (format "%s '%s' in %d rows? " prompt-verb field (length ids)))
+      (let ((ops '())
+            (changed 0))
+        (tabularium-db-with-transaction tabularium--db
+          (dolist (id ids)
+            (let* ((record (tabularium--get-record-by-id id))
+                   (old-value (alist-get col-name record))
+                   (old-str (if old-value (format "%s" old-value) "")))
+              (unless (string= old-str value-str)
+                (push (list :type 'update :row id :field col-name
+                            :old old-value :new value)
+                      ops)
+                (tabularium-db-update tabularium--db tabularium-table-name
+                                      (list (cons col-name value))
+                                      (tabularium--primary-field-name) id)
+                (cl-incf changed)))))
+        (when ops
+          (tabularium--undo-push (if (= 1 (length ops))
+                                     (car ops)
+                                   (list :type 'multi :ops (nreverse ops)))))
+        (tabularium--invalidate-cache)
+        (when has-marks
+          (setq tabularium--marked-entries nil)
+          (tabularium-view--update-mark-display))
+        (revert-buffer)
+        (message "%s %d row%s" done-verb changed (if (= changed 1) "" "s"))))))
 
 (defun tabularium-view-fill-clear (target-id)
   "Clear the current column from point to TARGET-ID (inclusive).

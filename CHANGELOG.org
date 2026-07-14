@@ -4,7 +4,7 @@
 
 All notable changes to ~tabularium~ are documented in this file.
 
-* 0.5.1 (2026-06-18)
+* 0.5.1 (2026-07-13)
 
 ** Added
 
@@ -15,6 +15,9 @@ All notable changes to ~tabularium~ are documented in this file.
 - =s `= (~tabularium-view-sort-index~) sorts by the primary-key column; =s s= (~tabularium-view-sort-reverse~) now sorts by the column at point, the keyboard equivalent of clicking a header
 - "Remove all" commands for sort (=s X=) and filter (=f X=), plus =X= in their rules-list buffers
 - =F x= (~tabularium-view-fill-clear-to-point~) clears the column up to but not including point; the inclusive clear moves to =F X=
+- =F S= (~tabularium-view-fill-series-up~) and =F D= (~tabularium-view-fill-delete-up~) add upward counterparts to fill-series and delete-run
+- =F r= / =F R= (~tabularium-view-fill-replace~ / ~tabularium-view-fill-replace-up~) set a same-value run to a prompted value, downward or upward
+- =z X= unfreezes all frozen rows as an alias for =z U=; both unfreeze aliases now appear in the freeze menus
 - =| s= (~tabularium-view-show-columns~) reveals hidden columns, the inverse of =| h=
 - ~tabularium-close~ is bound to =c= in the main menu, the bare command map, and the registry
 - =z x= is an extra unfreeze alias alongside =z u=
@@ -33,6 +36,8 @@ All notable changes to ~tabularium~ are documented in this file.
 - ~tabularium-view-move-column-left~ / ~-right~ now register undo/redo, affecting only the buffer's display order
 - Keybinding-consistency pass with the hydra displays as the source of truth: replace =R s= / =R S= / =R r= / =R R=, mark =* s= / =* e=, filter exact =f e=, visible count =# C=, fill delete-run =F D=
 - The column-summary buffer uses the standard 80-character box width and a flat-indent layout with aligned =Value= / =Count= / =%= columns
+- =F F= is now a true backward fill, the mirror of =F f=, propagating the value at point into the blank run above; ~tabularium-view-fill~ is renamed ~tabularium-view-fill-backward~
+- Delete-run moves to =F d=, freeing =F D= for the new upward variant; across the directional fill commands the lowercase key acts downward and the uppercase key upward
 
 ** Removed
 
@@ -44,7 +49,7 @@ All notable changes to ~tabularium~ are documented in this file.
 
 - Hiding a column that a computed column depends on no longer blanks the computed column
 - Removing a column in a table with computed columns no longer errors; this also fixes undoing a created column and cutting a column in such tables
-- =<backtab>= no longer jumps multiple cells in tables with computed columns or near highlighted cells, and the spurious "Push this button" message is gone—faced cells are now propertized strings rather than buttons
+- =<backtab>= no longer jumps multiple cells in tables with computed columns or near highlighted cells, and the spurious "Push this button" message is gone — faced cells are now propertized strings rather than buttons
 - A stale ~tabularium-schema-show~ reference in the transient menus is corrected to ~tabularium-schema-view~
 - The redo message now names the action being redone rather than its inverse
 

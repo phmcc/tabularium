@@ -29,184 +29,94 @@ Cell-jump navigation moves to the next cell with a different value, useful for g
 
 Page navigation (=C-<down>= / =C-<up>=) jumps by the configured page size in either direction.  Column scroll (=C-<right>= / =C-<left>=) shifts the visible portion of the buffer one column at a time, useful when columns overflow the window.
 
-** Goto (='= prefix)
-
-| Key | Command              |
-|-----+----------------------|
-| =' c= | Go to column by name |
-| =' r= | Go to row by number  |
-| =' e= | Go to entry by ID    |
-
-** Entry creation and modification
-
-| Key | Command                             |
-|-----+-------------------------------------|
-| =N=   | New entry (form)                    |
-| =P=   | Prompt entry (minibuffer)           |
-| =Q=   | Quick entry (subset of fields)      |
-| =I=   | Insert at position (=C-u= for prompt) |
-| =E=   | Edit entry (form)                   |
-| =d=   | Duplicate entry                     |
-| =D=   | Delete entry                        |
-| =C=   | Copy entry                          |
-| =V=   | Paste at point — rows, or a column at point (=C-u= consumes) |
-| =A=   | Paste at end — rows, or a column at the end (=C-u= consumes)  |
-| =X=   | Cut entry                           |
-| =M=   | Move entry                          |
-| =W=   | Swap entries (exactly 2)            |
-| =`=   | Reindex IDs                         |
-
-** Marking (dired-style)
-
-| Key | Command                   |
-|-----+---------------------------|
-| =m=   | Mark entry (region-aware) |
-| =u=   | Unmark entry              |
-| =U=   | Unmark all                |
-| =t=   | Toggle all marks          |
-| =x=   | Execute on marked         |
-| =* s= | Mark matching (substring) |
-| =* e= | Mark exact                |
-| =* p= | Mark pattern (SQL LIKE)   |
-| =* r= | Mark regexp               |
-| =* #= | Count marked              |
-
-** Replace (=R= prefix)
-
-| Key | Command                               |
-|-----+---------------------------------------|
-| =R s= | Replace substring                     |
-| =R S= | Replace substring (visible rows only) |
-| =R e= | Replace exact                         |
-| =R E= | Replace exact (visible rows only)     |
-| =R p= | Replace pattern (SQL LIKE)            |
-| =R r= | Replace regexp                        |
-| =R R= | Replace regexp (visible rows only)    |
-| =R /= | Query-replace (interactive)           |
-| =R ?= | Query-replace (visible rows only)     |
-| =R c= | Toggle case-sensitivity               |
-
-Uppercase variants scope to visible rows only.  Lowercase variants act on marked rows (if any) or all rows.  Choice fields (those with =:choice= in the schema) are automatically excluded when the replacement value is not in the allowed set.
-
-** Sort (=s= prefix)
-
-| Key | Command                            |
-|-----+------------------------------------|
-| =s s= | Sort by column at point (toggle, fallback index) |
-| =s `= | Sort by index column (toggle)      |
-| =s a= | Add sort rule (column + direction) |
-| =s c= | Cycle a sort rule's direction      |
-| =s x= | Remove sort rule(s) (=<<ALL>>= or one) |
-| =s X= | Remove all sort rules              |
-| =s l= | Open the Sort Rules List buffer    |
-
-Sorting mirrors filtering and highlighting.  Sort keys are additive
-rules: each =s a= adds another column (already-sorted columns are
-excluded from the prompt), =s s= makes the column at point the sole
-sort key (descending first, toggling on repeat — the keyboard
-equivalent of a header click, falling back to the index column when
-point is not on a sortable column), =s `= does the same for the index
-(primary-key) column, =s c= flips a chosen key's direction, =s x=
-removes one key or all of them (its prompt defaults to the =<<ALL>>=
-sentinel), and =s X= removes every key at once.  A view is the way to
-persist a sort, so there are no separate sort-save commands.  The
-modeline shows the active keys joined with =∧=, each with a =↑= / =↓=
-direction arrow (e.g. =author ↑ ∧ year ↓=).
-
-=s l= opens the Sort Rules List buffer — an interactive list of every
-sort key in priority order with its direction in a dedicated column.
-From it, =m= / =u= / =U= mark and unmark keys, =t= toggles all marks,
-=x= removes the marked keys (or the one at point), =X= removes every
-key, =c= cycles the direction of the key at point, =RET= re-enters a
-key, and =M-p= / =M-n= (or =M-<up>= / =M-<down>=) move a key up or down
-to change its priority.  The buffer refreshes automatically as the sort
-changes.
-
 ** Fill (=F= prefix)
 
 | Key | Command                                |
 |-----+----------------------------------------|
-| =F F= | Fill gap ↑ (value from above to point) |
-| =F f= | Fill forward ↓ (value from point down) |
-| =F n= | Fill next ↓ (prompted)                 |
-| =F p= | Fill prev ↑ (prompted)                 |
-| =F s= | Fill series (number or date)           |
-| =F .= | Fill ↓ to point (source above)          |
-| =F ,= | Fill ↑ to point (source below)          |
-| =F D= | Delete run (clear same-value cells)    |
+| =F f= | Fill ↓ (context)                       |
+| =F F= | Fill ↑ (context)                       |
+| =F n= | Fill ↓ (prompted)                      |
+| =F p= | Fill ↑ (prompted)                      |
+| =F .= | Fill ↓ to point (source above)         |
+| =F ,= | Fill ↑ to point (source below)         |
+| =F s= | Series ↓ (number or date)              |
+| =F S= | Series ↑ (number or date)              |
+| =F d= | Delete run ↓ (same-value cells)        |
+| =F D= | Delete run ↑ (same-value cells)        |
+| =F r= | Replace run ↓ (same-value cells)       |
+| =F R= | Replace run ↑ (same-value cells)       |
 | =F x= | Clear up to row (exclusive of point)   |
 | =F X= | Clear through row (inclusive of point) |
 
-=F F= and =F f= are zero-prompt: they infer the column and fill value from context.  =F n= and =F p= prompt for field and value.  =F .= and =F ,= are also zero-prompt and point-anchored: =F .= takes the nearest non-blank cell above and fills downward to point, while =F ,= takes the nearest non-blank cell below and fills upward to point.  =F D= clears the same-value run from point; =F x= clears the current column up to (but not including) a prompted row, and =F X= clears through it.
+Lowercase fill keys act downward from point and uppercase keys upward.  =F f= / =F F= are zero-prompt: they infer the column and fill value from context, propagating the value at point into the adjacent blank run.  =F n= / =F p= prompt for field and value.  =F .= / =F ,= are point-anchored: =F .= takes the nearest non-blank cell above and fills down to point, =F ,= takes the nearest non-blank cell below and fills up to point.  =F s= / =F S= fill a number or date series.  =F d= / =F D= clear the same-value run from point; =F r= / =F R= replace that run with a prompted value.  =F x= clears the current column up to (but not including) a prompted row, and =F X= clears through it.
 
 Without marks, fill operations auto-detect blank ranges from point.  With marks, they fill marked rows (prompting before overwriting non-blank cells).
 
 ** Highlight (=h= prefix)
 
-| =h h= | Quick-highlight marked rows (or the row at point) |
-| =h \= | Quick-highlight the column at point       |
-| =h |= | Quick-highlight columns (=<<ALL>>= / comma-separated) |
-| =h a= | New highlight rule (dispatches on rule type) |
+| Key | Command                                                     |
+|-----+-------------------------------------------------------------+
+| =h h= | Quick-highlight marked rows (or the row at point)           |
+| =h \= | Quick-highlight the column at point                         |
+| =h |= | Quick-highlight columns (=<<ALL>>= / comma-separated)        |
+| =h a= | New highlight rule (dispatches on rule type)                |
 | =h n= | Highlight by numeric/value/date comparison (> < >= <= = !=) |
-| =h d= | Highlight duplicate values                |
-| =h r= | Highlight cells matching a regexp         |
-| =h l= | Open the Highlight Rules List buffer      |
-| =h x= | Remove highlight rules (=<<ALL>>=, =<<UNSAVED>>=, or one rule) |
-| =h X= | Expunge saved highlight rules from the schema |
-| =h s= | Save one runtime highlight rule to the schema |
-| =h S= | Save all current highlight rules to the schema |
+| =h d= | Highlight duplicate values                                  |
+| =h r= | Highlight cells matching a regexp                           |
+| =h l= | Open the Highlight Rules List buffer                        |
+| =h x= | Remove highlight rules (=<<ALL>>=, =<<UNSAVED>>=, or one rule)  |
+| =h X= | Expunge saved highlight rules from the schema               |
+| =h s= | Save one runtime highlight rule to the schema               |
+| =h S= | Save all current highlight rules to the schema              |
 
 =h h=, =h \=, and =h |= are quick highlights for fast on-the-fly work: =h h= prompts only for a face and tints the marked rows (or the row at point); =h \= tints the column under point; =h |= tints columns chosen from the selector.  All three add a real rule to the Highlight Rules List, so they can be removed, reordered, or saved like any other.  =h a= is the full dispatcher: it prompts for the rule type, then runs the matching command.  Each rule command prompts for the target columns with a comma-separated =completing-read-multiple= selector — the =<<ALL>>= sentinel (or an empty answer) targets every visible column, the same field-selection paradigm the filter and mark commands use; the chosen columns are echoed back in a =[...]= hint.  =h n= offers only columns where a comparison is meaningful — integer, number, date, time, and datetime — and because ISO date/time strings order chronologically as text, the same rule expresses "later/earlier than" for date columns.  Rules are additive and *stack*: when several rules match the same cell their faces compose, so one rule can add a background color, another a foreground color, a third bold.  Rules are numbered in evaluation order so the stacking hierarchy is visible.  =h x= removes rules — its prompt lists every rule, runtime and saved alike, and defaults to =<<ALL>>= (remove every rule); it also offers =<<UNSAVED>>= (remove only the session's unsaved rules) and each individual rule; removal never touches the schema file.  =h s= prompts for one runtime rule and persists just that rule; =h S= persists the whole view state; =h X= expunges the saved rules from the schema — these three are the only highlight commands that write the file.  =h l= opens the Highlight Rules List buffer, an interactive list where rules can be marked, removed, reordered, modified, added, and saved or expunged, all in one place.
 
 ** Filter (=f= prefix)
 
-| Key | Command                         |
-|-----+---------------------------------|
+| Key | Command                                     |
+|-----+---------------------------------------------|
 | =f a= | Add filter rule (dispatches on filter type) |
 | =f f= | Filter on the cell at point (exact)         |
-| =f s= | Substring filter                |
-| =f e= | Exact match filter              |
-| =f n= | Numeric comparison (> >= < <= = !=) |
-| =f l= | Open the Filter Rules List buffer |
-| =f c= | Cycle the logical connective (∧/∨/∧¬/∨¬) |
-| =f x= | Remove filter rule(s) (=<<ALL>>= or one) |
-| =f X= | Remove all filter rules         |
+| =f s= | Substring filter                            |
+| =f e= | Exact match filter                          |
+| =f n= | Numeric comparison (> >= < <= = !=)         |
+| =f l= | Open the Filter Rules List buffer           |
+| =f c= | Cycle the logical connective (∧/∨/∧¬/∨¬)    |
+| =f x= | Remove filter rule(s) (=<<ALL>>= or one)      |
+| =f X= | Remove all filter rules                     |
 
 =f a= is a single entry point that prompts for the filter type — substring, exact, or numeric — then runs the matching command, parallel to the =h a= highlight dispatcher.  =f f= is a shortcut for the common case: it adds an exact-match filter on the value of the cell at point (reading the real stored value, so a truncated long field still matches in full; computed columns are rejected).  Every filter command prompts for its columns with the same =<<ALL>>= / comma-separated selector: pick one column, several, or all.  Filtering several columns ORs the test across them, so the old separate "filter across" command is no longer needed.  Filter rules are progressive and combined with logical connectives — the first sets the base; subsequent calls prompt for a connective (AND, OR, AND NOT, OR NOT).  =f x= removes one rule or all (its prompt defaults to the =<<ALL>>= sentinel); =f X= removes every rule at once.  The modeline shows the filter stack: =(genre = Fiction) ∧ (price > 20) ∧¬ (status ≈ inactive)=; when more than three rules are active the middle is elided to keep the modeline compact (=(genre = Fiction) … ∧ (year < 2000)=).
 
 =f l= opens the Filter Rules List buffer — an interactive list of every filter rule, numbered in evaluation order with its logical connective in a dedicated column.  From it, =m=/=u=/=U= mark and unmark rules, =t= toggles all marks, =x= removes the marked rules (or the one at point), =X= removes every rule, =c= cycles the connective of the rule at point, =RET= modifies a rule, and =M-p=/=M-n= (or =M-<up>=/=M-<down>=) move a rule up or down the stack.  The plain =<up>=/=<down>= arrows stay within the list like =n=/=p=, and the cursor starts on the first rule.  The buffer refreshes automatically as the filter stack changes.
 
-** Views (=v= prefix)
+** View (=v= prefix)
 
-| Key     | Command                              |
-|---------+--------------------------------------|
-| =v v=   | Select saved view                    |
-| =v s=   | Save current visible state           |
-| =v 0=   | Clear all (filter/sort/cols)         |
-| =v 1=–=v 9= | Apply schema view by number      |
-| =v x=   | Clear all (filter/sort/cols)         |
-| =v >=   | Show more rows                       |
-| =v a=   | Show all rows (no constraints)       |
-| =v +=   | Show all rows in current view        |
-| =v r=   | Show ID range                        |
-| =v ==   | Reset row limit to default page size |
+| Key       | Command                              |
+|-----------+--------------------------------------|
+| =v v=       | Select saved view                    |
+| =v s=       | Save current visible state           |
+| =v 0=       | Clear all (filter/sort/cols)         |
+| =v 1-9=     | Apply schema view by number          |
+| =v x=       | Clear all (filter/sort/cols)         |
+| =v >=       | Show more rows                       |
+| =v a=       | Show all rows (no constraints)       |
+| =v +=       | Show all rows in current view        |
+| =v r=       | Show ID range                        |
+| =v ==       | Reset row limit to default page size |
 
 =v 0= and =v x= both clear the active filter, column visibility, and sort back to defaults; =v 1= through =v 9= apply the corresponding numbered view from the schema.  The row-expansion keys control how many rows are shown: =v >= reveals the next page, =v a= drops every constraint, =v += lifts only the page-size limit and ID range while keeping the active filter, =v r= restricts to an explicit ID range, and =v == restores the default page size.
 
-** Freeze rows (=z= prefix)
+** Freeze (=z= prefix)
 
-| Key | Command                                  |
-|-----+------------------------------------------|
+| Key | Command                                    |
+|-----+--------------------------------------------|
 | =z z= | Freeze marked rows (or the row at point)   |
 | =z u= | Unfreeze marked rows (or the row at point) |
-| =z x= | Unfreeze (alias for =z u=)                  |
+| =z x= | Unfreeze (alias for =z u=)                   |
 | =z U= | Unfreeze all frozen rows                   |
+| =z X= | Unfreeze all (alias for =z U=)               |
 
-=z z= and =z u= act on the marked rows when any are marked, and on the
-row at point otherwise (the same marked-or-at-point behaviour used
-elsewhere); =z x= is a convenience alias for =z u=, and =z U= clears
-every frozen row at once.  Frozen rows always render at the top of the
-view, marked with a =∙= indicator.
+=z z= and =z u= act on the marked rows when any are marked, and on the row at point otherwise (the same marked-or-at-point behaviour used elsewhere); =z x= is a convenience alias for =z u=, and =z U= (or =z X=) clears every frozen row at once.  Frozen rows always render at the top of the view, marked with a =∙= indicator.
 
 ** Column operations (=|= prefix)
 
@@ -239,31 +149,22 @@ the buffer's display and can be undone.
 
 ** Math (=#= prefix)
 
-| Key | Command                          |
-|-----+----------------------------------|
-| =# s= | Sum                              |
-| =# S= | Sum (visible rows only)          |
-| =# m= | Min / max                        |
-| =# M= | Min / max (visible rows only)    |
-| =# d= | Mean ± standard deviation        |
-| =# D= | Mean ± SD (visible rows only)    |
-| =# i= | Median [Q1–Q3] (IQR)             |
-| =# I= | Median [IQR] (visible rows only) |
-| =# #= | Column summary                   |
+| Key | Command                                 |
+|-----+-----------------------------------------|
+| =# s= | Sum                                     |
+| =# S= | Sum (visible rows only)                 |
+| =# m= | Min / max                               |
+| =# M= | Min / max (visible rows only)           |
+| =# d= | Mean ± standard deviation               |
+| =# D= | Mean ± SD (visible rows only)           |
+| =# i= | Median [Q1–Q3] (IQR)                    |
+| =# I= | Median [IQR] (visible rows only)        |
+| =# #= | Column summary                          |
+| =# c= | Count (one or many columns via =<<ALL>>=) |
+| =# C= | Count visible                           |
+| =# *= | Count marked                            |
 
 Uppercase variants scope to visible rows only.
-
-** Count (=#= prefix)
-
-| Key | Command           |
-|-----+-------------------|
-| =# c= | Count (one or many columns via =<<ALL>>=) |
-| =# C= | Count visible     |
-| =# *= | Count marked      |
-
-=# c= prompts for a value, then a =<<ALL>>= / comma-separated column
-selector: count matches in one column, several (ORed), or all.  This
-folds in the former separate "count across" command.
 
 ** Schema (=.= prefix)
 
@@ -286,20 +187,20 @@ folds in the former separate "count across" command.
 
 ** Other
 
-| Key   | Command                                    |
-|-------+--------------------------------------------|
-| =i i= | Import a file as a new database            |
-| =i a= | Append a file to the current database      |
-| =e e= | Export marked rows, or all if none marked  |
-| =e a= | Export all — whole table (ignores marks)   |
-| =e v= | Export visible view                        |
-| =e r= | Export range (row IDs / columns)           |
-| =o=   | Open another database                      |
-| =O=   | Open and view                              |
-| =$=   | Rename database                            |
-| =?=   | Describe database                          |
-| =SPC= | Open menu                                  |
-| =q=   | Quit                                       |
+| Key | Command                                   |
+|-----+-------------------------------------------|
+| =i i= | Import a file as a new database           |
+| =i a= | Append a file to the current database     |
+| =e e= | Export marked rows, or all if none marked |
+| =e a= | Export all — whole table (ignores marks)  |
+| =e v= | Export visible view                       |
+| =e r= | Export range (row IDs / columns)          |
+| =o=   | Open another database                     |
+| =O=   | Open and view                             |
+| =$=   | Rename database                           |
+| =?=   | Describe database                         |
+| =SPC= | Open menu                                 |
+| =q=   | Quit                                      |
 
 The import and export prefixes have alternatives: =<= mirrors =i= and =>= mirrors =e=, so =< i=, =< a=, => e=, => a=, => v=, => r= work identically to their =i=/=e= counterparts.  In the registry buffer the same applies to the single-key bindings — =<= imports and =>= exports the database at point, alongside =i= and =e=.
 
@@ -361,41 +262,41 @@ The first column is a mark indicator: =*= marks a marked database and
 takes precedence).  Opening a database leaves the listing re-sorted
 with that database at the top and under point.
 
-| Key         | Command                                  |
-|-------------+------------------------------------------|
-| =RET= / =O= / =v= | Open and view database at point          |
-| =o=           | Open database (no view)                  |
-| =C=           | Create new database                      |
-| =+=           | Register existing database               |
-| =$=           | Rename (marked, or database at point)    |
-| =d=           | Duplicate (marked, or database at point) |
-| =D=           | Forget — keep files (marked, or at point) |
-| =X=           | Expunge — delete files (marked, or at point) |
-| =i= / =<=       | Import a file as a new database          |
-| =e= / =>=       | Export (marked, or database at point)    |
-| =.=           | Edit schema file at point                |
+| Key         | Command                                          |
+|-------------+--------------------------------------------------|
+| =RET= / =O= / =v= | Open and view database at point                  |
+| =o=           | Open database (no view)                          |
+| =C=           | Create new database                              |
+| =+=           | Register existing database                       |
+| =$=           | Rename (marked, or database at point)            |
+| =d=           | Duplicate (marked, or database at point)         |
+| =D=           | Forget — keep files (marked, or at point)        |
+| =X=           | Expunge — delete files (marked, or at point)     |
+| =i= / =<=       | Import a file as a new database                  |
+| =e= / =>=       | Export (marked, or database at point)            |
+| =.=           | Edit schema file at point                        |
 | =/=           | Visit database directory in Dired (other window) |
-| =?=           | Describe database at point               |
-| =m=           | Mark database at point                   |
-| =u=           | Unmark database at point                 |
-| =U=           | Unmark all                               |
-| =t=           | Toggle all marks                         |
-| =c=           | Close the open database                  |
-| =x=           | Action menu (rename/duplicate/delete/expunge) |
-| =g= / ===       | Refresh listing                          |
-| =n= / =TAB=     | Next entry                               |
-| =p= / =S-TAB=   | Previous entry                           |
-| =q=           | Quit                                     |
+| =?=           | Describe database at point                       |
+| =m=           | Mark database at point                           |
+| =u=           | Unmark database at point                         |
+| =U=           | Unmark all                                       |
+| =t=           | Toggle all marks                                 |
+| =c=           | Close the open database                          |
+| =x=           | Action menu (rename/duplicate/delete/expunge)    |
+| =g= / ===       | Refresh listing                                  |
+| =n= / =TAB=     | Next entry                                       |
+| =p= / =S-TAB=   | Previous entry                                   |
+| =q=           | Quit                                             |
 
 * Kill Ring Mode (~tabularium-kill-ring-mode~)
 
 Opened with =y= from view mode; lists the row/column batches available to paste.
 
-| Key         | Command                          |
-|-------------+----------------------------------|
-| =V=           | Paste the selected batch         |
-| =X=           | Clear the kill ring              |
-| =g= / ===       | Refresh listing                  |
-| =n= / =TAB=     | Next batch                       |
-| =p= / =S-TAB=   | Previous batch                   |
-| =q=           | Quit                             |
+| Key       | Command                  |
+|-----------+--------------------------|
+| =V=         | Paste the selected batch |
+| =X=         | Clear the kill ring      |
+| =g= / ===     | Refresh listing          |
+| =n= / =TAB=   | Next batch               |
+| =p= / =S-TAB= | Previous batch           |
+| =q=         | Quit                     |

@@ -4,7 +4,7 @@
 
 ;; Author: Paul H. McClelland <paulhmcclelland@protonmail.com>
 ;; Maintainer: Paul H. McClelland <paulhmcclelland@protonmail.com>
-;; Version: 0.5.0
+;; Version: 0.5.1
 ;; Package-Requires: ((emacs "29.1"))
 ;; Keywords: data
 ;; URL: https://codeberg.org/phmcc/tabularium
@@ -448,26 +448,27 @@
 ┌──────┐
 │ Fill │  %s(tabularium--hydra-db-info)
 └──────┘
-  Fill                    Delete
+  Fill                            Edit
  ────────────────────────────────────────────────────────────────────────────────
-  [_F_] Fill back ↑         [_D_] Delete run
-  [_f_] Fill forward ↓      [_x_] Clear up to row
-  [_p_] Fill prev ↑         [_X_] Clear incl. row
-  [_n_] Fill next ↓
-  [_,_] To point ↑
-  [_._] To point ↓
-  [_s_] Fill series
+  [_f_]/[_F_] Fill ↓ / ↑ (context)    [_d_]/[_D_] Delete run ↓ / ↑
+  [_n_]/[_p_] Fill ↓ / ↑ (prompt)     [_r_]/[_R_] Replace run ↓ / ↑
+  [_._]/[_,_] To point ↓ / ↑          [_x_]/[_X_] Clear to row excl / incl
+  [_s_]/[_S_] Series ↓ / ↑
  ────────────────────────────────────────────────────────────────────────────────
   [_q_] Quit
 "
-    ("F" tabularium-view-fill)
     ("f" tabularium-view-fill-forward)
+    ("F" tabularium-view-fill-backward)
     ("n" tabularium-view-fill-down)
     ("p" tabularium-view-fill-up)
-    ("," tabularium-view-fill-up-to-point)
     ("." tabularium-view-fill-down-to-point)
+    ("," tabularium-view-fill-up-to-point)
     ("s" tabularium-view-fill-series)
-    ("D" tabularium-view-fill-delete)
+    ("S" tabularium-view-fill-series-up)
+    ("d" tabularium-view-fill-delete)
+    ("D" tabularium-view-fill-delete-up)
+    ("r" tabularium-view-fill-replace)
+    ("R" tabularium-view-fill-replace-up)
     ("x" tabularium-view-fill-clear-to-point)
     ("X" tabularium-view-fill-clear)
     ("q" tabularium-view-hydra/body :color blue))
@@ -510,15 +511,17 @@
 └────────┘
   Main
  ────────────────────────────────────────────────────────────────────────────────
-  [_z_] Freeze row(s)
-  [_u_] Unfreeze row(s)
-  [_U_] Unfreeze all
+  [_z_]   Freeze row(s)
+  [_u_/_x_] Unfreeze row(s)
+  [_U_/_X_] Unfreeze all
  ────────────────────────────────────────────────────────────────────────────────
   [_q_] Quit
 "
     ("z" tabularium-view-freeze)
     ("u" tabularium-view-unfreeze)
+    ("x" tabularium-view-unfreeze)
     ("U" tabularium-view-unfreeze-all)
+    ("X" tabularium-view-unfreeze-all)
     ("q" tabularium-view-hydra/body :color blue))
 
   ;; Columns sub-hydra
@@ -825,7 +828,9 @@
       ("s X" "Remove all sorts" tabularium-view-sort-remove-all)
       ("z z" "Freeze row" tabularium-view-freeze)
       ("z u" "Unfreeze row" tabularium-view-unfreeze)
+      ("z x" "Unfreeze row" tabularium-view-unfreeze)
       ("z U" "Unfreeze all" tabularium-view-unfreeze-all)
+      ("z X" "Unfreeze all" tabularium-view-unfreeze-all)
       ("`" "Reindex" tabularium-reindex)]
      ["Modify" :pad-keys t
       ("R s" "Replace substr" tabularium-replace-substring)
@@ -838,14 +843,18 @@
       ("R /" "Query-replace" tabularium-replace-query)
       ("R ?" "Visible: query" tabularium-replace-visible-query)
       ("R c" "Case toggle" tabularium-toggle-case-sensitive)
-      ("F F" "Fill gap ↑" tabularium-view-fill)
-      ("F f" "Fill forward ↓" tabularium-view-fill-forward)
-      ("F n" "Fill next ↓" tabularium-view-fill-down)
-      ("F p" "Fill prev ↑" tabularium-view-fill-up)
-      ("F ," "To point ↑" tabularium-view-fill-up-to-point)
+      ("F f" "Fill ↓ (context)" tabularium-view-fill-forward)
+      ("F F" "Fill ↑ (context)" tabularium-view-fill-backward)
+      ("F n" "Fill ↓ (prompt)" tabularium-view-fill-down)
+      ("F p" "Fill ↑ (prompt)" tabularium-view-fill-up)
       ("F ." "To point ↓" tabularium-view-fill-down-to-point)
-      ("F s" "Fill series" tabularium-view-fill-series)
-      ("F D" "Delete run" tabularium-view-fill-delete)
+      ("F ," "To point ↑" tabularium-view-fill-up-to-point)
+      ("F s" "Series ↓" tabularium-view-fill-series)
+      ("F S" "Series ↑" tabularium-view-fill-series-up)
+      ("F d" "Delete run ↓" tabularium-view-fill-delete)
+      ("F D" "Delete run ↑" tabularium-view-fill-delete-up)
+      ("F r" "Replace run ↓" tabularium-view-fill-replace)
+      ("F R" "Replace run ↑" tabularium-view-fill-replace-up)
       ("F x" "Clear up to row" tabularium-view-fill-clear-to-point)
       ("F X" "Clear incl. row" tabularium-view-fill-clear)]
      ["Calculate (# prefix)"
