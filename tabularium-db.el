@@ -4,7 +4,7 @@
 
 ;; Author: Paul H. McClelland <paulhmcclelland@protonmail.com>
 ;; Maintainer: Paul H. McClelland <paulhmcclelland@protonmail.com>
-;; Version: 0.5.1
+;; Version: 0.5.2
 ;; Package-Requires: ((emacs "29.1"))
 ;; Keywords: data
 ;; URL: https://codeberg.org/phmcc/tabularium
@@ -405,6 +405,24 @@ are escaped.  When CASE-SENSITIVE is non-nil, uses GLOB; otherwise LIKE."
          (wrapped (tabularium-db-like-pattern (format "%s" pattern) case-sensitive))
          (escaped (replace-regexp-in-string "'" "''" wrapped)))
     (format "%s %s '%s'" col op escaped)))
+
+(cl-defgeneric tabularium-db-regexp-clause (backend column pattern
+                                                   &optional case-sensitive)
+  "Build a regexp match clause for COLUMN matching PATTERN on BACKEND.
+CASE-SENSITIVE selects a case-sensitive match where the backend
+distinguishes the two.  Backends without a regexp operator signal a
+`user-error' explaining the limitation.")
+
+(cl-defmethod tabularium-db-regexp-clause ((_backend tabularium-db-sqlite)
+                                           _column _pattern
+                                           &optional _case-sensitive)
+  "Signal that SQLite cannot match regexps.
+SQLite parses the REGEXP operator but ships no implementation for it;
+supplying one requires registering a user function through the C API,
+which Emacs' built-in SQLite support does not expose.  Pattern-based
+selection is available as a highlight rule, which matches in Emacs."
+  (user-error
+   "Regexp filtering needs the PostgreSQL backend; SQLite has no REGEXP operator"))
 
 (defun tabularium-db-build-equals-clause (column value)
   "Build an equality clause for COLUMN equal to VALUE.

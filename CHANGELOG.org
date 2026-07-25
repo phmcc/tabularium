@@ -4,6 +4,32 @@
 
 All notable changes to ~tabularium~ are documented in this file.
 
+* 0.5.2 (2026-07-24)
+
+** Added
+
+- Filter, highlight, and sort become one "rules" system: a shared rule vocabulary — substring, exact, regexp, numeric, datetime, and unique/duplicate tests — under matching keys, each with its own rules-list buffer (=f l=, =h l=, =s l=) for marking, removing, reordering, and inserting rules
+- Rules carry a scope — rows, whole columns, or individual values — adding column filters (=f |=) and row- and column-scoped highlights to the existing cell rules
+- The =f a= and =h a= dispatchers prompt for a row restriction and, for column rules, a column restriction (=<<ALL>>=, =<<RANGE>>=, or the marked rows); the direct keys stay restriction-free for speed
+- Filter and sort changes are undoable
+- Columns are added, inserted, and edited through the schema wizard's full field-definition prompts, and can be pasted from the kill ring (=| V= / =| A=)
+
+** Changed
+
+- "Layers" is retired for "rules" throughout, and filter, sort, and highlight share one keybinding vocabulary
+- Filters and sorts accept computed columns, whether defined in SQL or in Emacs Lisp (Emacs-side evaluation is bounded by =tabularium-post-fetch-row-cap=)
+- Highlight faces each set a single attribute under one naming convention, so stacked rules compose instead of the newest overriding the rest
+- A keybinding-consistency pass moves several commands: duplicate to =+=, schema-save to =.=, database registration to =R=, and the shared rule-type letters (=s=, =e=, =r=, =n=, =t=)
+- Column and rule commands default to the item at point, and the =f a= / =h a= target prompt defaults to the common case — =row(s)= for a filter, =value(s)= for a highlight
+- Saved views record and re-pin frozen rows
+
+** Fixed
+
+- Sorting by a computed column works for SQL expressions and is refused, rather than silently ignored, for Emacs Lisp ones
+- A filter rule whose query fails rolls back instead of wedging the whole stack
+- Moving a filter rule keeps its connective, and column moves carry point along with the column
+- Relative last-used times use singular units for a count of one (=1 week ago=)
+
 * 0.5.1 (2026-07-13)
 
 ** Added

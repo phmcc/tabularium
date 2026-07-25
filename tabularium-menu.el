@@ -4,7 +4,7 @@
 
 ;; Author: Paul H. McClelland <paulhmcclelland@protonmail.com>
 ;; Maintainer: Paul H. McClelland <paulhmcclelland@protonmail.com>
-;; Version: 0.5.1
+;; Version: 0.5.2
 ;; Package-Requires: ((emacs "29.1"))
 ;; Keywords: data
 ;; URL: https://codeberg.org/phmcc/tabularium
@@ -85,12 +85,12 @@
 ┌────────────┐
 │ Tabularium │  %s(tabularium--hydra-db-info)
 └────────────┘
-  Database              Entry                   Browse/Query              External                Schema                  
+  Database              Entry                   Browse/Query            External                Schema                  
  ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  [_o_] Open              [_N_] New (form)          [_v_] View all              [_i_/_<_] Import…           [_._] Schema…
-  [_O_] Open + View       [_P_] Prompt              [_/_] Fuzzy find            [_e_/_>_] Export…
-  [_c_] Close             [_Q_] Quick               [_l_] Last match            [_+_] Register
-  [_C_] Create…                                   [_#_] Calculate…            [_s_] Sync prep
+  [_o_] Open              [_N_] New (form)          [_v_] View all            [_i_/_<_] Import…           [_._] Schema…
+  [_O_] Open + View       [_P_] Prompt              [_/_] Fuzzy find          [_e_/_>_] Export…
+  [_c_] Close             [_Q_] Quick               [_l_] Last match          [_R_] Register
+  [_C_] Create…                                   [_#_] Calculate…          [_s_] Sync prep
   [_r_] Registry
   [_$_] Rename
   [_?_] Describe
@@ -122,7 +122,7 @@
     ("<" tabularium-import-hydra/body)
     ("e" tabularium-export-hydra/body)
     (">" tabularium-export-hydra/body)
-    ("+" tabularium-register-database)
+    ("R" tabularium-register-database)
     ("s" tabularium-sync-prepare))
 
   ;; Import sub-hydra: new database vs. append
@@ -245,20 +245,20 @@
   %s(tabularium--hydra-filter-info)   %s(tabularium--hydra-sort-info)   View: %s(or tabularium--current-view \"<none>\")
 
   Navigate                Modify                  Mark                      View                      Miscellaneous
- ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   [_n_/_p_] Row up/down       [_N_] New entry           [_m_] Mark row              [_f_] Filter…               [_`_] Reindex
   [_{_/_}_] First/last        [_P_] Prompt entry        [_u_] Unmark row            [_v_] Views…                [_#_] Calculate…
   [_[_/_]_] Line beg/end      [_Q_] Quick entry         [_U_] Unmark all            [_|_] Columns…              [_C-/_] Undo
   [_TAB_] Next cell         [_I_] Insert              [_t_] Toggle marks          [_s_] Sort…                 [_C-?_] Redo
   [_M-[_/_M-]_] Jump ←/→      [_E_] Edit                [_x_] Execute marks         [_z_] Freeze…               [_y_] Kill ring
-  [_M-{_/_M-}_] Jump ↑/↓      [_d_] Duplicate           [_*_] Mark menu…        
+  [_M-{_/_M-}_] Jump ↑/↓      [_+_] Duplicate           [_*_] Mark menu…        
   [_g_/_=_] Refresh           [_D_] Delete              [_h_] Highlight…
   [_/_] Fuzzy find          [_X_/_C_] Cut/Copy
   [_RET_] Details           [_V_/_A_] Paste/Append
   [_'_] Goto…               [_M_/_W_] Move/Swap
                           [_R_] Replace…
                           [_F_] Fill…
- ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   [_q_] Quit   [_o_] Open   [_O_] Open + View   [_i_/_<_] Import…    [_e_/_>_] Export…    [_$_] Rename   [_._] Schema   [_?_] Describe
 "
     ("q" nil :color blue)
@@ -294,10 +294,11 @@
     ("N" tabularium-new-entry :color blue)
     ("P" tabularium-prompt-entry :color blue)
     ("Q" tabularium-quick-entry :color blue)
+    ("+" tabularium-view-column-add :color blue)
     ("I" tabularium-view-insert :color blue)
     ("E" tabularium-view-edit :color blue)
     ("D" tabularium-view-delete :color blue)
-    ("d" tabularium-view-duplicate :color blue)
+    ("+" tabularium-view-duplicate :color blue)
     ("C" tabularium-view-copy)
     ("V" tabularium-view-paste)
     ("A" tabularium-view-paste-append)
@@ -380,13 +381,14 @@
  ────────────────────────────────────────────────────────────────────────────────
   [_s_] Substring         [_p_] Pattern
   [_e_] Exact             [_#_] Count marked
-  [_r_] Regexp
+  [_r_] Regexp            [_n_] Rows (range)
  ────────────────────────────────────────────────────────────────────────────────
   [_q_] Quit
 "
     ("s" tabularium-view-mark-matching)
     ("e" tabularium-view-mark-exact)
     ("r" tabularium-view-mark-regexp)
+    ("n" tabularium-view-mark-range)
     ("p" tabularium-view-mark-pattern)
     ("#" tabularium-view-count-marked)
     ("q" tabularium-view-hydra/body :color blue))
@@ -397,13 +399,16 @@
 ┌────────┐
 │ Filter │  %s(tabularium--hydra-db-info)   %s(tabularium--hydra-filter-info)
 └────────┘
-  Rules                  Manage
+  Row                     Column                  Rules
  ────────────────────────────────────────────────────────────────────────────────
-  [_a_] Add rule…          [_l_] Rules list
-  [_f_] At point           [_c_] Cycle connective
-  [_s_] Substring          [_x_] Remove
-  [_e_] Exact match        [_X_] Remove all
-  [_n_] Numeric
+  [_f_] At point            [_|_] By value            [_a_] Add rule…
+  [_s_] Substring                                   [_l_] Rules list
+  [_e_] Exact match                                 [_c_] Cycle connective
+  [_r_] Regexp                                      [_x_] Remove
+  [_n_] Numeric                                     [_X_] Remove all
+  [_t_] Datetime
+  [_u_] Unique
+  [_d_] Duplicates
  ────────────────────────────────────────────────────────────────────────────────
   [_q_] Quit
 "
@@ -412,6 +417,11 @@
     ("s" tabularium-view-filter-substring)
     ("e" tabularium-view-filter-exact)
     ("n" tabularium-view-filter-numeric)
+    ("r" tabularium-view-filter-regexp)
+    ("t" tabularium-view-filter-datetime)
+    ("u" tabularium-view-filter-unique)
+    ("d" tabularium-view-filter-duplicates)
+    ("|" tabularium-view-filter-column)
     ("l" tabularium-view-filter-buffer)
     ("c" tabularium-view-filter-cycle-connective)
     ("x" tabularium-view-filter-remove)
@@ -424,12 +434,13 @@
 ┌──────┐
 │ Sort │  %s(tabularium--hydra-db-info)   %s(tabularium--hydra-sort-info)
 └──────┘
-  Rules                 Manage
+  Main                  Manage
  ────────────────────────────────────────────────────────────────────────────────
-  [_a_] Add rule…         [_l_] Rules list
-  [_s_] By column         [_c_] Cycle order
-  [_`_] By index          [_x_] Remove
-                          [_X_] Remove all
+  [_s_] Reverse           [_a_] Add rule…
+  [_`_] By index          [_l_] Rules list
+                        [_c_] Cycle order
+                        [_x_] Remove
+                        [_X_] Remove all
  ────────────────────────────────────────────────────────────────────────────────
   [_q_] Quit
 "
@@ -450,10 +461,10 @@
 └──────┘
   Fill                            Edit
  ────────────────────────────────────────────────────────────────────────────────
-  [_f_]/[_F_] Fill ↓ / ↑ (context)    [_d_]/[_D_] Delete run ↓ / ↑
-  [_n_]/[_p_] Fill ↓ / ↑ (prompt)     [_r_]/[_R_] Replace run ↓ / ↑
-  [_._]/[_,_] To point ↓ / ↑          [_x_]/[_X_] Clear to row excl / incl
-  [_s_]/[_S_] Series ↓ / ↑
+  [_f_/_F_] Fill ↓ / ↑ (context)    [_d_/_D_] Delete run ↓ / ↑
+  [_n_/_p_] Fill ↓ / ↑ (prompt)     [_r_/_R_] Replace run ↓ / ↑
+  [_._/_,_] To point ↓ / ↑          [_x_/_X_] Clear to row excl / incl
+  [_s_/_S_] Series ↓ / ↑
  ────────────────────────────────────────────────────────────────────────────────
   [_q_] Quit
 "
@@ -479,13 +490,16 @@
 ┌───────────┐
 │ Highlight │  %s(tabularium--hydra-db-info)
 └───────────┘
-  Quick                   Rules                   Manage
+  Row                     Column                  Rules
  ────────────────────────────────────────────────────────────────────────────────
-  [_h_] Rows               [_a_] Add rule…          [_l_] Rules list
-  [_\\_] Column at point    [_n_] Numeric            [_x_] Remove
-  [_|_] Columns…           [_d_] Duplicates         [_X_] Expunge
-                          [_r_] Regexp             [_s_] Save one
-                                                  [_S_] Save all
+  [_h_] At point            [_\\_] At point            [_a_] Add rule…
+  [_s_] Substring           [_|_] Columns…            [_l_] Rules list
+  [_e_] Exact match                                 [_x_] Remove
+  [_r_] Regexp                                      [_X_] Expunge
+  [_n_] Numeric                                     [_._] Save one
+  [_t_] Datetime                                    [_>_] Save all
+  [_u_] Unique
+  [_d_] Duplicates
  ────────────────────────────────────────────────────────────────────────────────
   [_q_] Quit
 "
@@ -493,14 +507,18 @@
     ("\\" tabularium-view-highlight-column)
     ("|" tabularium-view-highlight-columns)
     ("a" tabularium-view-highlight-new)
+    ("s" tabularium-view-highlight-substring)
+    ("e" tabularium-view-highlight-exact)
+    ("t" tabularium-view-highlight-datetime)
+    ("u" tabularium-view-highlight-unique)
     ("n" tabularium-view-highlight-numeric)
     ("d" tabularium-view-highlight-duplicates)
     ("r" tabularium-view-highlight-regexp)
     ("l" tabularium-view-highlight-buffer)
     ("x" tabularium-view-highlight-remove)
     ("X" tabularium-view-highlight-expunge)
-    ("s" tabularium-view-highlight-save)
-    ("S" tabularium-view-highlight-save-all)
+    ("." tabularium-view-highlight-save)
+    (">" tabularium-view-highlight-save-all)
     ("q" tabularium-view-hydra/body :color blue))
 
   ;; Freeze sub-hydra
@@ -536,12 +554,15 @@
   [_h_] Hide                [_<_] Move left             [_I_] Insert
   [_s_] Show                [_>_] Move right            [_D_] Delete
   [_o_] Show only           [_=_] Reset order           [_E_] Edit
-  [_a_] Show all            [_M_/_W_] Move/Swap          [_d_] Duplicate
+  [_a_] Show all            [_M_/_W_] Move/Swap          [_+_] Duplicate
+  [_/_] Select by title
                                                     [_X_/_C_] Cut/Copy
+                                                    [_V_/_A_] Paste/Append
  ────────────────────────────────────────────────────────────────────────────────
   [_q_] Quit
 "
     ;; Visibility
+    ("/" tabularium-view-select-columns)
     ("t" tabularium-view-toggle-column)
     ("h" tabularium-view-hide-columns)
     ("s" tabularium-view-show-columns)
@@ -559,9 +580,11 @@
     ("I" tabularium-view-column-insert)
     ("D" tabularium-view-column-delete)
     ("E" tabularium-view-column-edit)
-    ("d" tabularium-view-column-duplicate)
+    ("+" tabularium-view-column-duplicate)
     ("C" tabularium-view-column-copy)
     ("X" tabularium-view-column-cut)
+    ("V" tabularium-view-column-paste)
+    ("A" tabularium-view-column-paste-append)
     ("q" tabularium-view-hydra/body :color blue))
 
   ;; Goto sub-hydra
@@ -627,7 +650,7 @@
 └───────┘
   Apply                 Save / Reset          Expand
  ───────────────────────────────────────────────────────────────────────────
-  [_v_] Select view       [_s_] Save current      [_>_] Show more
+  [_v_] Select view       [_._] Save current      [_>_] Show more
   [_1_-_9_] Preset        [_x_] Clear view        [_+_] All in view
                         [_0_] Reset views       [_a_] All (no constraints)
                                               [_r_] Show range
@@ -647,7 +670,7 @@
     ("8" tabularium-view-8)
     ("9" tabularium-view-9)
     ;; Save / Reset
-    ("s" tabularium-view-save)
+    ("." tabularium-view-save)
     ("x" tabularium-view-clear)
     ("0" tabularium-view-0)
     ;; Expand
@@ -761,7 +784,7 @@
      ["Modify"
       ("N" "New entry" tabularium-new-entry)
       ("E" "Edit" tabularium-view-edit)
-      ("d" "Duplicate" tabularium-view-duplicate)
+      ("+" "Duplicate" tabularium-view-duplicate)
       ("D" "Delete" tabularium-view-delete)
       ("C" "Copy" tabularium-view-copy)
       ("V" "Paste" tabularium-view-paste)
@@ -787,6 +810,7 @@
       ("* e" "Mark exact" tabularium-view-mark-exact)
       ("* p" "Mark pattern" tabularium-view-mark-pattern)
       ("* r" "Mark regexp" tabularium-view-mark-regexp)
+      ("* n" "Mark rows (range)" tabularium-view-mark-range)
       ("* #" "Count marked" tabularium-view-count-marked)
       ("h h" "Highlight rows" tabularium-view-highlight-rows)
       ("h \\" "Highlight column" tabularium-view-highlight-column)
@@ -798,8 +822,8 @@
       ("h l" "Highlight rules list" tabularium-view-highlight-buffer)
       ("h x" "Remove highlight" tabularium-view-highlight-remove)
       ("h X" "Expunge highlights" tabularium-view-highlight-expunge)
-      ("h s" "Save one highlight" tabularium-view-highlight-save)
-      ("h S" "Save all highlights" tabularium-view-highlight-save-all)]
+      ("h ." "Save one highlight" tabularium-view-highlight-save)
+      ("h >" "Save all highlights" tabularium-view-highlight-save-all)]
      ["View" :pad-keys t
       ("f a" "Add rule" tabularium-view-filter-add)
       ("f f" "At point" tabularium-view-filter-at-point)
@@ -811,7 +835,7 @@
       ("f x" "Remove filter" tabularium-view-filter-remove)
       ("f X" "Remove all filters" tabularium-view-filter-remove-all)
       ("v v" "Select view" tabularium-select-view)
-      ("v s" "Save current" tabularium-view-save)
+      ("v ." "Save current" tabularium-view-save)
       ("v 0" "Reset views" tabularium-view-0)
       ("v x" "Clear all" tabularium-view-clear)
       ("v >" "Show more" tabularium-view-show-more)
@@ -884,11 +908,13 @@
       ("| I" "Insert col" tabularium-view-column-insert)
       ("| D" "Delete col" tabularium-view-column-delete)
       ("| E" "Edit col" tabularium-view-column-edit)
-      ("| d" "Duplicate col" tabularium-view-column-duplicate)
+      ("| +" "Duplicate col" tabularium-view-column-duplicate)
       ("| M" "Move cols" tabularium-view-column-move)
       ("| W" "Swap cols" tabularium-view-column-swap)
       ("| C" "Copy cols" tabularium-view-column-copy)
-      ("| X" "Cut cols" tabularium-view-column-cut)]
+      ("| X" "Cut cols" tabularium-view-column-cut)
+      ("| V" "Paste cols" tabularium-view-column-paste)
+      ("| A" "Append cols" tabularium-view-column-paste-append)]
      ["Database"
       ("o" "Open" tabularium-open)
       ("O" "Open + View" tabularium-open-and-view)

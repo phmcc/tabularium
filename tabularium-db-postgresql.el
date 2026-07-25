@@ -4,7 +4,7 @@
 
 ;; Author: Paul H. McClelland <paulhmcclelland@protonmail.com>
 ;; Maintainer: Paul H. McClelland <paulhmcclelland@protonmail.com>
-;; Version: 0.5.1
+;; Version: 0.5.2
 ;; Package-Requires: ((emacs "29.1") (emacsql "4.0") (emacsql-pg "1.0"))
 ;; Keywords: data
 ;; URL: https://codeberg.org/phmcc/tabularium
@@ -155,6 +155,17 @@
                                        BEFORE UPDATE ON %s
                                        FOR EACH ROW EXECUTE FUNCTION update_timestamp()"
                                       table-name table-name))))))
+
+  (cl-defmethod tabularium-db-regexp-clause ((_backend tabularium-db-postgresql)
+                                             column pattern
+                                             &optional case-sensitive)
+    "Build a POSIX regexp match clause for COLUMN matching PATTERN.
+PostgreSQL provides the regexp operators directly: =~= matches
+case-sensitively and =~*= case-insensitively."
+    (let ((col (if (symbolp column) (symbol-name column) column))
+          (op (if case-sensitive "~" "~*")))
+      (format "%s %s '%s'" col op
+              (replace-regexp-in-string "'" "''" (format "%s" pattern)))))
 
   (cl-defmethod tabularium-db-create-index ((backend tabularium-db-postgresql) table-name column-name)
     "Create index on COLUMN-NAME in PostgreSQL TABLE-NAME."

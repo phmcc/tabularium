@@ -196,32 +196,34 @@ Cell-jump commands accept a prefix argument to jump across multiple value transi
 | ~tabularium-view-save~           | Save the current visible state as a numbered or named view      |
 | ~tabularium-view-clear~          | Clear all filters, sort rules, and column visibility            |
 
-Sorting, filtering, and highlighting share one *rules* paradigm.  For sorting, ~tabularium-view-sort-add~ (~s a~) adds a column as a sort key, ~tabularium-view-sort-reverse~ (~s s~) makes the column at point the sole sort key — descending first, toggling on repeat, the keyboard equivalent of a header click and falling back to the index column when point is not on a sortable column — ~tabularium-view-sort-index~ (~s `~) does the same for the index column, ~tabularium-view-sort-cycle~ (~s c~) toggles one key's direction, and ~tabularium-view-sort-remove~ (~s x~) drops one key or all of them, while ~tabularium-view-sort-remove-all~ (~s X~) drops every key at once.  Sorting is keyboard-driven (there is no header-click sorting); a saved view is the way to persist a sort.  ~tabularium-view-sort-buffer~ (~s l~) opens the *Sort Rules List* buffer, an interactive list of every key in priority order with its direction, where keys can be marked, removed (~x~, or ~X~ for all), re-entered, have their direction cycled (~c~), and be reordered with ~M-p~/~M-n~ (or ~M-<up>~/~M-<down>~).
+Sorting, filtering, and highlighting share one *rules* paradigm.  For sorting, ~tabularium-view-sort-add~ (~s a~) adds a column as a sort key, ~tabularium-view-sort-reverse~ (~s s~) makes the column at point the sole sort key — descending first, toggling on repeat, the keyboard equivalent of a header click and falling back to the index column when point is not on a sortable column — ~tabularium-view-sort-index~ (~s `~) does the same for the index column, ~tabularium-view-sort-cycle~ (~s c~) toggles one key's direction, and ~tabularium-view-sort-remove~ (~s x~) drops one key or all of them, while ~tabularium-view-sort-remove-all~ (~s X~) drops every key at once.  Sorting is keyboard-driven (there is no header-click sorting); a saved view is the way to persist a sort.  ~tabularium-view-sort-buffer~ (~s l~) opens the *Sort Rules List* buffer, an interactive list of every key in priority order with its direction, where keys can be inserted at point (~I~) or added at the end (~A~), marked, removed (~x~, or ~X~ for all), re-entered, have their direction cycled (~c~), navigated with ~TAB~/~S-TAB~, and be reordered with ~M-p~/~M-n~ (or ~M-<up>~/~M-<down>~).
 
-~tabularium-view-filter-add~ (bound ~f a~) is a single entry point that prompts for the filter type — substring, exact, or numeric — and runs the matching command, parallel to the ~h a~ highlight dispatcher; the substring filter is also directly available as ~f s~.  ~tabularium-view-filter-at-point~ (~f f~) is a shortcut that filters on the value of the cell at point.  Filter rules are progressive: the first call sets a base, and each subsequent call prompts for a logical connective (AND, OR, AND NOT, OR NOT) so the stack reads as a boolean expression.  The modeline shows it compactly — ~(genre = Fiction) ∧ (price > 20)~ — eliding the middle when more than three rules are active.  ~tabularium-view-filter-buffer~ (bound ~f l~) opens the *Filter Rules List* buffer: an interactive list of every rule numbered in evaluation order, with the connective in its own column.  From it, ~m~/~u~/~U~/~t~ mark and unmark rules, ~x~ removes the marked ones (~X~ removes every rule), ~c~ cycles the connective of the rule at point, ~RET~ modifies a rule, and ~M-p~/~M-n~ (or ~M-<up>~/~M-<down>~) move a rule up or down — a roomier counterpart to the single-line modeline summary, parallel to the Sort and Highlight Rules List buffers.
+~tabularium-view-filter-add~ (bound ~f a~) is a single entry point that prompts for the filter type — substring, exact, numeric, or datetime — and runs the matching command, parallel to the ~h a~ highlight dispatcher; the substring filter is also directly available as ~f s~ and the datetime filter as ~f t~, with ~f u~ and ~f d~ keeping rows whose value is unique or duplicated.  ~tabularium-view-filter-datetime~ covers date, time, and datetime columns in one command (ISO strings order chronologically as text) with ~before~, ~after~, ~exact~, and ~range~ comparisons.  Filter and highlight share one rule-type vocabulary under matching keys — ~s~ substring, ~e~ exact, ~r~ regexp, ~n~ numeric, ~t~ datetime — so the same letter means the same thing under either prefix.  Regexp filtering needs a backend with a regexp operator: PostgreSQL matches with ~~~ / ~~*~, while the built-in SQLite backend reports that it has none (SQLite parses the operator but ships no implementation, and Emacs cannot register one), so there use the regexp *highlight* rule, which matches in Emacs.  Duplicates stays highlight-only.  Filter rules carry a scope.  A row rule keeps rows whose field satisfies a test; a column rule — ~tabularium-view-filter-column~ (~f |~) — keeps columns in which some cell does, so ~any value~ hides columns that are empty in the current view.  Both live in one stack and combine with the same connectives, and rule listings mark scope with brackets: ~[price] > 20~ selects rows, ~{*} > 20~ selects columns.  A column rule is judged over every row by default, or over a single row index or a range (~5-9~), and may be scoped to particular columns rather than every one — so a rule can hide only ~{notes,tags}~ and leave the rest untouched — with the two axes shown together as ~[5-9]{notes,tags}~; over every row and column it reads simply ~{*}~.  These restrictions belong to the ~f a~ dispatcher, which prompts for both for full control; the direct keys, ~f |~ among them, skip them for speed and act over every row and column.  Choosing columns by what they are *called* is a separate operation: ~tabularium-view-select-columns~ (~| /~) keeps the columns whose name or label matches a pattern and hides the rest, with a prefix argument to invert.  ~tabularium-view-filter-at-point~ (~f f~) is a shortcut that filters on the value of the cell at point.  Filter rules are progressive: the first call sets a base, and each subsequent call prompts for a logical connective (AND, OR, AND NOT, OR NOT) so the stack reads as a boolean expression.  The modeline shows it compactly — ~(genre = Fiction) ∧ (price > 20)~ — eliding the middle when more than three rules are active.  ~tabularium-view-filter-buffer~ (bound ~f l~) opens the *Filter Rules List* buffer: an interactive list of every rule numbered in evaluation order, with the connective in its own ~Op~ column.  From it, ~I~ inserts a rule at point and ~A~ adds one at the end, ~m~/~u~/~U~/~t~ mark and unmark rules, ~x~ removes the marked ones (~X~ removes every rule), ~c~ cycles the connective of the rule at point, ~RET~ modifies a rule, and ~M-p~/~M-n~ (or ~M-<up>~/~M-<down>~) move a rule up or down (keeping each line's connective), while ~TAB~/~S-TAB~ navigate — a roomier counterpart to the single-line modeline summary, parallel to the Sort and Highlight Rules List buffers.
 
 ** Column operations
 
-| Command                            | Description                                   |
-|------------------------------------+-----------------------------------------------|
-| ~tabularium-view-column-add~         | Add a new column at the end (wizard-style label-first prompts) |
-| ~tabularium-view-column-delete~      | Delete one or more columns                    |
-| ~tabularium-view-column-edit~        | Edit column properties (wizard order: label, then id, type, default) |
-| ~tabularium-view-column-insert~      | Insert a new column at a chosen position (wizard-style prompts) |
-| ~tabularium-view-column-duplicate~   | Duplicate a column with its data              |
-| ~tabularium-view-column-move~        | Move columns to a new position                |
-| ~tabularium-view-column-swap~        | Swap two columns                              |
-| ~tabularium-view-column-copy~        | Copy columns to the column kill ring          |
-| ~tabularium-view-column-cut~         | Cut columns (copy then delete)                |
-| ~tabularium-view-toggle-column~      | Toggle visibility of a column                 |
-| ~tabularium-view-hide-columns~       | Hide multiple columns                         |
-| ~tabularium-view-show-columns~       | Show selected hidden columns (inverse of hide) |
-| ~tabularium-view-show-only-columns~  | Show only selected columns, hiding all others |
-| ~tabularium-view-show-all-columns~   | Show all columns                              |
-| ~tabularium-view-reorder-columns~    | Interactively reorder columns                 |
-| ~tabularium-view-reset-column-order~ | Reset to schema-defined order                 |
-| ~tabularium-view-move-column-left~   | Move the current column one position left (undoable) |
-| ~tabularium-view-move-column-right~  | Move the current column one position right (undoable) |
+| Command                               | Description                                                          |
+|---------------------------------------+----------------------------------------------------------------------|
+| ~tabularium-view-column-add~          | Add a new column at the end (full schema wizard prompts)             |
+| ~tabularium-view-column-delete~       | Delete one or more columns                                           |
+| ~tabularium-view-column-edit~         | Edit column properties through the full wizard (pre-filled)          |
+| ~tabularium-view-column-insert~       | Insert a new column at a chosen position (full wizard)               |
+| ~tabularium-view-column-duplicate~    | Duplicate a column with its data                                     |
+| ~tabularium-view-column-move~         | Move columns to a new position                                       |
+| ~tabularium-view-column-swap~         | Swap two columns                                                     |
+| ~tabularium-view-column-copy~         | Copy columns to the column kill ring                                 |
+| ~tabularium-view-column-cut~          | Cut columns (copy then delete)                                       |
+| ~tabularium-view-column-paste~        | Paste column(s) before a chosen column (defaults to point)           |
+| ~tabularium-view-column-paste-append~ | Append column(s) at the end                                          |
+| ~tabularium-view-toggle-column~       | Toggle visibility of a column                                        |
+| ~tabularium-view-hide-columns~        | Hide multiple columns                                                |
+| ~tabularium-view-show-columns~        | Show selected hidden columns (inverse of hide)                       |
+| ~tabularium-view-show-only-columns~   | Show only selected columns, hiding all others                        |
+| ~tabularium-view-show-all-columns~    | Show all columns                                                     |
+| ~tabularium-view-reorder-columns~     | Interactively reorder columns                                        |
+| ~tabularium-view-reset-column-order~  | Reset to schema-defined order                                        |
+| ~tabularium-view-move-column-left~    | Move the current column one position left (undoable)                 |
+| ~tabularium-view-move-column-right~   | Move the current column one position right (undoable)                |
 
 ** Math and statistics
 
@@ -303,6 +305,7 @@ The ~tabularium-entry-method~ variable controls the default method; a prefix arg
 | ~tabularium-entry-next-entry~  | Save current entry and move to the next one         |
 | ~tabularium-entry-prev-entry~  | Save current entry and move to the previous one     |
 | ~tabularium-entry-goto-view~   | Save and switch to the view buffer                  |
+| ~tabularium-entry-goto-entry~  | Center the view on this entry without saving        |
 
 * Registry Mode (~tabularium-registry-mode~)
 
@@ -408,7 +411,7 @@ Tabularium can highlight matching rows or cells in view mode.  There are two way
 
 *** Interactive highlighting
 
-The ~h~ prefix in view mode applies highlight rules to the current table, additively — each new rule stacks on top of the previous ones.  When several rules match the same cell their faces *stack*: the default face palette is grouped into three independent categories — a background color, a foreground color, and a style attribute — so a cell can carry one of each at once.  Each rule command prompts for the columns it should target.
+The ~h~ prefix in view mode applies highlight rules to the current table, additively — each new rule stacks on top of the previous ones.  When several rules match the same cell their faces *stack*: the palette is grouped into three independent categories — a background color, a foreground color, and a style attribute — and each face sets only its own attribute, so a cell can carry one of each at once and a later rule never wipes out an earlier one.  The faces are named for their category: ~tabularium-highlight-bg-*~, ~tabularium-highlight-fg-*~, and ~tabularium-highlight-style-*~.  Each rule command prompts for the columns it should target.
 
 | Key       | Command                               | Effect                                       |
 |-----------+---------------------------------------+----------------------------------------------|
@@ -422,18 +425,20 @@ The ~h~ prefix in view mode applies highlight rules to the current table, additi
 | ~h l~     | ~tabularium-view-highlight-buffer~     | opens the Highlight Rules List buffer        |
 | ~h x~     | ~tabularium-view-highlight-remove~     | removes rules (all, unsaved, or one)         |
 | ~h X~     | ~tabularium-view-highlight-expunge~    | expunges saved rules from the schema         |
-| ~h s~     | ~tabularium-view-highlight-save~       | saves one runtime rule into the schema file   |
-| ~h S~     | ~tabularium-view-highlight-save-all~   | saves the whole view's highlight state        |
+| ~h .~     | ~tabularium-view-highlight-save~       | saves one runtime rule into the schema file   |
+| ~h >~     | ~tabularium-view-highlight-save-all~   | saves the whole view's highlight state        |
 
-For quick on-the-fly work, three commands need only a face: ~h h~ tints the marked rows (or the row at point), ~h \~ tints the column under point, and ~h |~ tints columns chosen from the selector.  Each adds a real rule to the list, so it can be removed, reordered, modified, or saved like any other.  ~h a~ is the full dispatcher: it prompts for the rule type and runs the matching command.  The three typed rule commands (~h n~, ~h d~, ~h r~) each prompt for the target columns with a comma-separated ~completing-read-multiple~ selector — the ~<<ALL>>~ sentinel, or an empty answer, targets every visible column — and echo the chosen columns back in a ~[...]~ hint.  This is the same field-selection paradigm the filter and mark commands use: pick one column, several, or all.  Each command then prompts for a face, chosen from ~tabularium-highlight-faces~ — a customizable palette whose default entries are grouped ~bg:~, ~fg:~, and ~style:~, with the same ten WCAG-AAA hues offered for both color categories.
+For quick on-the-fly work, three commands need only a face: ~h h~ tints the marked rows (or the row at point), ~h \~ tints the column under point, and ~h |~ tints columns chosen from the selector.  Each adds a real rule to the list, so it can be removed, reordered, modified, or saved like any other.  ~h a~ is the full dispatcher: it prompts for the rule type and runs the matching command.  As with the filter dispatcher, it can scope a rule — a column rule to particular columns (tinting only those), a row or value rule to particular rows.  The typed rule commands (~h s~, ~h e~, ~h r~, ~h n~, ~h t~, ~h d~) each prompt for the target columns with a comma-separated ~completing-read-multiple~ selector — the ~<<ALL>>~ sentinel, or an empty answer, targets every visible column — and echo the chosen columns back in a ~[...]~ hint.  This is the same field-selection paradigm the filter and mark commands use: pick one column, several, or all.  Each command then prompts for a face, chosen from ~tabularium-highlight-faces~ — a customizable palette whose default entries are grouped ~bg:~, ~fg:~, and ~style:~, with the same ten WCAG-AAA hues offered for both color categories.
 
 The ~h n~ numeric command offers only columns where a comparison is meaningful — integer, number, date, time, and datetime.  Because ISO date/time strings order chronologically as text, the same comparison expresses "later than" / "earlier than" for date, time, and datetime columns without a separate command.
 
-All rules are numbered in evaluation order — saved rules first as the stable base, runtime rules layered on top — so the stacking hierarchy is visible.  ~h x~ removes rules: its prompt lists every rule — runtime and saved alike — and offers ~<<ALL>>~ (the default — remove every rule), ~<<UNSAVED>>~ (remove only the session's unsaved rules), and each individual rule.  Removing a saved rule only *hides* it in the current view — the schema is never mutated, so reopening the database brings every saved rule back.  ~h s~ persists one chosen runtime rule, ~h S~ persists the whole view state (runtime rules added, hidden rules dropped), and ~h X~ expunges every saved rule; these three are the only highlight commands that write the schema file.  Adding and removing rules is tracked by undo/redo.
+All rules are numbered in evaluation order — saved rules first as the stable base, runtime rules layered on top — so the stacking hierarchy is visible.  ~h x~ removes rules: its prompt lists every rule — runtime and saved alike — and offers ~<<ALL>>~ (the default — remove every rule), ~<<UNSAVED>>~ (remove only the session's unsaved rules), and each individual rule.  Removing a saved rule only *hides* it in the current view — the schema is never mutated, so reopening the database brings every saved rule back.  ~h .~ persists one chosen runtime rule, ~h >~ persists the whole view state (runtime rules added, hidden rules dropped), and ~h X~ expunges every saved rule; these three are the only highlight commands that write the schema file.  Adding and removing rules is tracked by undo/redo.
 
-~h l~ opens the *Highlight Rules List* buffer, an interactive list of every rule numbered in evaluation order with a "Saved?" column.  From it, ~a~ adds a new rule, ~m~/~u~/~U~/~t~ mark and unmark rules, ~x~ removes the marked rules (or the one at point), ~RET~ modifies a rule, ~M-p~/~M-n~ move a rule within its group, ~s~ saves the marked rules, ~S~ saves all, and ~X~ expunges — rule management in one place.  The buffer refreshes automatically as the rules change.
+Highlight rules carry the same three scopes.  ~h a~ asks what to highlight — ~row(s)~, ~column(s)~, or ~value(s)~ — before the rule type, so one test can tint a whole row when its field matches (~[health] = Struggling~), a whole column when any of its cells match (~{light}~, optionally judged over chosen rows), or only the cells that matched (~<location> ≈ /Bedroom/~).  Pressing ~RET~ on a rule in either list buffer re-enters that workflow from the top, scope prompt included.
 
-Rules added interactively live only in the current session until ~h s~ or ~h S~ writes them into the schema's ~:highlight~ property, the same way ~v s~ persists a saved view.
+~h l~ opens the *Highlight Rules List* buffer, an interactive list of every rule numbered in evaluation order with "Saved?" and "Format" columns — the latter naming the rule's face (~bg: Red~, ~fg: Green~, ~style: Bold~) and rendered in that face, so it is clear at a glance which rule produces which formatting.  The same swatch appears in the rule selectors, such as the one ~h x~ uses.  From it, ~I~ inserts a rule at point and ~A~ adds one at the end, ~m~/~u~/~U~/~t~ mark and unmark rules, ~x~ removes the marked rules (or the one at point), ~RET~ modifies a rule, ~M-p~/~M-n~ move a rule within its group and ~TAB~/~S-TAB~ navigate, ~.~ saves the marked rules, ~>~ saves all, and ~X~ expunges — rule management in one place.  The buffer refreshes automatically as the rules change.
+
+Rules added interactively live only in the current session until ~h .~ or ~h >~ writes them into the schema's ~:highlight~ property, the same way ~v .~ persists a saved view.
 
 *** Declarative highlighting
 
@@ -456,7 +461,7 @@ Cell rules use ~:field~ to name the target column.  They can match with a ~:test
   (:scope cell :field status :value "Closed"  :face shadow)
   (:scope cell :field amount :builtin compare
    :op ">" :operand "10000" :face warning)
-  (:scope cell :field tags :builtin duplicates :face tabularium-highlight-blue))
+  (:scope cell :field tags :builtin duplicates :face tabularium-highlight-bg-blue))
 #+end_src
 
 Cell rules can co-exist with row rules; cell faces are applied to the cell text, while row faces are applied via overlay.  Mark and freeze overlays sit on top of highlighting.
@@ -467,7 +472,7 @@ Columns can be added, deleted, or edited interactively from view mode.  These op
 
 ** Computed-field helpers
 
-Fields defined with ~:computed~ derive their value from an SQL expression or an Elisp function evaluated against the row, conceptually similar to formulae in spreadsheet software.  Computed fields are not stored — they are evaluated on read.  An Elisp ~:computed~ expression receives the current row as an alist.  Helpers are grouped into four categories: conditional logic, same-row aggregation, date arithmetic, and cross-row lookup.
+Fields defined with ~:computed~ derive their value from an SQL expression or an Elisp function evaluated against the row, conceptually similar to formulae in spreadsheet software.  Computed fields are not stored — they are evaluated on read.  Both kinds can be filtered, sorted, and highlighted.  A SQL-expression field is handled by the database, which substitutes the expression into the ~WHERE~ or ~ORDER BY~ clause.  An Elisp field has no SQL form, so its rows are fetched first and the filtering and sorting happen in Emacs; the page limit is therefore applied afterwards and the intermediate fetch is bounded by ~tabularium-post-fetch-row-cap~, which reports an error rather than silently returning a truncated — and so wrong — answer.  Such a column must be visible for this, since its values exist only once computed for display.  An Elisp ~:computed~ expression receives the current row as an alist.  Helpers are grouped into four categories: conditional logic, same-row aggregation, date arithmetic, and cross-row lookup.
 
 *** Conditional logic
 
@@ -651,7 +656,7 @@ The full key table mirrors the main menu layout:
 | =c=   | ~tabularium-close~                    |
 | =r=   | ~tabularium-registry~                 |
 | =$=   | ~tabularium-rename-database~          |
-| =+=   | ~tabularium-register-database~        |
+| =R=   | ~tabularium-register-database~        |
 | =N=   | ~tabularium-new-entry~                |
 | =P=   | ~tabularium-prompt-entry~             |
 | =Q=   | ~tabularium-quick-entry~              |
