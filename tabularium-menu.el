@@ -4,7 +4,7 @@
 
 ;; Author: Paul H. McClelland <paulhmcclelland@protonmail.com>
 ;; Maintainer: Paul H. McClelland <paulhmcclelland@protonmail.com>
-;; Version: 0.5.2
+;; Version: 0.5.3
 ;; Package-Requires: ((emacs "29.1"))
 ;; Keywords: data
 ;; URL: https://codeberg.org/phmcc/tabularium
@@ -89,8 +89,8 @@
  ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   [_o_] Open              [_N_] New (form)          [_v_] View all            [_i_/_<_] Import…           [_._] Schema…
   [_O_] Open + View       [_P_] Prompt              [_/_] Fuzzy find          [_e_/_>_] Export…
-  [_c_] Close             [_Q_] Quick               [_l_] Last match          [_R_] Register
-  [_C_] Create…                                   [_#_] Calculate…          [_s_] Sync prep
+  [_x_] Close             [_Q_] Quick               [_l_] Last match          [_R_] Register
+  [_C_] Create…                                   [_%_] Aggregate…          [_s_] Sync prep
   [_r_] Registry
   [_$_] Rename
   [_?_] Describe
@@ -101,7 +101,7 @@
     ;; Database
     ("o" tabularium-open)
     ("O" tabularium-open-and-view)
-    ("c" tabularium-close)
+    ("x" tabularium-close)
     ("C" tabularium-create-hydra/body)
     ("r" tabularium-registry)
     ("$" tabularium-rename-database)
@@ -116,7 +116,7 @@
     ("v" tabularium-view)
     ("/" tabularium-find)
     ("l" tabularium-last)
-    ("#" tabularium-calculate-hydra/body)
+    ("%" tabularium-aggregate-hydra/body)
     ;; External
     ("i" tabularium-import-hydra/body)
     ("<" tabularium-import-hydra/body)
@@ -207,31 +207,29 @@
     ("$" tabularium-schema-rename-field)
     ("q" tabularium-hydra/body :color blue))
 
-  ;; Calculate sub-hydra (accessible from main hydra)
+  ;; Aggregate sub-hydra (accessible from main hydra)
   ;; n.b.: view-dependent functions (count visible/marked/across, sum visible)
   ;; are only in the view-mode calculate hydra.
-  (defhydra tabularium-calculate-hydra (:color blue :hint nil)
+  (defhydra tabularium-aggregate-hydra (:color blue :hint nil)
     "
 ┌───────────┐
-│ Calculate │  %s(tabularium--hydra-db-info)
+│ Aggregate │  %s(tabularium--hydra-db-info)
 └───────────┘
-  Summarize
+  Main
  ────────────────────────────────────────────────────────────────────────────────
-  [_c_] Count
   [_s_] Sum
   [_d_] Mean ± SD
   [_i_] Median [IQR]
   [_m_] Min / Max
-  [_#_] Column summary
+  [_%_] Field summary
  ────────────────────────────────────────────────────────────────────────────────
   [_q_] Quit
 "
-    ("c" tabularium-aggregate-count)
     ("s" tabularium-aggregate-sum)
-    ("m" tabularium-aggregate-min-max)
     ("d" tabularium-aggregate-mean-sd)
     ("i" tabularium-aggregate-median-iqr)
-    ("#" tabularium-aggregate-column-summary)
+    ("m" tabularium-aggregate-min-max)
+    ("%" tabularium-aggregate-field-summary)
     ("q" tabularium-hydra/body :color blue)))
 
 ;;; ** 2.2 View Mode
@@ -246,18 +244,19 @@
 
   Navigate                Modify                  Mark                      View                      Miscellaneous
  ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  [_n_/_p_] Row up/down       [_N_] New entry           [_m_] Mark row              [_f_] Filter…               [_`_] Reindex
-  [_{_/_}_] First/last        [_P_] Prompt entry        [_u_] Unmark row            [_v_] Views…                [_#_] Calculate…
-  [_[_/_]_] Line beg/end      [_Q_] Quick entry         [_U_] Unmark all            [_|_] Columns…              [_C-/_] Undo
-  [_TAB_] Next cell         [_I_] Insert              [_t_] Toggle marks          [_s_] Sort…                 [_C-?_] Redo
-  [_M-[_/_M-]_] Jump ←/→      [_E_] Edit                [_x_] Execute marks         [_z_] Freeze…               [_y_] Kill ring
-  [_M-{_/_M-}_] Jump ↑/↓      [_+_] Duplicate           [_*_] Mark menu…        
-  [_g_/_=_] Refresh           [_D_] Delete              [_h_] Highlight…
-  [_/_] Fuzzy find          [_X_/_C_] Cut/Copy
-  [_RET_] Details           [_V_/_A_] Paste/Append
-  [_'_] Goto…               [_M_/_W_] Move/Swap
-                          [_R_] Replace…
-                          [_F_] Fill…
+  [_p_/_n_] Row ↑/↓           [_N_] New entry           [_m_] Mark row              [_f_] Filter…               [_`_] Reindex
+  [_S-TAB_/_TAB_] Cell ←/→    [_P_] Prompt entry        [_u_] Unmark row            [_v_] Views…                [_%_] Aggregate…
+  [_[_/_]_] Line ←/→          [_Q_] Quick entry         [_U_] Unmark all            [_|_] Columns…              [_#_] Count…
+  [_{_/_}_] Table ↑/↓         [_I_] Insert              [_t_] Toggle marks          [_s_] Sort…                 [_C-/_] Undo
+  [_M-{_/_M-}_] Jump ↑/↓      [_E_] Edit                [_a_] Action                [_z_] Freeze…               [_C-?_] Redo
+  [_M-[_/_M-]_] Jump ←/→      [_+_] Duplicate           [_*_] Mark menu…                                      [_y_] Kill ring
+  [_g_/_=_] Refresh           [_D_] Delete              [_h_] Highlight…                          
+  [_/_] Fuzzy find          [_X_/_C_] Cut/Copy                                                    
+  [_RET_] Details           [_V_/_A_] Paste/Append                                                
+  [_'_] Goto…               [_M_/_W_] Move/Swap                                                   
+                          [_R_] Replace…                                                          
+                          [_F_] Fill…                                                             
+  
  ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   [_q_] Quit   [_o_] Open   [_O_] Open + View   [_i_/_<_] Import…    [_e_/_>_] Export…    [_$_] Rename   [_._] Schema   [_?_] Describe
 "
@@ -269,8 +268,8 @@
     ("}" tabularium-view-last-row)
     ("[" tabularium-view-beginning-of-line)
     ("]" tabularium-view-end-of-line)
+    ("S-TAB" tabularium-view-backward-cell)
     ("TAB" tabularium-view-forward-cell)
-    ("<backtab>" tabularium-view-backward-cell)
     ("M-n" tabularium-view-cell-jump-down)
     ("M-p" tabularium-view-cell-jump-up)
     ("M-]" tabularium-view-cell-jump-forward)
@@ -281,10 +280,14 @@
     ("M-<up>" tabularium-view-cell-jump-up)
     ("M-<right>" tabularium-view-cell-jump-forward)
     ("M-<left>" tabularium-view-cell-jump-backward)
-    ("C-<down>" tabularium-view-page-down)
-    ("C-<up>" tabularium-view-page-up)
+    ("C-<down>" tabularium-view-scroll-row-down)
+    ("C-<up>" tabularium-view-scroll-row-up)
     ("C-<right>" tabularium-view-scroll-column-right)
     ("C-<left>" tabularium-view-scroll-column-left)
+    ("C-S-<down>" tabularium-view-page-down)
+    ("C-S-<up>" tabularium-view-page-up)
+    ("C-S-<right>" tabularium-view-scroll-page-right)
+    ("C-S-<left>" tabularium-view-scroll-page-left)
     ("g" tabularium-view-refresh)
     ("=" tabularium-view-refresh)
     ("'" tabularium-view-goto-hydra/body :color blue)
@@ -313,7 +316,7 @@
     ("u" tabularium-view-unmark)
     ("U" tabularium-view-unmark-all)
     ("t" tabularium-view-toggle-marks)
-    ("x" tabularium-view-execute :color blue)
+    ("a" tabularium-view-action :color blue)
     ("*" tabularium-view-mark-hydra/body :color blue)
     ("h" tabularium-view-highlight-hydra/body :color blue)
     ;; View
@@ -324,7 +327,8 @@
     ("z" tabularium-view-freeze-hydra/body :color blue)
     ("`" tabularium-reindex :color blue)
     ;; Calculate
-    ("#" tabularium-view-calculate-hydra/body :color blue)
+    ("%" tabularium-view-aggregate-hydra/body :color blue)
+    ("#" tabularium-view-count-hydra/body :color blue)
     ;; Schema submenu
     ("." tabularium-schema-hydra/body :color blue)
     ;; Undo/Redo
@@ -349,10 +353,10 @@
 └─────────┘
   All rows                Visible only              Other
  ────────────────────────────────────────────────────────────────────────────────
-  [_s_] Substring         [_S_] Substring           [_p_] Pattern (all)
-  [_e_] Exact             [_E_] Exact               [_c_] Case toggle
-  [_r_] Regexp            [_R_] Regexp
-  [_/_] Query-Replace     [_?_] Query-Replace
+  [_s_] Substring           [_S_] Substring             [_p_] Pattern (all)
+  [_e_] Exact               [_E_] Exact                 [_c_] Case toggle
+  [_r_] Regexp              [_R_] Regexp
+  [_/_] Query-Replace       [_?_] Query-Replace
  ────────────────────────────────────────────────────────────────────────────────
   [_q_] Quit
 "
@@ -379,9 +383,11 @@
 └──────┘
   Main                    Other
  ────────────────────────────────────────────────────────────────────────────────
-  [_s_] Substring         [_p_] Pattern
-  [_e_] Exact             [_#_] Count marked
-  [_r_] Regexp            [_n_] Rows (range)
+  [_s_] Substring           [_a_] Action
+  [_e_] Exact               [_#_] Count marked
+  [_r_] Regexp              
+  [_p_] Pattern
+  [_n_] Rows (range)
  ────────────────────────────────────────────────────────────────────────────────
   [_q_] Quit
 "
@@ -390,6 +396,7 @@
     ("r" tabularium-view-mark-regexp)
     ("n" tabularium-view-mark-range)
     ("p" tabularium-view-mark-pattern)
+    ("a" tabularium-view-action :color blue)
     ("#" tabularium-view-count-marked)
     ("q" tabularium-view-hydra/body :color blue))
 
@@ -403,12 +410,12 @@
  ────────────────────────────────────────────────────────────────────────────────
   [_f_] At point            [_|_] By value            [_a_] Add rule…
   [_s_] Substring                                   [_l_] Rules list
-  [_e_] Exact match                                 [_c_] Cycle connective
+  [_e_] Exact                                       [_c_] Cycle connective
   [_r_] Regexp                                      [_x_] Remove
   [_n_] Numeric                                     [_X_] Remove all
   [_t_] Datetime
   [_u_] Unique
-  [_d_] Duplicates
+  [_d_] Duplicate
  ────────────────────────────────────────────────────────────────────────────────
   [_q_] Quit
 "
@@ -554,7 +561,9 @@
   [_h_] Hide                [_<_] Move left             [_I_] Insert
   [_s_] Show                [_>_] Move right            [_D_] Delete
   [_o_] Show only           [_=_] Reset order           [_E_] Edit
-  [_a_] Show all            [_M_/_W_] Move/Swap          [_+_] Duplicate
+  [_a_] Show all            [_M_/_W_] Move/Swap           [_+_] Duplicate
+                                                    [_$_] Rename
+                                                    [_l_] Relabel
   [_/_] Select by title
                                                     [_X_/_C_] Cut/Copy
                                                     [_V_/_A_] Paste/Append
@@ -580,6 +589,8 @@
     ("I" tabularium-view-column-insert)
     ("D" tabularium-view-column-delete)
     ("E" tabularium-view-column-edit)
+    ("$" tabularium-schema-rename-field)
+    ("l" tabularium-view-column-relabel)
     ("+" tabularium-view-column-duplicate)
     ("C" tabularium-view-column-copy)
     ("X" tabularium-view-column-cut)
@@ -606,40 +617,70 @@
     ("c" tabularium-view-goto-column)
     ("q" tabularium-view-hydra/body :color blue))
 
-  ;; Calculate sub-hydra (view mode)
-  (defhydra tabularium-view-calculate-hydra (:color blue :hint nil)
+  ;; Count sub-hydra (view mode)
+  (defhydra tabularium-view-count-hydra (:color blue :hint nil)
     "
-┌───────────┐
-│ Calculate │  %s(tabularium--hydra-db-info)
-└───────────┘
-  Main                     Visible only
+┌───────┐
+│ Count │  %s(tabularium--hydra-db-info)
+└───────┘
+  All                   Visible rows           Tally
  ────────────────────────────────────────────────────────────────────────────────
-  [_c_] Count                [_C_] Count visible
-  [_s_] Sum                  [_S_] Sum
-  [_m_] Min / Max            [_M_] Min / Max
-  [_d_] Mean ± SD            [_D_] Mean ± SD
-  [_i_] Median [IQR]         [_I_] Median [IQR]
-  [_*_] Count marked
-  [_#_] Column summary
+  [_s_] Substring         [_S_] Substring          [_a_] All
+  [_e_] Exact             [_E_] Exact              [_#_] Visible
+  [_r_] Regexp            [_R_] Regexp             [_*_] Marked
+  [_n_] Numeric           [_N_] Numeric
+  [_t_] Datetime          [_T_] Datetime
+  [_u_] Unique            [_U_] Unique
+  [_d_] Duplicate         [_D_] Duplicate
  ────────────────────────────────────────────────────────────────────────────────
   [_q_] Quit
 "
-    ;; Count
-    ("c" tabularium-aggregate-count)
-    ("C" tabularium-aggregate-visible-count)
+    ("s" tabularium-count-substring)
+    ("S" tabularium-count-visible-substring)
+    ("e" tabularium-count-exact)
+    ("E" tabularium-count-visible-exact)
+    ("r" tabularium-count-regexp)
+    ("R" tabularium-count-visible-regexp)
+    ("n" tabularium-count-numeric)
+    ("N" tabularium-count-visible-numeric)
+    ("t" tabularium-count-datetime)
+    ("T" tabularium-count-visible-datetime)
+    ("u" tabularium-count-unique)
+    ("U" tabularium-count-visible-unique)
+    ("d" tabularium-count-duplicate)
+    ("D" tabularium-count-visible-duplicate)
+    ("a" tabularium-count-tally)
+    ("#" tabularium-count-visible-tally)
     ("*" tabularium-view-count-marked)
+    ("q" tabularium-view-hydra/body :color blue))
+
+  ;; Calculate sub-hydra (view mode)
+  (defhydra tabularium-view-aggregate-hydra (:color blue :hint nil)
+    "
+┌───────────┐
+│ Aggregate │  %s(tabularium--hydra-db-info)
+└───────────┘
+  Summarize               Visible                Miscellaneous
+ ────────────────────────────────────────────────────────────────────────────────
+  [_s_] Sum                 [_S_] Sum                [_%_] Field summary
+  [_d_] Mean ± SD           [_D_] Mean ± SD
+  [_i_] Median [IQR]        [_I_] Median [IQR]
+  [_m_] Min / Max           [_M_] Min / Max
+ ────────────────────────────────────────────────────────────────────────────────
+  [_q_] Quit
+"
     ;; Aggregate (all)
     ("s" tabularium-aggregate-sum)
-    ("m" tabularium-aggregate-min-max)
     ("d" tabularium-aggregate-mean-sd)
     ("i" tabularium-aggregate-median-iqr)
+    ("m" tabularium-aggregate-min-max)
     ;; Aggregate (visible)
     ("S" tabularium-aggregate-visible-sum)
-    ("M" tabularium-aggregate-visible-min-max)
     ("D" tabularium-aggregate-visible-mean-sd)
     ("I" tabularium-aggregate-visible-median-iqr)
+    ("M" tabularium-aggregate-visible-min-max)
     ;; Summary
-    ("#" tabularium-aggregate-column-summary)
+    ("%" tabularium-aggregate-field-summary)
     ("q" tabularium-view-hydra/body :color blue))
 
   ;; Views sub-hydra (presets + expansion)
@@ -648,13 +689,14 @@
 ┌───────┐
 │ Views │  %s(tabularium--hydra-db-info)   View: %s(or tabularium--current-view \"<none>\")
 └───────┘
-  Apply                 Save / Reset          Expand
+  Presets                 Save / Reset            Expand
  ───────────────────────────────────────────────────────────────────────────
-  [_v_] Select view       [_._] Save current      [_>_] Show more
-  [_1_-_9_] Preset        [_x_] Clear view        [_+_] All in view
-                        [_0_] Reset views       [_a_] All (no constraints)
-                                              [_r_] Show range
-                                              [_=_] Reset limit
+  [_v_] Select view         [_._] Save current        [_>_] Show more
+  [_1_-_9_] Preset            [_x_] Clear view          [_+_] All in view
+                            [_X_] Expunge saved         [_a_] All
+                          [_0_] Reset views         [_r_] Range
+                                                [_=_] Reset
+                                                [_#_] Count rows / columns
  ───────────────────────────────────────────────────────────────────────────
   [_q_] Quit
 "
@@ -672,13 +714,15 @@
     ;; Save / Reset
     ("." tabularium-view-save)
     ("x" tabularium-view-clear)
+    ("X" tabularium-view-expunge)
     ("0" tabularium-view-0)
     ;; Expand
     (">" tabularium-view-show-more)
-    ("a" tabularium-view-show-all)
     ("+" tabularium-view-show-all-in-view)
+    ("a" tabularium-view-show-all)
     ("r" tabularium-view-show-range)
     ("=" tabularium-view-reset-limit)
+    ("#" tabularium-count-visible-tally)
     ("q" tabularium-view-hydra/body :color blue)))
 
 ;;; * 3 Transient
@@ -693,7 +737,7 @@
                             ["Database"
                              ("o" "Open" tabularium-open)
                              ("O" "Open + View" tabularium-open-and-view)
-                             ("c" "Close" tabularium-close)
+                             ("x" "Close" tabularium-close)
                              ("C" "Create…" tabularium-create-transient)
                              ("r" "List databases" tabularium-registry)
                              ("$" "Rename" tabularium-rename-database)
@@ -713,7 +757,7 @@
                              ("v" "View all" tabularium-view)
                              ("/" "Fuzzy find" tabularium-find)
                              ("l" "Last match" tabularium-last)
-                             ("#" "Calculate…" tabularium-calculate-transient)]
+                             ("%" "Aggregate…" tabularium-aggregate-transient)]
                             ["External"
                              ("i" "Import…" tabularium-import-transient)
                              ("<" "Import… (alt)" tabularium-import-transient)
@@ -746,13 +790,11 @@
                             ("i" "As new database" tabularium-import)
                             ("a" "Append to current database" tabularium-import-append)])
 
-  ;; Calculate transient submenu
-  (transient-define-prefix tabularium-calculate-transient ()
-                           "Calculate operations."
+  ;; Aggregate transient submenu
+  (transient-define-prefix tabularium-aggregate-transient ()
+                           "Aggregate operations."
                            [:description
-                            (lambda () (format "Calculate: %s" (or tabularium--current-schema-name "<none>")))
-                            ["Count"
-                             ("c" "Count query" tabularium-aggregate-count)]
+                            (lambda () (format "Aggregate: %s" (or tabularium--current-schema-name "<none>")))
                             ["Aggregate"
                              ("s" "Sum" tabularium-aggregate-sum)
                              ("m" "Min/Max" tabularium-aggregate-min-max)]
@@ -760,7 +802,7 @@
                              ("d" "Mean±SD" tabularium-aggregate-mean-sd)
                              ("i" "Median[IQR]" tabularium-aggregate-median-iqr)]
                             ["Summary"
-                             ("#" "Column summary" tabularium-aggregate-column-summary)]]))
+                             ("%" "Field summary" tabularium-aggregate-field-summary)]]))
 
 ;;; ** 3.2 View Mode
 
@@ -805,7 +847,7 @@
       ("u" "Unmark" tabularium-view-unmark)
       ("U" "Unmark all" tabularium-view-unmark-all)
       ("t" "Toggle" tabularium-view-toggle-marks)
-      ("x" "Execute" tabularium-view-execute)
+      ("a" "Action" tabularium-view-action)
       ("* s" "Mark substring" tabularium-view-mark-matching)
       ("* e" "Mark exact" tabularium-view-mark-exact)
       ("* p" "Mark pattern" tabularium-view-mark-pattern)
@@ -838,6 +880,7 @@
       ("v ." "Save current" tabularium-view-save)
       ("v 0" "Reset views" tabularium-view-0)
       ("v x" "Clear all" tabularium-view-clear)
+      ("v X" "Expunge saved view" tabularium-view-expunge)
       ("v >" "Show more" tabularium-view-show-more)
       ("v a" "Show all (no constraints)" tabularium-view-show-all)
       ("v +" "Show all in view" tabularium-view-show-all-in-view)
@@ -879,21 +922,36 @@
       ("F D" "Delete run ↑" tabularium-view-fill-delete-up)
       ("F r" "Replace run ↓" tabularium-view-fill-replace)
       ("F R" "Replace run ↑" tabularium-view-fill-replace-up)
-      ("F x" "Clear up to row" tabularium-view-fill-clear-to-point)
-      ("F X" "Clear incl. row" tabularium-view-fill-clear)]
-     ["Calculate (# prefix)"
-      ("# c" "Count query" tabularium-aggregate-count)
-      ("# C" "Count visible" tabularium-aggregate-visible-count)
-      ("# *" "Count marked" tabularium-view-count-marked)
-      ("# s" "Sum" tabularium-aggregate-sum)
-      ("# S" "Visible: Sum" tabularium-aggregate-visible-sum)
-      ("# m" "Min/Max" tabularium-aggregate-min-max)
-      ("# M" "Visible: Min/Max" tabularium-aggregate-visible-min-max)
-      ("# d" "Mean±SD" tabularium-aggregate-mean-sd)
-      ("# D" "Visible: Mean±SD" tabularium-aggregate-visible-mean-sd)
-      ("# i" "Median[IQR]" tabularium-aggregate-median-iqr)
-      ("# I" "Visible: Med[IQR]" tabularium-aggregate-visible-median-iqr)
-      ("# #" "Column summary" tabularium-aggregate-column-summary)]
+      ("F x" "Clear down through row" tabularium-view-fill-clear)
+      ("F X" "Clear up through row" tabularium-view-fill-clear-to-point)]
+     ["Count (# prefix)"
+      ("# s" "Substring" tabularium-count-substring)
+      ("# S" "Visible: Substring" tabularium-count-visible-substring)
+      ("# e" "Exact" tabularium-count-exact)
+      ("# E" "Visible: Exact" tabularium-count-visible-exact)
+      ("# r" "Regexp" tabularium-count-regexp)
+      ("# R" "Visible: Regexp" tabularium-count-visible-regexp)
+      ("# n" "Numeric" tabularium-count-numeric)
+      ("# N" "Visible: Numeric" tabularium-count-visible-numeric)
+      ("# t" "Datetime" tabularium-count-datetime)
+      ("# T" "Visible: Datetime" tabularium-count-visible-datetime)
+      ("# u" "Unique" tabularium-count-unique)
+      ("# U" "Visible: Unique" tabularium-count-visible-unique)
+      ("# d" "Duplicate" tabularium-count-duplicate)
+      ("# D" "Visible: Duplicate" tabularium-count-visible-duplicate)
+      ("# a" "Tally all" tabularium-count-tally)
+      ("# #" "Tally visible" tabularium-count-visible-tally)
+      ("# *" "Marked" tabularium-view-count-marked)]
+     ["Aggregate (% prefix)"
+      ("% s" "Sum" tabularium-aggregate-sum)
+      ("% S" "Visible: Sum" tabularium-aggregate-visible-sum)
+      ("% m" "Min/Max" tabularium-aggregate-min-max)
+      ("% M" "Visible: Min/Max" tabularium-aggregate-visible-min-max)
+      ("% d" "Mean±SD" tabularium-aggregate-mean-sd)
+      ("% D" "Visible: Mean±SD" tabularium-aggregate-visible-mean-sd)
+      ("% i" "Median[IQR]" tabularium-aggregate-median-iqr)
+      ("% I" "Visible: Med[IQR]" tabularium-aggregate-visible-median-iqr)
+      ("% %" "Field summary" tabularium-aggregate-field-summary)]
      ["Columns (| prefix)" :pad-keys t
       ("| t" "Toggle" tabularium-view-toggle-column)
       ("| h" "Hide" tabularium-view-hide-columns)
@@ -908,6 +966,8 @@
       ("| I" "Insert col" tabularium-view-column-insert)
       ("| D" "Delete col" tabularium-view-column-delete)
       ("| E" "Edit col" tabularium-view-column-edit)
+      ("| $" "Rename col" tabularium-schema-rename-field)
+      ("| l" "Relabel col" tabularium-view-column-relabel)
       ("| +" "Duplicate col" tabularium-view-column-duplicate)
       ("| M" "Move cols" tabularium-view-column-move)
       ("| W" "Swap cols" tabularium-view-column-swap)

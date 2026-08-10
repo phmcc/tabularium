@@ -1,10 +1,10 @@
-;;; tabularium-db.el --- Database backend abstraction for Tabularium -*- lexical-binding: t; -*-
+;;; tabularium-db.el --- Database backend layer -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2026 Paul H. McClelland
 
 ;; Author: Paul H. McClelland <paulhmcclelland@protonmail.com>
 ;; Maintainer: Paul H. McClelland <paulhmcclelland@protonmail.com>
-;; Version: 0.5.2
+;; Version: 0.5.3
 ;; Package-Requires: ((emacs "29.1"))
 ;; Keywords: data
 ;; URL: https://codeberg.org/phmcc/tabularium
@@ -122,7 +122,7 @@ which case statements simply auto-commit as before.")
 ;; Transactions are a no-op by default, so a backend that has not
 ;; implemented them keeps its previous statement-at-a-time
 ;; auto-commit behavior with no change in semantics.  Backends that
-;; support transactions (e.g. SQLite) override the three methods
+;; support transactions (e.g., SQLite) override the three methods
 ;; below; `tabularium-db-with-transaction' then batches the writes.
 (cl-defmethod tabularium-db-begin-transaction ((_backend tabularium-db-backend))
   "Default: no transaction support, so do nothing."
@@ -398,13 +398,17 @@ Dates, times, and datetimes are stored as TEXT in ISO 8601 form."
 
 (defun tabularium-db-build-like-clause (column pattern &optional case-sensitive)
   "Build a substring match clause for COLUMN matching PATTERN.
-PATTERN is a literal substring; single quotes and (for GLOB) wildcards
-are escaped.  When CASE-SENSITIVE is non-nil, uses GLOB; otherwise LIKE."
+PATTERN is a literal substring: single quotes are doubled and the
+operator's own wildcards are escaped, so a search for a literal % or _
+matches that character instead of acting as a wildcard.  When
+CASE-SENSITIVE is non-nil, uses GLOB; otherwise LIKE plus its ESCAPE
+clause."
   (let* ((col (if (symbolp column) (symbol-name column) column))
          (op (tabularium-db-like-op case-sensitive))
          (wrapped (tabularium-db-like-pattern (format "%s" pattern) case-sensitive))
          (escaped (replace-regexp-in-string "'" "''" wrapped)))
-    (format "%s %s '%s'" col op escaped)))
+    (format "%s %s '%s'%s" col op escaped
+            (tabularium-db-like-escape-clause case-sensitive))))
 
 (cl-defgeneric tabularium-db-regexp-clause (backend column pattern
                                                    &optional case-sensitive)
@@ -448,9 +452,18 @@ Otherwise returns LIKE (case-insensitive)."
   (if case-sensitive "GLOB" "LIKE"))
 
 (defun tabularium-db-like-pattern (value case-sensitive)
-  "Wrap VALUE in wildcard pattern for the current match operator.
-When CASE-SENSITIVE is non-nil, uses *value* for GLOB.
-Otherwise uses %value% for LIKE."
+  "Wrap VALUE in a wildcard pattern for the current match operator.
+VALUE is a literal substring, so its own wildcard characters are
+escaped to match themselves.  GLOB escapes [ ] * ? inline by wrapping
+each in a bracket expression.  LIKE has no bracket syntax, so % and _
+\(and the escape character itself) are prefixed with a backslash; a
+caller building LIKE SQL must therefore also emit
+`tabularium-db-like-escape-clause', or the backslashes are matched
+literally instead of read as escapes.
+
+Commands that deliberately expose SQL wildcards to the user — the
+`*-pattern' family — pass their pattern through untouched rather than
+calling this function."
   (if case-sensitive
       ;; GLOB: escape [ ] * ? by wrapping each in [c]
       (let ((escaped (replace-regexp-in-string
@@ -458,7 +471,28 @@ Otherwise uses %value% for LIKE."
                       (lambda (m) (format "[%s]" m))
                       value t t)))
         (format "*%s*" escaped))
-    (format "%%%s%%" value)))
+    ;; LIKE: escape the backslash first (it is the escape character),
+    ;; then the two wildcards.  One pass over a character alternative
+    ;; does all three without re-escaping what it just inserted.
+    (let ((escaped (replace-regexp-in-string
+                    "[\\%_]"
+                    (lambda (m) (concat "\\" m))
+                    value t t)))
+      (format "%%%s%%" escaped))))
+
+(defun tabularium-db-like-escape-clause (case-sensitive)
+  "Return the SQL ESCAPE clause pairing with `tabularium-db-like-pattern'.
+GLOB escapes wildcards inline and needs no clause, so this returns the
+empty string when CASE-SENSITIVE is non-nil.  LIKE needs the clause so
+the backslashes inserted by `tabularium-db-like-pattern' are read as
+escapes rather than matched literally, giving SQL of the shape
+
+  col LIKE ? ESCAPE BACKSLASH
+
+The clause belongs after the operand, not after the operator, so it is
+appended to the end of the comparison rather than folded into
+`tabularium-db-like-op'."
+  (if case-sensitive "" " ESCAPE '\\'"))
 
 (defun tabularium-db-update-schema-file-path (schema-file new-db-path)
   "Update the :file path in SCHEMA-FILE to NEW-DB-PATH.

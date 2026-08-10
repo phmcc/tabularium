@@ -24,7 +24,7 @@ The following features are tentatively planned for future releases:
   - [X] Date/time/datetime arithmetic helpers (=fn-time-add=, =fn-datetime-diff=, =fn-duration-format=, etc.)
 
 - [X] Quick-startup wizard
-  - [X] One-shot prompt for all fields at once (e.g. =name:text:required age:integer date:date=)
+  - [X] One-shot prompt for all fields at once (e.g., =name:text:required age:integer date:date=)
   - [X] Schema generation from a pasted header row
 
 - [X] Generate database from existing schema file
@@ -39,7 +39,39 @@ The following features are tentatively planned for future releases:
   - [X] Filter / view-status face in the modeline
   - [X] Group all under a ~tabularium-faces~ customize group
 
-** v0.6.0
+** v0.5.3
+
+- [X] Pre-release hardening pass
+  - [X] Extend the ERT suite to cover pure helpers (statistics, escaping, SQL clause construction, schema accessors, undo/redo and kill-ring mechanics)
+  - [X] Keymap audit test: every command bound in a mode map still exists, so a file split cannot silently orphan a binding
+  - [X] Escape =%= and =_= in substring searches so they match literally
+  - [X] Accept a dotted =:boolean-pair= from a hand-edited schema file
+  - [X] Naming, docstring, message, and header consistency pass
+- [ ] Full manual run-through (see =MANUAL-TESTING.org=)
+
+** v0.5.4 — computed-column formulas
+
+- [X] ~tabularium-compute~ macro: one way to write a computed column, replacing the choice between a SQL expression string and an Emacs Lisp lambda
+  - [X] Formulas are ordinary Lisp forms, so ~read~ is the parser; a head symbol names an operator, any other bare symbol is a column
+  - [X] Dual backend: compiles to SQL when every operator has a SQL form, falls back to the existing post-fetch path otherwise
+  - [X] SQL is the specification — the Lisp side is written to match SQLite where they would differ (rounding, modulo sign, 1-indexed substrings, null propagation)
+  - [X] Polymorphic ~=~, so ~(= status "open")~ reads the way it looks
+  - [X] Errors at macro expansion rather than blank cells at render
+- [ ] Wire the formula prompt into ~| N~ and ~| E~, with completion over the operator table
+- [ ] Decide whether ~sum-where~, ~count-where~, and ~lookup~ belong in the language (currently excluded; raw lambdas remain available)
+- [ ] Document the operator table in the README, and the post-fetch seam in ~?~ describe
+
+** v0.6.0 — first public release
+
+- [ ] Modularization
+  - [ ] Split ~tabularium.el~ into a flat ~lisp/~ directory, Magit-style: 17 essential modules plus 3 opt-in (~tabularium-menu~, ~tabularium-modeline~, ~tabularium-postgresql~)
+  - [ ] Bottom-up extraction, byte-compiling and running the ERT suite after each module
+  - [ ] Modularization only — no behavior changes bundled in
+- [ ] Release preparation
+  - [ ] Resolve the remaining ELPA compliance items (see =AUDIT.org=)
+  - [ ] Submit to NonGNU ELPA, then MELPA
+
+** Post-release
 
 - [ ] Audit Log / Diff
   - [ ] Track all changes over time

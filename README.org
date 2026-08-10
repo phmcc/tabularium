@@ -23,7 +23,7 @@ This package was developed out of a need to more adeptly handle large datasets w
 - *Saved views* — named presets for filter, sort, and column configuration
 - *Import/export* — CSV, TSV, and org-table import; CSV/TSV export (RFC 4180-compliant)
 - *Hydra and Transient menus* — discoverable command interface
-- *Version control-friendly* — designed for Git and Syncthing workflows
+- *Version control-friendly* — plain-text schemas and TSV export suit version control and file synchronization
 
 Default keybindings for all modes are documented in [[file:KEYBINDINGS.org][KEYBINDINGS.org]].
 
@@ -64,7 +64,7 @@ This creates two paired files: =expenses.db= (the SQLite database) and =expenses
 
 Three alternate creation paths are available for non-interactive workflows:
 
-- ~tabularium-create-database-quick~ takes a one-line spec string of the form =id:type:flag id:type:flag…= (types: ~text~, ~integer~, ~number~, ~date~, ~time~, ~datetime~, ~choice~, ~boolean~; flags: ~required~, ~primary~/~pk~, ~long~, or a ~|~-separated list of choices).
+- ~tabularium-create-database-quick~ takes a one-line spec string of the form =id:type:flag id:type:flag…= (types: ~text~, ~integer~, ~number~, ~date~, ~time~, ~datetime~, ~choice~, ~boolean~; flags: ~required~/~req~, ~primary~/~pri~, ~long~, or a ~|~-separated list of choices).
 - ~tabularium-create-database-from-header~ creates a text-only schema from a pasted tab/pipe/comma-separated header row.
 - ~tabularium-create-database-from-schema-file~ uses an existing =.schema.el= as a template for a new database — like \"Save As\" for schemas.  Prompts for a new name and new database file, then writes a fresh schema mirroring the source's fields, saved views, highlight rules, default sort, and backend choice, but pointing at the new database file (which starts empty).
 
@@ -141,7 +141,7 @@ Cell-jump commands accept a prefix argument to jump across multiple value transi
 | ~tabularium-view-mark-regexp~   | Mark entries by regexp match                          |
 | ~tabularium-view-mark-pattern~  | Mark entries by SQL LIKE pattern (=%= and =_= wildcards)  |
 | ~tabularium-view-count-marked~  | Count marked entries                                  |
-| ~tabularium-view-execute~       | Execute an action on marked entries                   |
+| ~tabularium-view-action~        | Action menu on marked entries, or the row at point     |
 
 ** Fill and replace
 
@@ -171,6 +171,8 @@ Cell-jump commands accept a prefix argument to jump across multiple value transi
 | ~tabularium-replace-visible-exact~     | Replace exact value in visible rows only                            |
 | ~tabularium-replace-visible-regexp~    | Replace by regexp in visible rows only                              |
 | ~tabularium-replace-visible-query~     | Interactive query-replace in visible rows only                      |
+
+*Literal text versus patterns.*  The ~*-substring~ and ~*-exact~ commands, and the substring marks and filters, treat the search term as literal text: a =%= or =_= in the term matches that character.  Only the ~*-pattern~ commands expose SQL wildcards (=%= matches any run of characters, =_= any single one), and only the ~*-regexp~ commands take an Emacs regexp.  ~tabularium-toggle-case-sensitive~ governs all of them; case-sensitive matching uses SQL =GLOB=, whose wildcards are =*= and =?= instead.
 
 ** Sorting, filtering, and views
 
@@ -234,7 +236,7 @@ Sorting, filtering, and highlighting share one *rules* paradigm.  For sorting, ~
 | ~tabularium-aggregate-min-max~            | Minimum and maximum values             |
 | ~tabularium-aggregate-mean-sd~            | Mean ± standard deviation              |
 | ~tabularium-aggregate-median-iqr~         | Median [Q1, Q3] (interquartile range)  |
-| ~tabularium-aggregate-column-summary~     | Comprehensive column statistics        |
+| ~tabularium-aggregate-field-summary~     | Comprehensive column statistics        |
 | ~tabularium-aggregate-visible-min-max~    | Min/max of visible entries only        |
 | ~tabularium-aggregate-visible-mean-sd~    | Mean ± SD of visible entries only      |
 | ~tabularium-aggregate-visible-median-iqr~ | Median [Q1–Q3] of visible entries only |
@@ -371,7 +373,7 @@ Each database is paired with a =.schema.el= file that defines its structure.  Th
 | ~:computed~      | string/plist | SQL expression or Elisp function                                             |
 | ~:complete~      | symbol/plist | Completion source (see below)                                                |
 | ~:long~          | boolean      | Open dedicated editing buffer for multi-paragraph text                       |
-| ~:pattern~       | string       | Regex the entered value must match                                           |
+| ~:pattern~       | string       | Regexp the entered value must match                                           |
 | ~:pattern-help~  | string       | Error message shown on ~:pattern~ mismatch (otherwise generated)               |
 | ~:validate~      | function     | =(lambda (value) ...)= returning nil if valid, or an error string            |
 
@@ -381,7 +383,7 @@ The ~:default~ value ~now~ is interpreted relative to the field type: ~time~ fie
 
 Storage of date / time / datetime values: SQLite columns are TEXT in ISO 8601 form (lexically sortable); PostgreSQL columns use the native DATE, TIME, and TIMESTAMP types respectively.  Datetime input accepts either a space (~2026-05-18 14:30:00~) or a T (~2026-05-18T14:30:00~) between the date and time portion; output is always emitted with a space.
 
-Validation runs in this order on every prompted edit: type check → ~:pattern~ → ~:validate~.  The first failure short-circuits and the message is shown inline; the prompt re-loops with the rejected value as the initial input so the user can correct it.  Empty input always passes validation so a field can be cleared.  Pattern matching is always case-sensitive; write the regex's character classes accordingly (=[A-Za-z]+= rather than =[A-Z]+= when both cases should match).
+Validation runs in this order on every prompted edit: type check → ~:pattern~ → ~:validate~.  The first failure short-circuits and the message is shown inline; the prompt re-loops with the rejected value as the initial input so the user can correct it.  Empty input always passes validation so a field can be cleared.  Pattern matching is always case-sensitive; write the regexp's character classes accordingly (=[A-Za-z]+= rather than =[A-Z]+= when both cases should match).
 
 ** Completion sources
 
@@ -453,7 +455,7 @@ Row rules use ~:test~, a function receiving the row alist:
    :face error))
 #+end_src
 
-Cell rules use ~:field~ to name the target column.  They can match with a ~:test~ function (receiving the cell value and row alist), a ~:value~ literal-equality shorthand, or a ~:builtin~ keyword naming one of the built-in rule types (~compare~, ~duplicates~, ~regex~, ~all~) — the same types the interactive ~h~ commands generate.  A row-scoped ~:builtin rows~ rule, carrying ~:row-ids~, matches a fixed set of rows by primary key — this is what the quick ~h h~ command produces:
+Cell rules use ~:field~ to name the target column.  They can match with a ~:test~ function (receiving the cell value and row alist), a ~:value~ literal-equality shorthand, or a ~:builtin~ keyword naming one of the built-in rule types (~compare~, ~duplicates~, ~regexp~, ~all~) — the same types the interactive ~h~ commands generate.  A row-scoped ~:builtin rows~ rule, carrying ~:row-ids~, matches a fixed set of rows by primary key — this is what the quick ~h h~ command produces:
 
 #+begin_src elisp
 :highlight
@@ -530,9 +532,9 @@ External packages can inject content and behavior into Tabularium through a smal
 | ~tabularium-entry-pre-render-hook~          | Inside `tabularium-entry-render', before the buffer is laid out.  Use this to set buffer-local variables that the layout pass consults                                                                                                                                                                                                                                             |
 | ~tabularium-entry-render-hook~              | At the end of form buffer rendering, after the standard hint lines but before cursor positioning.  Use to inject content such as cross-table data or schema-specific hints                                                                                                                                                                                                         |
 | ~tabularium-entry-new-hook~                 | After a new entry buffer is initialized (~tabularium-entry-editing-id~ is nil) and before the first render.  Use to populate plugin-specific defaults via ~tabularium-entry--values~                                                                                                                                                                                                   |
-| ~tabularium-entry-pre-submit-hook~          | Just before the form is submitted, in both new and edit paths.  Use to update bookkeeping fields (e.g. a date-modified timestamp) before they are written to the database                                                                                                                                                                                                          |
+| ~tabularium-entry-pre-submit-hook~          | Just before the form is submitted, in both new and edit paths.  Use to update bookkeeping fields (e.g., a date-modified timestamp) before they are written to the database                                                                                                                                                                                                          |
 | ~tabularium-entry-required-field-functions~ | List of predicates called with =(FIELD-NAME VALUES)= during render and submit.  Returning non-nil marks FIELD-NAME as dynamically required for the current entry's state — useful for type-specific required fields that cannot be expressed by a static `:required t'.  Marked fields display `+' (vs `*' for static `:required t'), and submission errors if such a field is empty |
-| ~tabularium-entry-field-changed-functions~  | Abnormal hook called with =(FIELD-NAME OLD-VALUE NEW-VALUE)= after each interactive field change (edit, clear, default, autofill).  Plugins may further mutate ~tabularium-entry--values~ in response (e.g. clearing dependent fields, eagerly computing derived values).  Mutations from this hook will themselves fire the hook, so guard against unbounded recursion                |
+| ~tabularium-entry-field-changed-functions~  | Abnormal hook called with =(FIELD-NAME OLD-VALUE NEW-VALUE)= after each interactive field change (edit, clear, default, autofill).  Plugins may further mutate ~tabularium-entry--values~ in response (e.g., clearing dependent fields, eagerly computing derived values).  Mutations from this hook will themselves fire the hook, so guard against unbounded recursion                |
 
 ** Header function
 
@@ -617,6 +619,42 @@ Run ~M-x tabularium-customize~ to browse all settings in the Customize UI.  Sett
 | ~tabularium-registry-file~       | =(varies)=    | Path to the registry file                   |
 | ~tabularium-registry-max-recent~ | ~100~         | Maximum tracked databases                   |
 | ~tabularium-auto-reindex~        | ~nil~         | Reindex automatically on delete             |
+| ~tabularium-case-sensitive~      | ~t~           | Case-sensitive marking and replacement      |
+| ~tabularium-entry-show-type-hints~ | ~nil~       | Show an inline field-type marker in forms   |
+| ~tabularium-kill-ring-max~       | ~10~          | Maximum batches kept in the kill ring       |
+| ~tabularium-cache-ttl~           | ~300~         | Completion cache lifetime, in seconds       |
+| ~tabularium-registry-auto-register-on-open~ | ~t~ | Register databases automatically on open    |
+| ~tabularium-menu-system~         | ~auto~        | Menu system (~auto~, ~hydra~, or ~transient~)     |
+
+Two options change where data lives and are best set before a database is created:
+
+| Variable              | Default  | Description                                       |
+|-----------------------+----------+---------------------------------------------------|
+| ~tabularium-schemas~    | ~nil~      | Alist of named schemas, one entry per database    |
+| ~tabularium-table-name~ | ~"data"~   | Name of the main table inside each database file  |
+
+** Database connections
+
+| Variable                                 | Default | Description                                  |
+|------------------------------------------+---------+----------------------------------------------|
+| ~tabularium-db-sqlite-wal-mode~            | ~t~       | Enable SQLite WAL mode                       |
+| ~tabularium-db-sqlite-checkpoint-on-close~ | ~t~       | Checkpoint the WAL before closing            |
+| ~tabularium-db-close-on-suspend~           | ~t~       | Close connections when Emacs suspends        |
+| ~tabularium-db-close-on-kill~              | ~t~       | Close connections when Emacs exits           |
+
+The defaults suit files synchronized between machines: WAL mode keeps writes fast, and checkpointing on close means the =-wal= and =-shm= sidecars are folded back into the database before anything is copied.  See *Syncing between machines* below.
+
+** Modeline
+
+These take effect once ~tabularium-modeline-setup~ has run.
+
+| Variable                        | Default | Description                                        |
+|---------------------------------+---------+----------------------------------------------------|
+| ~tabularium-modeline-format~      | ~full~    | Segment format (~icon-only~, ~minimal~, or ~full~)       |
+| ~tabularium-modeline-show-schema~ | ~t~       | Show the schema name beside the database name      |
+| ~tabularium-modeline-use-icon~    | ~nil~     | Use an icon in the segment                         |
+| ~tabularium-modeline-nerd-font-icon~ | ~nil~  | Nerd Font icon, when ~nerd-icons~ is available       |
+| ~tabularium-modeline-contextual~  | ~nil~     | Show the segment only in Tabularium buffers        |
 
 Per-schema settings (~:default-sort~, ~:quick-entry-fields~, ~:views~, ~:highlight~) are specified in the schema file.
 
@@ -686,7 +724,7 @@ The full key table mirrors the main menu layout:
 | =# m= | ~tabularium-aggregate-min-max~        |
 | =# d= | ~tabularium-aggregate-mean-sd~        |
 | =# i= | ~tabularium-aggregate-median-iqr~     |
-| =# #= | ~tabularium-aggregate-column-summary~ |
+| =# #= | ~tabularium-aggregate-field-summary~ |
 
 The =C=, =.=, and =#= entries are themselves prefix keymaps (~tabularium-create-command-map~, ~tabularium-schema-command-map~, and ~tabularium-aggregate-command-map~) and may be bound directly to a key if preferred.
 
@@ -710,7 +748,7 @@ This map is independent of the menu system; users who prefer ~tabularium-menu~ c
 - SQLite 3.31+
 - Optional: ~hydra~, ~transient~ (for menu interface)
 
-** Syncing (Git, Syncthing, Dropbox)
+** Syncing between machines
 
 Database and schema files are designed to travel together.  Before syncing or suspending, ~tabularium-sync-prepare~ checkpoints and closes all connections to ensure a clean state.  ~tabularium-sync-checkpoint~ flushes the write-ahead log without disconnecting.  ~tabularium-sync-cleanup-wal-files~ removes any orphaned =-wal= and =-shm= files left by interrupted sessions; it is safe to run when the database is closed.  ~tabularium-sync-fix-paths~ converts any absolute home directory paths in schema files to =~/= notation, ensuring portability across machines with different home directories.
 

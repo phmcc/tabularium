@@ -4,7 +4,7 @@
 
 ;; Author: Paul H. McClelland <paulhmcclelland@protonmail.com>
 ;; Maintainer: Paul H. McClelland <paulhmcclelland@protonmail.com>
-;; Version: 0.5.2
+;; Version: 0.5.3
 ;; Package-Requires: ((emacs "29.1") (emacsql "4.0") (emacsql-pg "1.0"))
 ;; Keywords: data
 ;; URL: https://codeberg.org/phmcc/tabularium
