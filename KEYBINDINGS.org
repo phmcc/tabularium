@@ -161,6 +161,7 @@ Without marks, fill operations auto-detect blank ranges from point.  With marks,
 | =| += | Duplicate column         |
 | =| $= | Rename column            |
 | =| l= | Relabel column           |
+| =| F= | Edit computed formula    |
 | =| M= | Move columns             |
 | =| W= | Swap columns             |
 | =| C= | Copy columns             |
@@ -234,6 +235,7 @@ Counting and aggregating answer different questions — how many rows match a de
 | =e e= | Export marked rows, or all if none marked |
 | =e a= | Export all — whole table (ignores marks)  |
 | =e v= | Export visible view                       |
+| =e c= | Copy visible view to the clipboard        |
 | =e r= | Export range (row IDs / columns)          |
 | =o=   | Open another database                     |
 | =O=   | Open and view                             |

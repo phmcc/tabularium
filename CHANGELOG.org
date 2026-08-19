@@ -4,9 +4,47 @@
 
 All notable changes to ~tabularium~ are documented in this file.
 
+* Unreleased (v0.5.4)
+
+** Added
+
+- Column formulas: ~tabularium-compute~ writes a computed column as an ordinary Lisp form, compiling to SQL where it can and to the existing post-fetch path where it cannot
+- The field wizard asks for a formula directly: answering =y= to "Computed?" prompts for it, checks it against the operator table, and writes the complete =:computed (tabularium-compute ...)= into the schema file.  It used to leave a commented stub to fill in by hand
+- =org= joins TSV and CSV as an export format, written pre-aligned and with pipes escaped as =\vert{}=
+- =e c= copies the current view to the clipboard rather than a file, in any of the three formats.  With rows marked it copies those; with a prefix argument, every visible row
+
+** Changed
+
+- Sorting by a column adds to the sort rather than replacing it; a column already in the sort has its direction flipped in place.  =s X= discards the sort
+- New =| F= edits a computed column's formula, offering the current one for editing
+- A truth-valued formula renders as =TRUE= / =FALSE= rather than SQLite's 1 and 0
+- The registry shows =DB= (file present) and =S= (schemata defined) instead of a single =Schema?= column
+- 42 formula operators covering arithmetic, comparison, logic, text, dates, times, datetimes, and table-wide aggregates.  Each has a matching ~tabularium-fn-*~ helper of the same name, so the lambda form can do whatever a formula can; only the punctuation operators need a different name (~+~ is ~tabularium-fn-add~)
+- ~datetime-diff~, ~datetime-add~, and ~datetime-subtract~ work across date, time, and datetime columns in any combination.  Durations are written =2Y 3M 3d 14h 35m=; a difference with no unit is a compound string in the same notation, so it can be fed straight back
+- Counting offers computed columns
+- The colon-based wizard method is called "shorthand"
+
+** Fixed
+
+- A column the table did not have took the whole query down with =no such column=, and with it the database — which could then not be opened to remove the column that was breaking it.  Every column is now checked against the table before it is named: a missing one reads =<<ERROR>>=, and sorting or filtering by one drops the clause
+- A schema file with an error in it reported the same "no schema found" message as a schema file that was absent, and offered to create a database.  The failure is now recorded and reported: the file is named, the error quoted, and opening it offered
+- Registry rows with a long path and a =(missing)= tag ran past the frame
+- Almost every computed column rendered as =<<ERROR>>=.  The guard that catches a formula naming a deleted column scanned *inside* string literals, so =bulk= in ~THEN 'bulk'~ read as an unknown column — and with it every formula producing text, every date function, and every aggregate.  It now reads only the parts outside string literals, and knows its own generated identifiers
+- A compiled formula was parenthesized twice: =((qty * price)) AS total=
+- A formula written in a schema file was never compiled.  `tabularium-define-schema' is a function, so its fields arrive quoted and the `tabularium-compute' macro inside them never runs — the literal form reached the query, which emitted =NULL= for the column.  Formulas are now compiled where they are read, so the quoted and expanded spellings behave alike
+- A computed column added through the wizard also had a real column added to the table, and that column of nulls shadowed the formula
+- Rewriting a schema after an edit printed each field on one line, so a formula added through the wizard came out unreadable.  Both writers now render fields the same way, with `:computed' last and on its own line
+- Importing an org file with several tables took the first one in silence when reached through =i i=; both entry points now offer the choice, and both reach unnamed tables
+- Importing a table into an existing database could query the previous schema's columns against the new table.  View buffers are keyed by schema name, so a reused buffer kept a stale buffer-local name that outranked the global one
+- Org cells arrived carrying the buffer's text properties, so a heading's =%= was consumed when used as a format string and =% Change= rendered as =Change=
+- Declining a registry confirmation cleared the marks anyway
+
 * 0.5.3 (2026-08-09)
 
-Hardening release.  Full manual pass over every feature, with the defects it turned up fixed and the test suite grown from 277 to 488.  No new subsystems.  Several interfaces changed name or key, which is free to do before the first public release and expensive afterwards.
+A hardening release: a full manual pass over every feature, with the
+defects it turned up fixed and the test suite grown from 277 to 488.
+No new subsystems.  Several interfaces changed name or key, which is
+free to do before the first public release and expensive afterwards.
 
 ** Fixed
 
@@ -315,7 +353,7 @@ Hardening release.  Full manual pass over every feature, with the defects it tur
 
 ** Fixed
 
-- ~tabularium-schemas~ docstring covers all eight ~:complete~ types and the previously-undocumented field properties
+- ~tabularium-schemata~ docstring covers all eight ~:complete~ types and the previously-undocumented field properties
 - Fill commands report the actual count of cells changed (the ~filled~ / ~cleared~ counters were tracked but not reported)
 - ~tabularium-sync-checkpoint~ now autoloaded; matching ~tabularium-sync-prepare~
 - ~(require 'subr-x)~ added; forward declarations added for ~tabularium-transient~ and ~tabularium--kill-ring~

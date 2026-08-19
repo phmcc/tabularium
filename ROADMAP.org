@@ -51,15 +51,20 @@ The following features are tentatively planned for future releases:
 
 ** v0.5.4 — computed-column formulas
 
-- [X] ~tabularium-compute~ macro: one way to write a computed column, replacing the choice between a SQL expression string and an Emacs Lisp lambda
-  - [X] Formulas are ordinary Lisp forms, so ~read~ is the parser; a head symbol names an operator, any other bare symbol is a column
-  - [X] Dual backend: compiles to SQL when every operator has a SQL form, falls back to the existing post-fetch path otherwise
-  - [X] SQL is the specification — the Lisp side is written to match SQLite where they would differ (rounding, modulo sign, 1-indexed substrings, null propagation)
-  - [X] Polymorphic ~=~, so ~(= status "open")~ reads the way it looks
+- [X] ~tabularium-compute~ macro, merged into ~tabularium.el~ (section 4.4.3) and its tests into ~tabularium-ert.el~ (sections 83-90)
+  - [X] Formulas are ordinary Lisp forms, so ~read~ is the parser
+  - [X] Dual backend: SQL when every operator has a SQL form, the existing post-fetch path otherwise
+  - [X] SQL is the specification — the Lisp side matches SQLite on rounding, modulo sign, 1-indexed substrings, and null propagation
+  - [X] Polymorphic ~=~
   - [X] Errors at macro expansion rather than blank cells at render
-- [ ] Wire the formula prompt into ~| N~ and ~| E~, with completion over the operator table
-- [ ] Decide whether ~sum-where~, ~count-where~, and ~lookup~ belong in the language (currently excluded; raw lambdas remain available)
-- [ ] Document the operator table in the README, and the post-fetch seam in ~?~ describe
+  - [X] ~sum-where~, ~count-where~, and ~lookup~, equality-only, as correlated subqueries
+- [X] The field wizard asks for a formula directly and supplies the wrapper
+- [X] =| F= edits a computed column's formula
+- [X] 44 operators, each with a matching ~tabularium-fn-*~ helper so the lambda form can do whatever a formula can
+- [X] Operator table documented in the README
+- [X] Manual pass over section 16 of =MANUAL-TESTING.org=
+- [ ] Manual pass over the remaining sections (17-20)
+- [ ] Completion over the operator table at the formula prompt
 
 ** v0.6.0 — first public release
 

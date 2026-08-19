@@ -4,7 +4,7 @@
 
 ;; Author: Paul H. McClelland <paulhmcclelland@protonmail.com>
 ;; Maintainer: Paul H. McClelland <paulhmcclelland@protonmail.com>
-;; Version: 0.5.3
+;; Version: 0.5.4
 ;; Package-Requires: ((emacs "29.1"))
 ;; Keywords: data
 ;; URL: https://codeberg.org/phmcc/tabularium
@@ -153,6 +153,7 @@
   [_e_] Export
   [_a_] All
   [_v_] Visible
+  [_c_] Copy to clipboard
   [_r_] Range
  ────────────────────────────────────────────────────────────────────────────────
   [_q_] Quit
@@ -160,6 +161,7 @@
     ("e" tabularium-export)
     ("a" tabularium-export-all)
     ("v" tabularium-export-visible)
+    ("c" tabularium-export-to-clipboard)
     ("r" tabularium-export-range)
     ("q" nil))
 
@@ -564,6 +566,7 @@
   [_a_] Show all            [_M_/_W_] Move/Swap           [_+_] Duplicate
                                                     [_$_] Rename
                                                     [_l_] Relabel
+                                                    [_F_] Formula
   [_/_] Select by title
                                                     [_X_/_C_] Cut/Copy
                                                     [_V_/_A_] Paste/Append
@@ -591,6 +594,7 @@
     ("E" tabularium-view-column-edit)
     ("$" tabularium-schema-rename-field)
     ("l" tabularium-view-column-relabel)
+    ("F" tabularium-view-column-formula)
     ("+" tabularium-view-column-duplicate)
     ("C" tabularium-view-column-copy)
     ("X" tabularium-view-column-cut)
@@ -781,6 +785,7 @@
                             ("e" "Export (marked or all)" tabularium-export)
                             ("a" "All" tabularium-export-all)
                             ("v" "Visible view" tabularium-export-visible)
+                            ("c" "Copy to clipboard" tabularium-export-to-clipboard)
                             ("r" "Range (IDs/columns)" tabularium-export-range)])
 
   ;; Import transient submenu: new database vs. append
@@ -968,6 +973,7 @@
       ("| E" "Edit col" tabularium-view-column-edit)
       ("| $" "Rename col" tabularium-schema-rename-field)
       ("| l" "Relabel col" tabularium-view-column-relabel)
+      ("| F" "Edit formula" tabularium-view-column-formula)
       ("| +" "Duplicate col" tabularium-view-column-duplicate)
       ("| M" "Move cols" tabularium-view-column-move)
       ("| W" "Swap cols" tabularium-view-column-swap)

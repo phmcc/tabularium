@@ -23,7 +23,7 @@ This package was developed out of a need to more adeptly handle large datasets w
 - *Saved views* — named presets for filter, sort, and column configuration
 - *Import/export* — CSV, TSV, and org-table import; CSV/TSV export (RFC 4180-compliant)
 - *Hydra and Transient menus* — discoverable command interface
-- *Version control-friendly* — plain-text schemas and TSV export suit version control and file synchronization
+- *Version control-friendly* — plain-text schemata and TSV export suit version control and file synchronization
 
 Default keybindings for all modes are documented in [[file:KEYBINDINGS.org][KEYBINDINGS.org]].
 
@@ -66,7 +66,7 @@ Three alternate creation paths are available for non-interactive workflows:
 
 - ~tabularium-create-database-quick~ takes a one-line spec string of the form =id:type:flag id:type:flag…= (types: ~text~, ~integer~, ~number~, ~date~, ~time~, ~datetime~, ~choice~, ~boolean~; flags: ~required~/~req~, ~primary~/~pri~, ~long~, or a ~|~-separated list of choices).
 - ~tabularium-create-database-from-header~ creates a text-only schema from a pasted tab/pipe/comma-separated header row.
-- ~tabularium-create-database-from-schema-file~ uses an existing =.schema.el= as a template for a new database — like \"Save As\" for schemas.  Prompts for a new name and new database file, then writes a fresh schema mirroring the source's fields, saved views, highlight rules, default sort, and backend choice, but pointing at the new database file (which starts empty).
+- ~tabularium-create-database-from-schema-file~ uses an existing =.schema.el= as a template for a new database — like \"Save As\" for schemata.  Prompts for a new name and new database file, then writes a fresh schema mirroring the source's fields, saved views, highlight rules, default sort, and backend choice, but pointing at the new database file (which starts empty).
 
 All four variants are also accessible from the menu under =C= (sub-keys =C=, =Q=, =H=, =S=).
 
@@ -283,7 +283,7 @@ Entry mode provides a form-based interface for creating and editing individual r
 
 Three entry methods are available:
 
-- *Form entry* — opens a dedicated buffer with all fields laid out vertically; best for complex schemas and careful data entry.
+- *Form entry* — opens a dedicated buffer with all fields laid out vertically; best for complex schemata and careful data entry.
 - *Prompt entry* — prompts for each field sequentially in the minibuffer; suitable for quick keyboard-driven entry.
 - *Quick entry* — prompts only for fields listed in ~:quick-entry-fields~; ideal for high-volume entry with consistent defaults.
 
@@ -472,7 +472,51 @@ Cell rules can co-exist with row rules; cell faces are applied to the cell text,
 
 Columns can be added, deleted, or edited interactively from view mode.  These operations update both the SQLite database and the schema file.  The schema file can also be edited directly and reloaded without restarting.
 
+** Computed-field formulas
+
+A computed column is written as a formula:
+
+#+begin_src emacs-lisp
+(:id total :label "Total" :type number
+     :computed (tabularium-compute (* qty price)))
+#+end_src
+
+The formula is an ordinary Lisp form.  A symbol in head position names an operator from the table below; any other bare symbol is a column, resolved against the row.  In the field wizard, answering =y= to "Computed?" prompts for the formula and supplies the ~tabularium-compute~ wrapper.
+
+Two backends, chosen automatically.  When every operator in a formula has a SQL form, the expression goes into the ~SELECT~ and the column filters and sorts in the database like a stored one.  When some operator does not, the column is computed in Emacs after the fetch: it still filters and sorts, but must be visible to do so and is bounded by ~tabularium-post-fetch-row-cap~.  ~M-x tabularium-compute-describe~ reports which a formula uses, and names the operator responsible when it falls back.
+
+*** Operators
+
+| Group        | Operators                                                                  |
+|--------------+----------------------------------------------------------------------------|
+| Arithmetic   | ~+~ ~-~ ~*~ ~/~ ~mod~ ~abs~ ~round~ ~max~ ~min~                            |
+| Comparison   | ~=~ ~/=~ ~<~ ~>~ ~<=~ ~>=~                                                 |
+| Logic        | ~and~ ~or~ ~not~ ~if~ ~case~ ~coalesce~ ~empty-p~                          |
+| Text         | ~concat~ ~length~ ~upper~ ~lower~ ~trim~ ~substr~                          |
+| Dates/times  | ~today~ ~now~ ~age~ ~days-between~ ~days-add~                              |
+| Differences  | ~datetime-diff~ ~datetime-add~ ~datetime-subtract~                         |
+| Parts        | ~datetime-combine~ ~datetime-date~ ~datetime-time~                         |
+| Aggregates   | ~sum-where~ ~count-where~ ~lookup~                                         |
+
+~datetime-diff~, ~datetime-add~, and ~datetime-subtract~ take a date, a clock time, or a datetime in any combination — a column's type decides how its value is written, not what can be asked of it.  Durations are written as ~"2Y 3M 3d 14h 35m"~, where ~M~ is months and ~m~ is minutes.  With no unit argument ~datetime-diff~ returns a compound string in that same notation, so a difference can be fed straight back to ~datetime-add~; with one of ~years~, ~months~, ~weeks~, ~days~, ~hours~, ~minutes~, or ~seconds~ it returns that count as a whole number.
+
+Three departures from Emacs Lisp, each deliberate.  ~=~ is polymorphic — ~(= status "open")~ compares text — because the design rests on both backends agreeing and the most-used operator is the worst place for them to differ.  ~round~ rounds half away from zero, ~substr~ counts from 1, and arithmetic on a null yields null, all matching SQLite rather than Emacs for the same reason.
+
+The aggregates take an equality predicate only, and cover the whole table rather than the current view — a group total that moved as you filtered would be a surprise rather than a total.  Anything more complex is a SQL view.
+
 ** Computed-field helpers
+
+Every operator also exists as a ~tabularium-fn-*~ function, so the older lambda form can do whatever a formula can:
+
+#+begin_src emacs-lisp
+(:id total :computed (lambda (row)
+                       (tabularium-fn-multiply (alist-get 'qty row)
+                                               (alist-get 'price row))))
+#+end_src
+
+Each helper is named for its operator, so knowing one is knowing the other.  The only exceptions are the operators that are punctuation, which cannot be function names: ~+~ is ~tabularium-fn-add~, ~-~ is ~tabularium-fn-subtract~, ~*~ is ~tabularium-fn-multiply~, ~/~ is ~tabularium-fn-divide~, ~mod~ is ~tabularium-fn-modulo~, ~=~ is ~tabularium-fn-equal~, ~/=~ is ~tabularium-fn-not-equal~, ~<~ ~>~ ~<=~ ~>=~ are ~-less~ ~-greater~ ~-at-most~ ~-at-least~, and ~and~ ~or~ ~not~ are ~-all~ ~-any~ ~-invert~.  A lambda is worth reaching for when a formula would be awkward — several columns combined conditionally, or a helper the language has no operator for.  A raw SQL string in ~:computed~ also still works.
+
+
 
 Fields defined with ~:computed~ derive their value from an SQL expression or an Elisp function evaluated against the row, conceptually similar to formulae in spreadsheet software.  Computed fields are not stored — they are evaluated on read.  Both kinds can be filtered, sorted, and highlighted.  A SQL-expression field is handled by the database, which substitutes the expression into the ~WHERE~ or ~ORDER BY~ clause.  An Elisp field has no SQL form, so its rows are fetched first and the filtering and sorting happen in Emacs; the page limit is therefore applied afterwards and the intermediate fetch is bounded by ~tabularium-post-fetch-row-cap~, which reports an error rather than silently returning a truncated — and so wrong — answer.  Such a column must be visible for this, since its values exist only once computed for display.  An Elisp ~:computed~ expression receives the current row as an alist.  Helpers are grouped into four categories: conditional logic, same-row aggregation, date arithmetic, and cross-row lookup.
 
@@ -592,6 +636,7 @@ There are two import modes.  ~tabularium-import~ always creates a *new* database
 | ~tabularium-export~           | Export the marked rows, or the whole table if none marked |
 | ~tabularium-export-all~       | Export the whole table, always — every non-computed column |
 | ~tabularium-export-visible~   | Export the on-screen view — visible columns, filtered/sorted rows, view limit |
+| ~tabularium-export-to-clipboard~ | Copy the visible view to the clipboard as org, CSV, or TSV |
 | ~tabularium-export-range~     | Export an explicit selection of row IDs and columns       |
 
 All four prompt for TSV or CSV.  In the menus and the bare keymap they live under an =e= prefix (=e e=, =e a=, =e v=, =e r=); =>= works as an alternative prefix (=> e=, => a=, => v=, => r=).
@@ -630,7 +675,7 @@ Two options change where data lives and are best set before a database is create
 
 | Variable              | Default  | Description                                       |
 |-----------------------+----------+---------------------------------------------------|
-| ~tabularium-schemas~    | ~nil~      | Alist of named schemas, one entry per database    |
+| ~tabularium-schemata~    | ~nil~      | Alist of named schemata, one entry per database    |
 | ~tabularium-table-name~ | ~"data"~   | Name of the main table inside each database file  |
 
 ** Database connections
