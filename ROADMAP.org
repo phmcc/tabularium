@@ -26,16 +26,25 @@ The following features are tentatively planned for future releases:
 
 ** v0.6.1
 
-- [ ] A join is declared as a *view-like schema*: several tables, the columns to take from each, and the links to join on.  Reusing the read-only machinery means sorting, filtering, highlighting, and aggregating work on it the day it exists
-- [ ] Export a join to CSV/TSV/Org, which is the case a join is usually wanted for
-- [ ] Inner and left joins; the rest can wait for a case that needs them
+- [ ] Joining
+  - Defined as a view-like schema
+  - Several tables, the columns to take from each, and the links to join on.  Reusing the read-only machinery means sorting, filtering, highlighting, and aggregating work automatically
+- [ ] Export joins
+  - CSV/TSV/Org formats
+- [ ] Inner and left joins (priority)
 
 ** v0.6.2
 
-- [ ] *Schema migration.* Adding a =:fk= to an existing table does nothing: SQLite adds constraints only at =CREATE TABLE=.  Today the only cure is to delete the database and rebuild, which makes the whole link feature usable on new databases only.  ~tabularium--rebuild-table-dropping~ already does the copy-and-swap dance for column deletion; generalizing it to "rebuild this table from its current schema" closes the gap and makes every constraint below retroactive
-- [ ] *=NOT NULL= and =UNIQUE= in the DDL.*  =:required= is checked at entry and =:unique= does not exist; neither reaches the database, so anything writing to the file another way can break what the schema promises
-- [ ] *=:on-update=.*  The delete policies are there; changing a parent key silently orphans its children
-- [ ] *Composite keys.*  =:pk t= marks one field, and =:fk= names one column.  A key of (patient_id, visit_date) cannot be expressed, which rules out a large class of real data.  Touches the storage layer, so cheaper before modularization than after
+- [ ] Schema migration
+  - Adding a =:fk= to an existing table does nothing: SQLite adds constraints only at =CREATE TABLE=
+  - Currently can only delete the database and rebuild, which makes the whole link feature usable on new databases only
+  - ~tabularium--rebuild-table-dropping~ already does the copy-and-swap dance for column deletion; generalizing it to "rebuild this table from its current schema" closes the gap and makes every constraint below retroactive
+- [ ] =NOT NULL= and =UNIQUE= in the DDL
+  - =:required= is checked at entry and =:unique= does not exist; neither reaches the database, so anything writing to the file another way can break what the schema promises
+- [ ] =:on-update=
+  - The delete policies are there; changing a parent key silently orphans its children
+- [ ] Composite keys
+  - =:pk t= marks one field, and =:fk= names one column.  A key of (patient_id, visit_date) cannot be expressed, which rules out a large class of real data
 
 ** v0.6.3
 
@@ -44,15 +53,16 @@ The following features are tentatively planned for future releases:
 
 ** v0.7.0
 
+- [ ] Pivot Tables
+- [ ] Aggregate summaries
+- [ ] Cross-tabulation
+- [ ] Dynamic grouping
+
+** v0.8.0
+
 - [ ] Modularization into smaller files for easier maintenance
 
-
 ** Post-release
-
-- [ ] Pivot Tables
-  - [ ] Aggregate summaries
-  - [ ] Cross-tabulation
-  - [ ] Dynamic grouping
 
 - [ ] Audit Log / Diff
   - [ ] Track all changes over time
@@ -68,17 +78,12 @@ The following features are tentatively planned for future releases:
 
 - [ ] Frozen Columns
   - [ ] Pin leftmost columns so they stay visible while scrolling horizontally
-  - [ ] Requires working around tabulated-list-mode's single-line-per-row rendering (no native frozen-column concept) — likely an hscroll/overlay approach or a side-by-side window arrangement
+  - [ ] Requires working around tabulated-list-mode's single-line-per-row rendering (no native frozen-column concept)-—-likely an hscroll/overlay approach or a side-by-side window arrangement
 
 - [ ] Charts
   - [ ] Integration with gnuplot/GraphViz
   - [ ] SVG generation
   - [ ] Inline display in Emacs
-
-- [ ] Linked Tables
-  - [ ] Foreign key relationships
-  - [ ] Relational queries
-  - [ ] Cascading updates
 
 - [ ] Additional Backends
   - [ ] MySQL (via ~emacsql~)
