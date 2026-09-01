@@ -50,7 +50,7 @@ The =C-= arrows scroll the viewport by one step on either axis: =C-<down>= / =C-
 | =F x= | Clear down through a row (inclusive)  |
 | =F X= | Clear up through a row (inclusive)    |
 
-Lowercase fill keys act downward from point and uppercase keys upward.  =F f= / =F F= are zero-prompt: they infer the column and fill value from context, propagating the value at point into the adjacent blank run.  =F n= / =F p= prompt for field and value.  =F .= / =F ,= are point-anchored: =F .= takes the nearest non-blank cell above and fills down to point, =F ,= takes the nearest non-blank cell below and fills up to point.  =F s= / =F S= fill a number or date series.  =F d= / =F D= clear the same-value run from point; =F r= / =F R= replace that run with a prompted value.  =F x= clears the current column downward from point through a prompted row, and =F X= clears upward; both include the row at point, so they differ in direction only, like the rest of the fill keys.
+Lowercase fill keys act downward from point and uppercase keys upward.  =F f= / =F F= are zero-prompt: they infer the column and fill value from context, propagating the value at point into the adjacent blank run.  =F n= / =F p= prompt for column and value.  =F .= / =F ,= are point-anchored: =F .= takes the nearest non-blank cell above and fills down to point, =F ,= takes the nearest non-blank cell below and fills up to point.  =F s= / =F S= fill a number or date series.  =F d= / =F D= clear the same-value run from point; =F r= / =F R= replace that run with a prompted value.  =F x= clears the current column downward from point through a prompted row, and =F X= clears upward; both include the row at point, so they differ in direction only, like the rest of the fill keys.
 
 Without marks, fill operations auto-detect blank ranges from point.  With marks, they fill marked rows (prompting before overwriting non-blank cells).
 
@@ -71,7 +71,7 @@ Without marks, fill operations auto-detect blank ranges from point.  With marks,
 | =h .= | Save one runtime highlight rule to the schema               |
 | =h >= | Save all current highlight rules to the schema              |
 
-=h h=, =h \=, and =h |= are quick highlights for fast on-the-fly work: =h h= prompts only for a face and tints the marked rows (or the row at point); =h \= tints the column under point; =h |= tints columns chosen from the selector.  All three add a real rule to the Highlight Rules List, so they can be removed, reordered, or saved like any other.  =h a= is the full dispatcher: it prompts for the rule type — substring (=h s=), exact (=h e=), regexp (=h r=), numeric (=h n=), datetime (=h t=), unique (=h u=), or duplicates (=h d=).  =h a= asks first what to highlight — =row(s)=, =column(s)=, or =value(s)= — and the same rule type then tints the whole row when its field matches, the whole column when any of its cells match, or just the matching cells.  Like the filter dispatcher, it can restrict a rule's reach: the column(s) branch to particular columns — tinting only those and leaving the rest — and the row(s) and value(s) branches to particular rows.  The row(s) and column(s) branches also offer a direct option that tints what is already chosen without a test — then runs the matching command.  The first five mirror the filter rule types, so the same vocabulary describes both; regexp and duplicates stay highlight-only, having no SQL equivalent in the built-in SQLite backend.  Each rule command prompts for the target columns with a comma-separated =completing-read-multiple= selector — the =<<ALL>>= sentinel (or an empty answer) targets every visible column, the same field-selection paradigm the filter and mark commands use; the chosen columns are echoed back in a =[...]= hint.  =h n= offers only columns where a comparison is meaningful — integer, number, date, time, and datetime — and because ISO date/time strings order chronologically as text, the same rule expresses "later/earlier than" for date columns.  Rules are additive and *stack*: when several rules match the same cell their faces compose, so one rule can add a background color, another a foreground color, a third bold.  Rules are numbered in evaluation order so the stacking hierarchy is visible.  =h x= removes rules — its prompt lists every rule, runtime and saved alike, and defaults to =<<ALL>>= (remove every rule); it also offers =<<UNSAVED>>= (remove only the session's unsaved rules) and each individual rule; removal never touches the schema file.  =h .= prompts for one runtime rule and persists just that rule; =h >= persists all current highlight rules; =h X= expunges the saved rules from the schema — these three are the only highlight commands that write the file.  =h l= opens the Highlight Rules List buffer, an interactive list where rules can be marked, removed, reordered, modified, inserted at point (=I=) or added at the end (=A=), and saved or expunged, all in one place.
+=h h=, =h \=, and =h |= are quick highlights for fast on-the-fly work: =h h= prompts only for a face and tints the marked rows (or the row at point); =h \= tints the column under point; =h |= tints columns chosen from the selector.  All three add a real rule to the Highlight Rules List, so they can be removed, reordered, or saved like any other.  =h a= is the full dispatcher: it prompts for the rule type — substring (=h s=), exact (=h e=), regexp (=h r=), numeric (=h n=), datetime (=h t=), unique (=h u=), or duplicates (=h d=).  =h a= asks first what to highlight — =row(s)=, =column(s)=, or =value(s)= — and the same rule type then tints the whole row when its column matches, the whole column when any of its cells match, or just the matching cells.  Like the filter dispatcher, it can restrict a rule's reach: the column(s) branch to particular columns — tinting only those and leaving the rest — and the row(s) and value(s) branches to particular rows.  The row(s) and column(s) branches also offer a direct option that tints what is already chosen without a test — then runs the matching command.  The first five mirror the filter rule types, so the same vocabulary describes both; regexp and duplicates stay highlight-only, having no SQL equivalent in the built-in SQLite backend.  Each rule command prompts for the target columns with a comma-separated =completing-read-multiple= selector — the =<<ALL>>= sentinel (or an empty answer) targets every visible column, the same column-selection paradigm the filter and mark commands use; the chosen columns are echoed back in a =[...]= hint.  =h n= offers only columns where a comparison is meaningful — integer, number, date, time, and datetime — and because ISO date/time strings order chronologically as text, the same rule expresses "later/earlier than" for date columns.  Rules are additive and *stack*: when several rules match the same cell their faces compose, so one rule can add a background color, another a foreground color, a third bold.  Rules are numbered in evaluation order so the stacking hierarchy is visible.  =h x= removes rules — its prompt lists every rule, runtime and saved alike, and defaults to =<<ALL>>= (remove every rule); it also offers =<<UNSAVED>>= (remove only the session's unsaved rules) and each individual rule; removal never touches the schema file.  =h .= prompts for one runtime rule and persists just that rule; =h >= persists all current highlight rules; =h X= expunges the saved rules from the schema — these three are the only highlight commands that write the file.  =h l= opens the Highlight Rules List buffer, an interactive list where rules can be marked, removed, reordered, modified, inserted at point (=I=) or added at the end (=A=), and saved or expunged, all in one place.
 
 ** Filter (=f= prefix)
 
@@ -87,7 +87,7 @@ Without marks, fill operations auto-detect blank ranges from point.  With marks,
 | =f x= | Remove filter rule(s) (=<<ALL>>= or one)      |
 | =f X= | Remove all filter rules                     |
 
-=f a= is a single entry point that prompts for the filter type — substring, exact, numeric, or datetime — then runs the matching command, parallel to the =h a= highlight dispatcher.  =f t= is the datetime filter: one command covers date, time, and datetime columns (ISO strings order chronologically as text), offering =before=, =after=, =exact=, and =range=.  =f u= and =f d= keep rows whose value in the chosen columns is unique or duplicated — the fastest way to find repeated records.  =f |= adds a *column* rule: it keeps columns in which some cell satisfies the test (=any value= hides columns that are empty in the current view), joining the same stack as the row rules.  As a speed key it acts over every row and every column; the =f a= dispatcher is where a column rule can instead be judged over a subset of rows (a single index or a range such as =5-9=) or scoped to particular columns — hiding only those and leaving the rest.  A column rule marks both axes: =[…]= the rows it is judged over (shown only for a subset) and ={…}= the columns it acts on (={*}= every column), so a scoped rule reads =[5-9]{notes,tags}=.  To pick columns by what they are *called* rather than what they hold, use =| /=, which keeps the columns whose name or label matches and hides the rest (a prefix argument inverts it).  =f f= is a shortcut for the common case: it adds an exact-match filter on the value of the cell at point (reading the real stored value, so a truncated long field still matches in full; computed columns are rejected).  Every filter command prompts for its columns with the same =<<ALL>>= / comma-separated selector: pick one column, several, or all.  Computed columns are offered too.  One defined by a SQL expression is filtered and sorted by that expression; one computed in Emacs Lisp is filtered and sorted in Emacs after the rows are fetched, which means the page limit applies afterwards and the intermediate fetch is bounded by =tabularium-post-fetch-row-cap= (exceeding it reports an error rather than showing a truncated, wrong answer).  Such a column must be visible for this to work, since its value only exists on screen.  Filtering several columns ORs the test across them, so the old separate "filter across" command is no longer needed.  Filter rules are progressive and combined with logical connectives — the first sets the base; subsequent calls prompt for a connective (AND, OR, AND NOT, OR NOT).  =f x= removes one rule or all (its prompt defaults to the =<<ALL>>= sentinel); =f X= removes every rule at once.  The modeline shows the filter stack: =(genre = Fiction) ∧ (price > 20) ∧¬ (status ≈ inactive)=; when more than three rules are active the middle is elided to keep the modeline compact (=(genre = Fiction) … ∧ (year < 2000)=).
+=f a= is a single entry point that prompts for the filter type — substring, exact, numeric, or datetime — then runs the matching command, parallel to the =h a= highlight dispatcher.  =f t= is the datetime filter: one command covers date, time, and datetime columns (ISO strings order chronologically as text), offering =before=, =after=, =exact=, and =range=.  =f u= and =f d= keep rows whose value in the chosen columns is unique or duplicated — the fastest way to find repeated rows.  =f |= adds a *column* rule: it keeps columns in which some cell satisfies the test (=any value= hides columns that are empty in the current view), joining the same stack as the row rules.  As a speed key it acts over every row and every column; the =f a= dispatcher is where a column rule can instead be judged over a subset of rows (a single index or a range such as =5-9=) or scoped to particular columns — hiding only those and leaving the rest.  A column rule marks both axes: =[…]= the rows it is judged over (shown only for a subset) and ={…}= the columns it acts on (={*}= every column), so a scoped rule reads =[5-9]{notes,tags}=.  To pick columns by what they are *called* rather than what they hold, use =| /=, which keeps the columns whose name or label matches and hides the rest (a prefix argument inverts it).  =f f= is a shortcut for the common case: it adds an exact-match filter on the value of the cell at point (reading the real stored value, so a truncated long column still matches in full; computed columns are rejected).  Every filter command prompts for its columns with the same =<<ALL>>= / comma-separated selector: pick one column, several, or all.  Computed columns are offered too.  One defined by a SQL expression is filtered and sorted by that expression; one computed in Emacs Lisp is filtered and sorted in Emacs after the rows are fetched, which means the page limit applies afterwards and the intermediate fetch is bounded by =tabularium-post-fetch-row-cap= (exceeding it reports an error rather than showing a truncated, wrong answer).  Such a column must be visible for this to work, since its value only exists on screen.  Filtering several columns ORs the test across them, so the old separate "filter across" command is no longer needed.  Filter rules are progressive and combined with logical connectives — the first sets the base; subsequent calls prompt for a connective (AND, OR, AND NOT, OR NOT).  =f x= removes one rule or all (its prompt defaults to the =<<ALL>>= sentinel); =f X= removes every rule at once.  The modeline shows the filter stack: =(genre = Fiction) ∧ (price > 20) ∧¬ (status ≈ inactive)=; when more than three rules are active the middle is elided to keep the modeline compact (=(genre = Fiction) … ∧ (year < 2000)=).
 
 =f l= opens the Filter Rules List buffer — an interactive list of every filter rule, numbered in evaluation order with its logical connective in a dedicated =Op= column.  From it, =I= inserts a new rule at point and =A= adds one at the end; =m=/=u=/=U= mark and unmark rules, =t= toggles all marks, =x= removes the marked rules (or the one at point), =X= removes every rule, =c= cycles the connective of the rule at point, =RET= modifies a rule, and =M-p=/=M-n= (or =M-<up>=/=M-<down>=) move a rule up or down the stack, keeping each line's connective.  The plain =<up>=/=<down>= arrows (and =TAB=/=S-TAB=) stay within the list like =n=/=p=, and the cursor starts on the first rule.  The buffer refreshes automatically as the filter stack changes.
 
@@ -202,9 +202,9 @@ Counting mirrors the filter and highlight rule types — the three families ask 
 | =% D= | Mean ± SD (visible rows only)    |
 | =% i= | Median [Q1–Q3] (IQR)             |
 | =% I= | Median [IQR] (visible rows only) |
-| =% %= | Field summary                    |
+| =% %= | Column summary                    |
 
-Counting and aggregating answer different questions — how many rows match a description, against what the values in a column come to — so they have separate prefixes rather than sharing one.  Within each, lowercase covers the whole table and uppercase the current view.  =% %= reports on a field as a whole: how many rows hold a value, how many distinct ones, the most frequent, and the numeric block when the column is numeric.
+Counting and aggregating answer different questions — how many rows match a description, against what the values in a column come to — so they have separate prefixes rather than sharing one.  Within each, lowercase covers the whole table and uppercase the current view.  =% %= reports on a column as a whole: how many rows hold a value, how many distinct ones, the most frequent, and the numeric block when the column is numeric.
 
 ** Schema (=.= prefix)
 
@@ -215,8 +215,8 @@ Counting and aggregating answer different questions — how many rows match a de
 | =. == | Reload schema         |
 | =. w= | Switch database       |
 | =. += | Add column (undoable) |
-| =. $= | Rename field          |
-| =. l= | Relabel field         |
+| =| $= | Rename column          |
+| =. l= | Relabel column         |
 
 ** Undo / redo
 
@@ -230,9 +230,13 @@ Counting and aggregating answer different questions — how many rows match a de
 
 | Key | Command                                   |
 |-----+-------------------------------------------|
-| =i i= | Import a file as a new database           |
-| =i a= | Append a file to the current database     |
+| =i i= | Import: asks where, then what             |
+| =i N= | Import into a new database                |
+| =i A= | Import into the active database           |
+| =i a= | Append a file to the current table        |
 | =e e= | Export marked rows, or all if none marked |
+| =e t= | Export one table                          |
+| =e T= | Export several tables                     |
 | =e a= | Export all — whole table (ignores marks)  |
 | =e v= | Export visible view                       |
 | =e c= | Copy visible view to the clipboard        |
@@ -244,17 +248,17 @@ Counting and aggregating answer different questions — how many rows match a de
 | =SPC= | Open menu                                 |
 | =q=   | Quit                                      |
 
-The import and export prefixes have alternatives: =<= mirrors =i= and =>= mirrors =e=, so =< i=, =< a=, => e=, => a=, => v=, => r= work identically to their =i=/=e= counterparts.  In the registry buffer the same applies to the single-key bindings — =<= imports and =>= exports the database at point, alongside =i= and =e=.
+The import and export prefixes have alternatives: =<= mirrors =i= and =>= mirrors =e=, key for key — every =i N= has a =< N= and every =e N= a => N=, so there is no subset to remember.  In the registry buffer the same applies to the single-key bindings — =<= imports and =>= exports the database at point, alongside =i= and =e=.
 
-* Entry Mode (~tabularium-entry-mode~)
+* Row Mode (~tabularium-entry-mode~)
 
-** Field navigation
+** Column navigation
 
 | Key               | Command               |
 |-------------------+-----------------------|
-| =TAB= / =S-TAB=       | Next / previous field |
-| =M-]= / =M-[=         | Next / previous field |
-| =C-c C-n= / =C-c C-p= | Next / previous field |
+| =TAB= / =S-TAB=       | Next / previous column |
+| =M-]= / =M-[=         | Next / previous column |
+| =C-c C-n= / =C-c C-p= | Next / previous column |
 | =n= / =p=             | Next / previous line  |
 | =M-n= / =M-p=         | Next / previous entry |
 | ='=                 | Go to entry in view   |
@@ -263,12 +267,12 @@ The import and export prefixes have alternatives: =<= mirrors =i= and =>= mirror
 
 | Key               | Command              |
 |-------------------+----------------------|
-| =RET= / =C-c C-e=     | Edit field at point  |
-| === / =C-c C-d=       | Set field to default |
-| =DEL= / =x= / =C-c C-r= | Clear field          |
-| =X= / =C-c C-x=       | Clear field and edit |
+| =RET= / =C-c C-e=     | Edit column at point  |
+| === / =C-c C-d=       | Set column to default |
+| =DEL= / =x= / =C-c C-r= | Clear column          |
+| =X= / =C-c C-x=       | Clear column and edit |
 
-Fields with ~:long t~ open a dedicated editing buffer instead of the minibuffer.  The default mode is ~tabularium-long-edit-mode~ (derived from ~text-mode~ with ~visual-line-mode~ and ~outline-minor-mode~).  Configurable via ~tabularium-long-field-mode~; window position via ~tabularium-long-field-display~ (~side~ or ~bottom~).
+Columns with ~:long t~ open a dedicated editing buffer instead of the minibuffer.  The default mode is ~tabularium-long-edit-mode~ (derived from ~text-mode~ with ~visual-line-mode~ and ~outline-minor-mode~).  Configurable via ~tabularium-long-column-mode~; window position via ~tabularium-long-column-display~ (~side~ or ~bottom~).
 
 ** Submit / cancel
 
@@ -277,7 +281,7 @@ Fields with ~:long t~ open a dedicated editing buffer instead of the minibuffer.
 | =.= / =C-c C-c= / =C-c C-s= / =C-RET= / =C-x C-s= | Submit  |
 | =C-c C-k= / =q=                             | Cancel  |
 
-** Entry operations
+** Row operations
 
 | Key | Command            |
 |-----+--------------------|
@@ -324,7 +328,29 @@ with that database at the top and under point.
 | =m=           | Mark database at point                           |
 | =u=           | Unmark database at point                         |
 | =U=           | Unmark all                                       |
-| =t=           | Toggle all marks                                 |
+| =* *=         | Toggle all marks                                 |
+| =t t=         | Switch to another table in this file             |
+| =t n=         | Next table                                       |
+| =t p=         | Previous table                                   |
+| =t l=         | List tables and their links                      |
+| =t S=         | Describe the SQL a formula compiles to           |
+| =t ?=         | Check referential integrity                         |
+| =t N=         | New table in this database                       |
+| =t D=         | Delete a table                                     |
+| =t +=         | Duplicate a table                                |
+| =t TAB=       | Next table (alias)                               |
+| =t <backtab>= | Previous table (alias)                           |
+| =t `=         | Reorder the tables of this database              |
+| =t '=         | Follow the key at point into the next table      |
+| =t "=         | Follow it into the previous table                |
+| =t ==         | Check for tables without schemata, and vice versa |
+| =t k=         | Set the column this database links on             |
+| =t $=         | Name this table                                  |
+| =. $=         | Name this database                               |
+| =v R=         | Toggle read-only for this table                  |
+| =l=           | Child rows for the row at point                  |
+| =L=           | Back to the parent row                           |
+| =C-c l=       | Drop the detail filter                           |
 | =x=           | Close the open database                          |
 | =A=           | Action menu (rename/duplicate/delete/expunge)    |
 | =g= / ===       | Refresh listing                                  |

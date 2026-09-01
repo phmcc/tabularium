@@ -4,20 +4,20 @@
 
 *Structured data management in Emacs using SQL*
 
-~tabularium~ provides a scalable data entry and management system within Emacs, using SQLite as its primary backend.  It is designed to be an accessible user interface for datasets with thousands of entries and dozens of columns, in which standard Emacs tools begin to exhibit performance limitations.
+~tabularium~ provides a scalable data entry and management system within Emacs, using SQLite as its primary backend.  It is designed to be an accessible user interface for datasets with thousands of rows and dozens of columns, in which standard Emacs tools begin to exhibit performance limitations.
 
 * Design and Scope
 
-~tabularium~ creates a data management ecosystem within Emacs centered around paired database/schema files, tracked via a central registry.  Databases are stored within standard SQL database files, and corresponding schema files provide the structure of these databases in Elisp.  Interaction with the database is handled via built-in Emacs tools, including ~tabulated-list-mode~ for row/column display, ~forms-mode~ for data viewing/entry, and ~sqlite.el~ for the database backend.  The result is something close in spirit to Microsoft Access or LibreOffice Base, but fully integrated into Emacs—leveraging Emacs's standard completion frameworks, keyboard-driven navigation, and version control support.  Several useful elements from common spreadsheet software such as Microsoft Excel and LibreOffice Calc are also implemented for ease-of-use.  An EIEIO-based backend abstraction layer adds optional support for PostgreSQL (via ~emacsql-pg~) and leaves room for future extension to other database systems.
+~tabularium~ creates a data management ecosystem within Emacs centered around paired database/schema files, tracked via a central registry.  Databases are stored within standard SQL database files, and corresponding schema files provide the structure of these databases in Elisp.  Interaction with the database is handled via built-in Emacs tools, including ~tabulated-list-mode~ for row/column display, ~forms-mode~ for data viewing/row, and ~sqlite.el~ for the database backend.  The result is something close in spirit to Microsoft Access or LibreOffice Base, but fully integrated into Emacs—leveraging Emacs's standard completion frameworks, keyboard-driven navigation, and version control support.  Several useful elements from common spreadsheet software such as Microsoft Excel and LibreOffice Calc are also implemented for ease-of-use.  An EIEIO-based backend abstraction layer adds optional support for PostgreSQL (via ~emacsql-pg~) and leaves room for future extension to other database systems.
 
-This package was developed out of a need to more adeptly handle large datasets within Emacs.  Emacs's built-in tools such as ~org-table~ and ~csv-mode~ handle human-readable tables and flat files well, but neither scales gracefully to thousands of records with rich schemata, field-level completion, or computed fields.  Conversely, packages like ~emacsql~ provide raw database access but lack a data management interface, and ~esqlite~ offers SQLite bindings without a user-facing layer.  ~tabularium~ is designed to occupy the space between these tools and full external database applications.
+This package was developed out of a need to more adeptly handle large datasets within Emacs.  Emacs's built-in tools such as ~org-table~ and ~csv-mode~ handle human-readable tables and flat files well, but neither scales gracefully to thousands of rows with rich schemata, column-level completion, or computed columns.  Conversely, packages like ~emacsql~ provide raw database access but lack a data management interface, and ~esqlite~ offers SQLite bindings without a user-facing layer.  ~tabularium~ is designed to occupy the space between these tools and full external database applications.
 
 * Features
 
 - *SQL-backed storage* — SQLite by default, with an extensible backend architecture
-- *Schema-driven data structure* — field types, defaults, choices, validation, and computed fields
-- *Multiple entry modes* — form-based (with per-field completion), minibuffer prompts, and quick entry for high-volume workflows
-- *Rich querying* — filter, search, count, and aggregate across any field type; fuzzy find via ~completing-read~
+- *Schema-driven data structure* — column types, defaults, choices, validation, and computed columns
+- *Multiple row modes* — form-based (with per-column completion), minibuffer prompts, and quick entry for high-volume workflows
+- *Rich querying* — filter, search, count, and aggregate across any column type; fuzzy find via ~completing-read~
 - *Spreadsheet operations* — undo/redo, copy/paste, dired-style marking, multi-column sort, freeze rows, fill, query-replace, column clipboard, and reindexing
 - *Completion system* — historical (frequency-ranked), recent, vocabulary (file or inline), related (contextual co-occurrence), filtered (~SQL WHERE~), custom function, and union sources
 - *Saved views* — named presets for filter, sort, and column configuration
@@ -60,19 +60,19 @@ Alternatively, clone the repository and put the package in the Emacs load path:
 M-x tabularium-create-database RET expenses RET ~/Documents/expenses.db RET
 #+end_example
 
-This creates two paired files: =expenses.db= (the SQLite database) and =expenses.schema.el= (the schema definition).  An interactive wizard prompts for field definitions.
+This creates two paired files: =expenses.db= (the SQLite database) and =expenses.schema.el= (the schema definition).  An interactive wizard prompts for column definitions.
 
 Three alternate creation paths are available for non-interactive workflows:
 
 - ~tabularium-create-database-quick~ takes a one-line spec string of the form =id:type:flag id:type:flag…= (types: ~text~, ~integer~, ~number~, ~date~, ~time~, ~datetime~, ~choice~, ~boolean~; flags: ~required~/~req~, ~primary~/~pri~, ~long~, or a ~|~-separated list of choices).
 - ~tabularium-create-database-from-header~ creates a text-only schema from a pasted tab/pipe/comma-separated header row.
-- ~tabularium-create-database-from-schema-file~ uses an existing =.schema.el= as a template for a new database — like \"Save As\" for schemata.  Prompts for a new name and new database file, then writes a fresh schema mirroring the source's fields, saved views, highlight rules, default sort, and backend choice, but pointing at the new database file (which starts empty).
+- ~tabularium-create-database-from-schema-file~ uses an existing =.schema.el= as a template for a new database — like \"Save As\" for schemata.  Prompts for a new name and new database file, then writes a fresh schema mirroring the source's columns, saved views, highlight rules, default sort, and backend choice, but pointing at the new database file (which starts empty).
 
 All four variants are also accessible from the menu under =C= (sub-keys =C=, =Q=, =H=, =S=).
 
 ** 2. Edit the schema (optional)
 
-The wizard produces a working schema, but the generated =.schema.el= file can be refined further—for instance, to add completion sources, views, or quick-entry fields.  See "Schema Files" below for the full specification.
+The wizard produces a working schema, but the generated =.schema.el= file can be refined further—for instance, to add completion sources, views, or quick-row columns.  See "Schema Files" below for the full specification.
 
 ** 3. Open and use
 
@@ -81,11 +81,11 @@ M-x tabularium-open RET expenses RET
 M-x tabularium-view RET
 #+end_example
 
-From the view buffer, entries can be created, edited, sorted, filtered, marked, and exported.  Form-based entry provides per-field completion; quick entry prompts only for selected fields.
+From the view buffer, rows can be created, edited, sorted, filtered, marked, and exported.  Form-based row provides per-column completion; quick entry prompts only for selected columns.
 
 * View Mode (~tabularium-view-mode~)
 
-View mode is the primary interface for browsing and manipulating records.  It derives from ~tabulated-list-mode~ and displays entries in a columnar table.
+View mode is the primary interface for browsing and manipulating rows.  It derives from ~tabulated-list-mode~ and displays rows in a columnar table.
 
 ** Navigation
 
@@ -103,45 +103,45 @@ View mode is the primary interface for browsing and manipulating records.  It de
 | ~tabularium-view-cell-jump-backward~ | Jump left to the next column with a different value  |
 | ~tabularium-view-goto-column~        | Go to a column by name (with completion)             |
 | ~tabularium-view-goto-row~           | Go to a row by number                                |
-| ~tabularium-view-goto-entry~         | Go to an entry by ID                                 |
-| ~tabularium-view-entry~              | View the full record at point                        |
-| ~tabularium-find~                    | Fuzzy-find a record using ~completing-read~            |
+| ~tabularium-view-goto-row~         | Go to an row by ID                                 |
+| ~tabularium-view-row~              | View the full row at point                        |
+| ~tabularium-find~                    | Fuzzy-find a row using ~completing-read~            |
 
 Cell-jump commands accept a prefix argument to jump across multiple value transitions.
 
-** Entry creation and modification
+** Row creation and modification
 
 | Command                      | Description                                          |
 |------------------------------+------------------------------------------------------|
-| ~tabularium-new-entry~         | Open a form for creating a new entry                 |
-| ~tabularium-prompt-entry~      | Create a new entry via sequential minibuffer prompts |
-| ~tabularium-quick-entry~       | Streamlined entry using only quick-entry fields      |
-| ~tabularium-view-edit~         | Edit record at point                                 |
-| ~tabularium-view-insert~       | Insert a new entry, shifting subsequent entries      |
-| ~tabularium-view-delete~       | Delete entry at point or all marked entries          |
-| ~tabularium-view-duplicate~    | Duplicate entry at point or all marked entries       |
-| ~tabularium-view-copy~         | Copy entry (or marked entries) to the kill ring      |
-| ~tabularium-view-cut~          | Cut entry (or marked entries) to the kill ring       |
+| ~tabularium-new-row~         | Open a form for creating a new row                 |
+| ~tabularium-prompt-entry~      | Create a new row via sequential minibuffer prompts |
+| ~tabularium-quick-entry~       | Streamlined row using only quick-row columns      |
+| ~tabularium-view-edit~         | Edit row at point                                 |
+| ~tabularium-view-insert~       | Insert a new row, shifting subsequent rows      |
+| ~tabularium-view-delete~       | Delete row at point or all marked rows          |
+| ~tabularium-view-duplicate~    | Duplicate row at point or all marked rows       |
+| ~tabularium-view-copy~         | Copy row (or marked rows) to the kill ring      |
+| ~tabularium-view-cut~          | Cut row (or marked rows) to the kill ring       |
 | ~tabularium-view-paste~        | Paste at point — rows, or a column at point          |
 | ~tabularium-view-paste-append~ | Paste at end — rows, or a column at the end          |
-| ~tabularium-view-move~         | Move entry (or marked entries) to a new position     |
-| ~tabularium-view-swap~         | Swap positions of two entries                        |
-| ~tabularium-reindex~           | Renumber all entry IDs sequentially                  |
+| ~tabularium-view-move~         | Move row (or marked rows) to a new position     |
+| ~tabularium-view-swap~         | Swap positions of two rows                        |
+| ~tabularium-reindex~           | Renumber all row IDs sequentially                  |
 
 ** Marking
 
 | Command                       | Description                                           |
 |-------------------------------+-------------------------------------------------------|
-| ~tabularium-view-mark~          | Mark entry at point or entries in the active region   |
-| ~tabularium-view-unmark~        | Unmark entry at point or entries in the active region |
-| ~tabularium-view-unmark-all~    | Unmark all entries                                    |
-| ~tabularium-view-toggle-marks~  | Toggle marks on all visible entries                   |
-| ~tabularium-view-mark-matching~ | Mark entries by substring match                       |
-| ~tabularium-view-mark-exact~    | Mark entries by exact match                           |
-| ~tabularium-view-mark-regexp~   | Mark entries by regexp match                          |
-| ~tabularium-view-mark-pattern~  | Mark entries by SQL LIKE pattern (=%= and =_= wildcards)  |
-| ~tabularium-view-count-marked~  | Count marked entries                                  |
-| ~tabularium-view-action~        | Action menu on marked entries, or the row at point     |
+| ~tabularium-view-mark~          | Mark row at point or rows in the active region   |
+| ~tabularium-view-unmark~        | Unmark row at point or rows in the active region |
+| ~tabularium-view-unmark-all~    | Unmark all rows                                    |
+| ~tabularium-view-toggle-marks~  | Toggle marks on all visible rows                   |
+| ~tabularium-view-mark-matching~ | Mark rows by substring match                       |
+| ~tabularium-view-mark-exact~    | Mark rows by exact match                           |
+| ~tabularium-view-mark-regexp~   | Mark rows by regexp match                          |
+| ~tabularium-view-mark-pattern~  | Mark rows by SQL LIKE pattern (=%= and =_= wildcards)  |
+| ~tabularium-view-count-marked~  | Count marked rows                                  |
+| ~tabularium-view-action~        | Action menu on marked rows, or the row at point     |
 
 ** Fill and replace
 
@@ -149,8 +149,8 @@ Cell-jump commands accept a prefix argument to jump across multiple value transi
 |--------------------------------------+---------------------------------------------------------------------|
 | ~tabularium-view-fill-forward~       | Fill forward (context): propagate the value at point into the blank run below |
 | ~tabularium-view-fill-backward~      | Fill backward (context): propagate the value at point into the blank run above |
-| ~tabularium-view-fill-down~          | Prompted fill downward: choose field and value                      |
-| ~tabularium-view-fill-up~            | Prompted fill upward: choose field and value                        |
+| ~tabularium-view-fill-down~          | Prompted fill downward: choose column and value                      |
+| ~tabularium-view-fill-up~            | Prompted fill upward: choose column and value                        |
 | ~tabularium-view-fill-down-to-point~ | Fill down to point: propagate the nearest value above into blanks down to point |
 | ~tabularium-view-fill-up-to-point~   | Fill up to point: propagate the nearest value below into blanks up to point |
 | ~tabularium-view-fill-series~        | Fill a numeric or date series downward                              |
@@ -161,10 +161,10 @@ Cell-jump commands accept a prefix argument to jump across multiple value transi
 | ~tabularium-view-fill-replace-up~    | Replace run upward: set consecutive same-value cells to a prompted value |
 | ~tabularium-view-fill-clear~         | Clear through row: blank the current column from point through a target |
 | ~tabularium-view-fill-clear-to-point~ | Clear up to row: blank the current column up to (not including) point |
-| ~tabularium-replace-substring~         | Replace substring across selected fields                            |
-| ~tabularium-replace-exact~             | Replace exact value across selected fields                          |
-| ~tabularium-replace-pattern~           | Replace values matching a glob pattern across selected fields       |
-| ~tabularium-replace-regexp~            | Replace by regexp across selected fields                            |
+| ~tabularium-replace-substring~         | Replace substring across selected columns                            |
+| ~tabularium-replace-exact~             | Replace exact value across selected columns                          |
+| ~tabularium-replace-pattern~           | Replace values matching a glob pattern across selected columns       |
+| ~tabularium-replace-regexp~            | Replace by regexp across selected columns                            |
 | ~tabularium-replace-query~             | Interactive query-replace with visual feedback                      |
 | ~tabularium-toggle-case-sensitive~     | Toggle case sensitivity for replace and mark operations             |
 | ~tabularium-replace-visible-substring~ | Replace substring in visible rows only                              |
@@ -200,7 +200,7 @@ Cell-jump commands accept a prefix argument to jump across multiple value transi
 
 Sorting, filtering, and highlighting share one *rules* paradigm.  For sorting, ~tabularium-view-sort-add~ (~s a~) adds a column as a sort key, ~tabularium-view-sort-reverse~ (~s s~) makes the column at point the sole sort key — descending first, toggling on repeat, the keyboard equivalent of a header click and falling back to the index column when point is not on a sortable column — ~tabularium-view-sort-index~ (~s `~) does the same for the index column, ~tabularium-view-sort-cycle~ (~s c~) toggles one key's direction, and ~tabularium-view-sort-remove~ (~s x~) drops one key or all of them, while ~tabularium-view-sort-remove-all~ (~s X~) drops every key at once.  Sorting is keyboard-driven (there is no header-click sorting); a saved view is the way to persist a sort.  ~tabularium-view-sort-buffer~ (~s l~) opens the *Sort Rules List* buffer, an interactive list of every key in priority order with its direction, where keys can be inserted at point (~I~) or added at the end (~A~), marked, removed (~x~, or ~X~ for all), re-entered, have their direction cycled (~c~), navigated with ~TAB~/~S-TAB~, and be reordered with ~M-p~/~M-n~ (or ~M-<up>~/~M-<down>~).
 
-~tabularium-view-filter-add~ (bound ~f a~) is a single entry point that prompts for the filter type — substring, exact, numeric, or datetime — and runs the matching command, parallel to the ~h a~ highlight dispatcher; the substring filter is also directly available as ~f s~ and the datetime filter as ~f t~, with ~f u~ and ~f d~ keeping rows whose value is unique or duplicated.  ~tabularium-view-filter-datetime~ covers date, time, and datetime columns in one command (ISO strings order chronologically as text) with ~before~, ~after~, ~exact~, and ~range~ comparisons.  Filter and highlight share one rule-type vocabulary under matching keys — ~s~ substring, ~e~ exact, ~r~ regexp, ~n~ numeric, ~t~ datetime — so the same letter means the same thing under either prefix.  Regexp filtering needs a backend with a regexp operator: PostgreSQL matches with ~~~ / ~~*~, while the built-in SQLite backend reports that it has none (SQLite parses the operator but ships no implementation, and Emacs cannot register one), so there use the regexp *highlight* rule, which matches in Emacs.  Duplicates stays highlight-only.  Filter rules carry a scope.  A row rule keeps rows whose field satisfies a test; a column rule — ~tabularium-view-filter-column~ (~f |~) — keeps columns in which some cell does, so ~any value~ hides columns that are empty in the current view.  Both live in one stack and combine with the same connectives, and rule listings mark scope with brackets: ~[price] > 20~ selects rows, ~{*} > 20~ selects columns.  A column rule is judged over every row by default, or over a single row index or a range (~5-9~), and may be scoped to particular columns rather than every one — so a rule can hide only ~{notes,tags}~ and leave the rest untouched — with the two axes shown together as ~[5-9]{notes,tags}~; over every row and column it reads simply ~{*}~.  These restrictions belong to the ~f a~ dispatcher, which prompts for both for full control; the direct keys, ~f |~ among them, skip them for speed and act over every row and column.  Choosing columns by what they are *called* is a separate operation: ~tabularium-view-select-columns~ (~| /~) keeps the columns whose name or label matches a pattern and hides the rest, with a prefix argument to invert.  ~tabularium-view-filter-at-point~ (~f f~) is a shortcut that filters on the value of the cell at point.  Filter rules are progressive: the first call sets a base, and each subsequent call prompts for a logical connective (AND, OR, AND NOT, OR NOT) so the stack reads as a boolean expression.  The modeline shows it compactly — ~(genre = Fiction) ∧ (price > 20)~ — eliding the middle when more than three rules are active.  ~tabularium-view-filter-buffer~ (bound ~f l~) opens the *Filter Rules List* buffer: an interactive list of every rule numbered in evaluation order, with the connective in its own ~Op~ column.  From it, ~I~ inserts a rule at point and ~A~ adds one at the end, ~m~/~u~/~U~/~t~ mark and unmark rules, ~x~ removes the marked ones (~X~ removes every rule), ~c~ cycles the connective of the rule at point, ~RET~ modifies a rule, and ~M-p~/~M-n~ (or ~M-<up>~/~M-<down>~) move a rule up or down (keeping each line's connective), while ~TAB~/~S-TAB~ navigate — a roomier counterpart to the single-line modeline summary, parallel to the Sort and Highlight Rules List buffers.
+~tabularium-view-filter-add~ (bound ~f a~) is a single entry point that prompts for the filter type — substring, exact, numeric, or datetime — and runs the matching command, parallel to the ~h a~ highlight dispatcher; the substring filter is also directly available as ~f s~ and the datetime filter as ~f t~, with ~f u~ and ~f d~ keeping rows whose value is unique or duplicated.  ~tabularium-view-filter-datetime~ covers date, time, and datetime columns in one command (ISO strings order chronologically as text) with ~before~, ~after~, ~exact~, and ~range~ comparisons.  Filter and highlight share one rule-type vocabulary under matching keys — ~s~ substring, ~e~ exact, ~r~ regexp, ~n~ numeric, ~t~ datetime — so the same letter means the same thing under either prefix.  Regexp filtering needs a backend with a regexp operator: PostgreSQL matches with ~~~ / ~~*~, while the built-in SQLite backend reports that it has none (SQLite parses the operator but ships no implementation, and Emacs cannot register one), so there use the regexp *highlight* rule, which matches in Emacs.  Duplicates stays highlight-only.  Filter rules carry a scope.  A row rule keeps rows whose column satisfies a test; a column rule — ~tabularium-view-filter-column~ (~f |~) — keeps columns in which some cell does, so ~any value~ hides columns that are empty in the current view.  Both live in one stack and combine with the same connectives, and rule listings mark scope with brackets: ~[price] > 20~ selects rows, ~{*} > 20~ selects columns.  A column rule is judged over every row by default, or over a single row index or a range (~5-9~), and may be scoped to particular columns rather than every one — so a rule can hide only ~{notes,tags}~ and leave the rest untouched — with the two axes shown together as ~[5-9]{notes,tags}~; over every row and column it reads simply ~{*}~.  These restrictions belong to the ~f a~ dispatcher, which prompts for both for full control; the direct keys, ~f |~ among them, skip them for speed and act over every row and column.  Choosing columns by what they are *called* is a separate operation: ~tabularium-view-select-columns~ (~| /~) keeps the columns whose name or label matches a pattern and hides the rest, with a prefix argument to invert.  ~tabularium-view-filter-at-point~ (~f f~) is a shortcut that filters on the value of the cell at point.  Filter rules are progressive: the first call sets a base, and each subsequent call prompts for a logical connective (AND, OR, AND NOT, OR NOT) so the stack reads as a boolean expression.  The modeline shows it compactly — ~(genre = Fiction) ∧ (price > 20)~ — eliding the middle when more than three rules are active.  ~tabularium-view-filter-buffer~ (bound ~f l~) opens the *Filter Rules List* buffer: an interactive list of every rule numbered in evaluation order, with the connective in its own ~Op~ column.  From it, ~I~ inserts a rule at point and ~A~ adds one at the end, ~m~/~u~/~U~/~t~ mark and unmark rules, ~x~ removes the marked ones (~X~ removes every rule), ~c~ cycles the connective of the rule at point, ~RET~ modifies a rule, and ~M-p~/~M-n~ (or ~M-<up>~/~M-<down>~) move a rule up or down (keeping each line's connective), while ~TAB~/~S-TAB~ navigate — a roomier counterpart to the single-line modeline summary, parallel to the Sort and Highlight Rules List buffers.
 
 ** Column operations
 
@@ -231,26 +231,24 @@ Sorting, filtering, and highlighting share one *rules* paradigm.  For sorting, ~
 
 | Command                                 | Description                            |
 |-----------------------------------------+----------------------------------------|
-| ~tabularium-aggregate-sum~                | Sum of a numeric field                 |
-| ~tabularium-aggregate-visible-sum~        | Sum of visible entries only            |
+| ~tabularium-aggregate-sum~                | Sum of a numeric column                 |
+| ~tabularium-aggregate-visible-sum~        | Sum of visible rows only            |
 | ~tabularium-aggregate-min-max~            | Minimum and maximum values             |
 | ~tabularium-aggregate-mean-sd~            | Mean ± standard deviation              |
 | ~tabularium-aggregate-median-iqr~         | Median [Q1, Q3] (interquartile range)  |
-| ~tabularium-aggregate-field-summary~     | Comprehensive column statistics        |
-| ~tabularium-aggregate-visible-min-max~    | Min/max of visible entries only        |
-| ~tabularium-aggregate-visible-mean-sd~    | Mean ± SD of visible entries only      |
-| ~tabularium-aggregate-visible-median-iqr~ | Median [Q1–Q3] of visible entries only |
-| ~tabularium-aggregate-count~              | Count records where a value matches in one or many columns |
-| ~tabularium-aggregate-visible-count~      | Count currently visible entries        |
+| ~tabularium-aggregate-column-summary~     | Comprehensive column statistics        |
+| ~tabularium-aggregate-visible-min-max~    | Min/max of visible rows only        |
+| ~tabularium-aggregate-visible-mean-sd~    | Mean ± SD of visible rows only      |
+| ~tabularium-aggregate-visible-median-iqr~ | Median [Q1–Q3] of visible rows only |
 
 ** View expansion
 
 | Command                     | Description                          |
 |-----------------------------+--------------------------------------|
 | ~tabularium-view-show-more~   | Show more rows (one additional page) |
-| ~tabularium-view-show-all~    | Show all entries (remove page limit) |
+| ~tabularium-view-show-all~    | Show all rows (remove page limit) |
 | ~tabularium-view-show-all-in-view~ | Show all rows passing the active filter (keep filter) |
-| ~tabularium-view-show-range~  | Show entries within an ID range      |
+| ~tabularium-view-show-range~  | Show rows within an ID range      |
 | ~tabularium-view-reset-limit~ | Reset to default page size           |
 
 ** Freeze, undo/redo, and other
@@ -259,7 +257,7 @@ Sorting, filtering, and highlighting share one *rules* paradigm.  For sorting, ~
 |---------------------------------+-----------------------------------------------|
 | ~tabularium-view-freeze~          | Freeze marked rows, or the row at point       |
 | ~tabularium-view-unfreeze~        | Unfreeze marked rows, or the row at point     |
-| ~tabularium-view-unfreeze-all~    | Unfreeze all frozen entries                   |
+| ~tabularium-view-unfreeze-all~    | Unfreeze all frozen rows                   |
 | ~tabularium-undo~                 | Undo the last database operation              |
 | ~tabularium-redo~                 | Redo the last undone operation                |
 | ~tabularium-kill-ring-view~       | View contents of the kill ring                |
@@ -279,39 +277,39 @@ Frozen rows always render at the top of the view, regardless of filter or sort. 
 
 * Entry Mode (~tabularium-entry-mode~)
 
-Entry mode provides a form-based interface for creating and editing individual records.  Each field is displayed on its own line with its prompt label, and completion is available where configured in the schema.
+Entry mode provides a form-based interface for creating and editing individual rows.  Each column is displayed on its own line with its prompt label, and completion is available where configured in the schema.
 
-Three entry methods are available:
+Three row methods are available:
 
-- *Form entry* — opens a dedicated buffer with all fields laid out vertically; best for complex schemata and careful data entry.
-- *Prompt entry* — prompts for each field sequentially in the minibuffer; suitable for quick keyboard-driven entry.
-- *Quick entry* — prompts only for fields listed in ~:quick-entry-fields~; ideal for high-volume entry with consistent defaults.
+- *Form row* — opens a dedicated buffer with all columns laid out vertically; best for complex schemas and careful data entry.
+- *Prompt row* — prompts for each column sequentially in the minibuffer; suitable for quick keyboard-driven row.
+- *Quick row* — prompts only for columns listed in ~:quick-entry-fields~; ideal for high-volume row with consistent defaults.
 
-The ~tabularium-entry-method~ variable controls the default method; a prefix argument before any entry command invokes the alternative.
+The ~tabularium-entry-method~ variable controls the default method; a prefix argument before any row command invokes the alternative.
 
 ** Commands
 
 | Command                      | Description                                         |
 |------------------------------+-----------------------------------------------------|
-| ~tabularium-entry-next-field~  | Move to the next field                              |
-| ~tabularium-entry-prev-field~  | Move to the previous field                          |
-| ~tabularium-entry-edit-field~  | Edit field at point with completion, then advance   |
-| ~tabularium-entry-set-default~ | Set current field to its default value              |
-| ~tabularium-entry-reset-field~ | Reset current field to empty                        |
-| ~tabularium-entry-submit~      | Submit the form and save the entry                  |
+| ~tabularium-entry-next-field~  | Move to the next column                              |
+| ~tabularium-entry-prev-field~  | Move to the previous column                          |
+| ~tabularium-entry-edit-field~  | Edit column at point with completion, then advance   |
+| ~tabularium-entry-set-default~ | Set current column to its default value              |
+| ~tabularium-entry-reset-field~ | Reset current column to empty                        |
+| ~tabularium-entry-submit~      | Submit the form and save the row                  |
 | ~tabularium-entry-cancel~      | Cancel the form without saving                      |
-| ~tabularium-entry-new~         | Save current entry and open a new blank form        |
-| ~tabularium-entry-insert~      | Insert a new entry at the current entry's position  |
-| ~tabularium-entry-duplicate~   | Save current entry and open a duplicate for editing |
-| ~tabularium-entry-delete~      | Delete the current entry being edited               |
-| ~tabularium-entry-next-entry~  | Save current entry and move to the next one         |
-| ~tabularium-entry-prev-entry~  | Save current entry and move to the previous one     |
+| ~tabularium-entry-new~         | Save current row and open a new blank form        |
+| ~tabularium-entry-insert~      | Insert a new row at the current row's position  |
+| ~tabularium-entry-duplicate~   | Save current row and open a duplicate for editing |
+| ~tabularium-entry-delete~      | Delete the current row being edited               |
+| ~tabularium-entry-next-entry~  | Save current row and move to the next one         |
+| ~tabularium-entry-prev-entry~  | Save current row and move to the previous one     |
 | ~tabularium-entry-goto-view~   | Save and switch to the view buffer                  |
-| ~tabularium-entry-goto-entry~  | Center the view on this entry without saving        |
+| ~tabularium-entry-goto-entry~  | Center the view on this row without saving        |
 
 * Registry Mode (~tabularium-registry-mode~)
 
-The registry tracks all known databases.  ~M-x tabularium-registry~ displays a listing with each database's name, schema status, and file path.  From this buffer, databases can be opened, viewed, created, registered, renamed, deleted (registry entry only), or expunged (registry entry + files).  Rows can be marked dired-style (~m~/~u~/~U~/~t~) so the action keys operate on a set; the mark column shows ~*~ on a marked row and ~+~ on the database that is currently open (~*~ wins if both apply).  Opening a database re-sorts the listing with that database at the top and leaves point on it.
+The registry tracks all known databases.  ~M-x tabularium-registry~ displays a listing with each database's name, schema status, and file path.  From this buffer, databases can be opened, viewed, created, registered, renamed, deleted (registry row only), or expunged (registry row + files).  Rows can be marked dired-style (~m~/~u~/~U~/~t~) so the action keys operate on a set; the mark column shows ~*~ on a marked row and ~+~ on the database that is currently open (~*~ wins if both apply).  Opening a database re-sorts the listing with that database at the top and leaves point on it.
 
 The registry persists across sessions in =registry.eld= (stored under ~user-emacs-directory~ or ~no-littering-var-directory~ if available).
 
@@ -324,27 +322,27 @@ Each database is paired with a =.schema.el= file that defines its structure.  Th
 #+begin_src emacs-lisp
 (tabularium-define-schema "expenses"
   :file "~/Documents/expenses.db"
-  :fields
-  '((:id row_id :type integer :label "ID" :primary t :width 5)
+  :columns
+  '((:id row_id :type integer :label "ID" :pk t :width 5)
     (:id date :type text :label "Date" :default today :width 12)
     (:id category :type choice :label "Category" :width 12
      :choice ("Food" "Transport" "Utilities" "Entertainment" "Other"))
     (:id amount :type number :label "Amount" :width 10)
     (:id description :type text :label "Description" :width 30
      :complete historical))
-  :quick-entry-fields '(date category amount description)
+  :quick-entry-columns '(date category amount description)
   :default-sort 'asc
   :views
   '((:name "Recent"
-     :filter (:field date :op ">=" :value "2024-01-01")
+     :filter (:column date :op ">=" :value "2024-01-01")
      :sort ((date . desc)))
     (:name "High Value"
-     :filter (:field amount :op ">" :value "100")
+     :filter (:column amount :op ">" :value "100")
      :columns (date category amount)
      :default t)))
 #+end_src
 
-** Field types
+** Column types
 
 | Type     | Description                                            |
 |----------+--------------------------------------------------------|
@@ -357,15 +355,15 @@ Each database is paired with a =.schema.el= file that defines its structure.  Th
 | ~choice~   | Constrained selection from ~:choice~                     |
 | ~boolean~  | Constrained yes/no pair                                |
 
-** Field properties
+** Column properties
 
 | Property       | Type         | Description                                                                  |
 |----------------+--------------+------------------------------------------------------------------------------|
-| ~:id~            | symbol       | Field identifier (required)                                                  |
+| ~:id~            | symbol       | Column identifier (required)                                                  |
 | ~:type~          | symbol       | One of the types listed above                                                |
 | ~:label~         | string       | Display label                                                                |
-| ~:primary~       | boolean      | Marks the row-ID field — exactly one field per schema (see below)            |
-| ~:required~      | boolean      | Field cannot be left empty                                                   |
+| ~:pk~       | boolean      | Marks the row-ID column — exactly one column per schema (see below)            |
+| ~:required~      | boolean      | Column cannot be left empty                                                   |
 | ~:width~         | integer      | Column width in view mode                                                    |
 | ~:default~       | any          | Default value (~today~, ~now~, a function, or a literal)                         |
 | ~:choice~        | list         | Valid options for ~choice~ type                                                |
@@ -377,13 +375,13 @@ Each database is paired with a =.schema.el= file that defines its structure.  Th
 | ~:pattern-help~  | string       | Error message shown on ~:pattern~ mismatch (otherwise generated)               |
 | ~:validate~      | function     | =(lambda (value) ...)= returning nil if valid, or an error string            |
 
-The ~:default~ value ~now~ is interpreted relative to the field type: ~time~ fields receive the current time per ~tabularium-time-format~; ~date~ fields receive today's date per ~tabularium-date-format~; ~datetime~ fields and any other type receive the current timestamp per ~tabularium-datetime-format~.
+The ~:default~ value ~now~ is interpreted relative to the column type: ~time~ columns receive the current time per ~tabularium-time-format~; ~date~ columns receive today's date per ~tabularium-date-format~; ~datetime~ columns and any other type receive the current timestamp per ~tabularium-datetime-format~.
 
-*Row ID.* Exactly one field per schema carries ~:primary t~ — it holds each row's *row ID*, the integer that uniquely identifies the row and that move, sort, mark, undo/redo, and export all use to refer to rows.  When the creation wizard or importer adds this field automatically it names it ~row_id~ with the label ~ID~; you may instead mark any field of your own ~:primary t~.  "Row ID" is the value/concept; "field id" or "column id" (the ~:id~ keyword every field carries) is a separate thing — every column has a ~:id~, but only the primary field's value is a row ID.
+*Row ID.* Exactly one column per schema carries ~:pk t~ — it holds each row's *row ID*, the integer that uniquely identifies the row and that move, sort, mark, undo/redo, and export all use to refer to rows.  When the creation wizard or importer adds this column automatically it names it ~row_id~ with the label ~ID~; you may instead mark any column of your own ~:pk t~.  "Row ID" is the value/concept; "column id" or "column id" (the ~:id~ keyword every column carries) is a separate thing — every column has a ~:id~, but only the primary column's value is a row ID.
 
 Storage of date / time / datetime values: SQLite columns are TEXT in ISO 8601 form (lexically sortable); PostgreSQL columns use the native DATE, TIME, and TIMESTAMP types respectively.  Datetime input accepts either a space (~2026-05-18 14:30:00~) or a T (~2026-05-18T14:30:00~) between the date and time portion; output is always emitted with a space.
 
-Validation runs in this order on every prompted edit: type check → ~:pattern~ → ~:validate~.  The first failure short-circuits and the message is shown inline; the prompt re-loops with the rejected value as the initial input so the user can correct it.  Empty input always passes validation so a field can be cleared.  Pattern matching is always case-sensitive; write the regexp's character classes accordingly (=[A-Za-z]+= rather than =[A-Z]+= when both cases should match).
+Validation runs in this order on every prompted edit: type check → ~:pattern~ → ~:validate~.  The first failure short-circuits and the message is shown inline; the prompt re-loops with the rejected value as the initial input so the user can correct it.  Empty input always passes validation so a column can be cleared.  Pattern matching is always case-sensitive; write the regexp's character classes accordingly (=[A-Za-z]+= rather than =[A-Z]+= when both cases should match).
 
 ** Completion sources
 
@@ -391,12 +389,12 @@ The ~:complete~ property configures intelligent completion during data entry.
 
 | Type       | Syntax                                          | Description                                               |
 |------------+-------------------------------------------------+-----------------------------------------------------------|
-| ~historical~ | ~:complete historical~                            | Frequency-ranked past entries                             |
-| ~recent~     | ~:complete recent~                                | Recency-ranked past entries                               |
+| ~historical~ | ~:complete historical~                            | Frequency-ranked past rows                             |
+| ~recent~     | ~:complete recent~                                | Recency-ranked past rows                               |
 | ~vocabulary~ | ~:complete (:type vocabulary :source "file.txt")~ | External file (one value per line) or inline ~:values~ list |
-| ~related~    | ~:complete (:type related :field surgeon)~        | Values co-occurring with another field's current value    |
+| ~related~    | ~:complete (:type related :column surgeon)~        | Values co-occurring with another column's current value    |
 | ~filtered~   | ~:complete (:type filtered :where "active = 1")~  | Historical values filtered by ~SQL WHERE~                   |
-| ~function~   | ~:complete (:type function :fn my-fn)~            | Custom Elisp function receiving field name and context    |
+| ~function~   | ~:complete (:type function :fn my-fn)~            | Custom Elisp function receiving column name and context    |
 | ~union~      | ~:complete (:type union :sources (...))~          | Combine multiple sources; duplicates removed              |
 
 All types accept an optional ~:limit N~ to cap the candidate count.  Related completion supports ~:autofill t~ to pre-fill with the most frequent co-occurring value.
@@ -405,7 +403,7 @@ A shorthand syntax is also available: ~(:complete (vocabulary "~/codes.txt"))~, 
 
 ** Saved views
 
-Views are defined in the ~:views~ property of the schema as a list of plists.  Each view may specify ~:name~, ~:filter~ (with ~:field~, ~:op~, ~:value~), ~:sort~ (list of =(column . direction)= pairs), ~:columns~ (list of visible columns), and ~:default t~ (applied on open).
+Views are defined in the ~:views~ property of the schema as a list of plists.  Each view may specify ~:name~, ~:filter~ (with ~:column~, ~:op~, ~:value~), ~:sort~ (list of =(column . direction)= pairs), ~:columns~ (list of visible columns), and ~:default t~ (applied on open).
 
 ** Highlighting (conditional formatting)
 
@@ -430,13 +428,13 @@ The ~h~ prefix in view mode applies highlight rules to the current table, additi
 | ~h .~     | ~tabularium-view-highlight-save~       | saves one runtime rule into the schema file   |
 | ~h >~     | ~tabularium-view-highlight-save-all~   | saves the whole view's highlight state        |
 
-For quick on-the-fly work, three commands need only a face: ~h h~ tints the marked rows (or the row at point), ~h \~ tints the column under point, and ~h |~ tints columns chosen from the selector.  Each adds a real rule to the list, so it can be removed, reordered, modified, or saved like any other.  ~h a~ is the full dispatcher: it prompts for the rule type and runs the matching command.  As with the filter dispatcher, it can scope a rule — a column rule to particular columns (tinting only those), a row or value rule to particular rows.  The typed rule commands (~h s~, ~h e~, ~h r~, ~h n~, ~h t~, ~h d~) each prompt for the target columns with a comma-separated ~completing-read-multiple~ selector — the ~<<ALL>>~ sentinel, or an empty answer, targets every visible column — and echo the chosen columns back in a ~[...]~ hint.  This is the same field-selection paradigm the filter and mark commands use: pick one column, several, or all.  Each command then prompts for a face, chosen from ~tabularium-highlight-faces~ — a customizable palette whose default entries are grouped ~bg:~, ~fg:~, and ~style:~, with the same ten WCAG-AAA hues offered for both color categories.
+For quick on-the-fly work, three commands need only a face: ~h h~ tints the marked rows (or the row at point), ~h \~ tints the column under point, and ~h |~ tints columns chosen from the selector.  Each adds a real rule to the list, so it can be removed, reordered, modified, or saved like any other.  ~h a~ is the full dispatcher: it prompts for the rule type and runs the matching command.  As with the filter dispatcher, it can scope a rule — a column rule to particular columns (tinting only those), a row or value rule to particular rows.  The typed rule commands (~h s~, ~h e~, ~h r~, ~h n~, ~h t~, ~h d~) each prompt for the target columns with a comma-separated ~completing-read-multiple~ selector — the ~<<ALL>>~ sentinel, or an empty answer, targets every visible column — and echo the chosen columns back in a ~[...]~ hint.  This is the same column-selection paradigm the filter and mark commands use: pick one column, several, or all.  Each command then prompts for a face, chosen from ~tabularium-highlight-faces~ — a customizable palette whose default rows are grouped ~bg:~, ~fg:~, and ~style:~, with the same ten WCAG-AAA hues offered for both color categories.
 
 The ~h n~ numeric command offers only columns where a comparison is meaningful — integer, number, date, time, and datetime.  Because ISO date/time strings order chronologically as text, the same comparison expresses "later than" / "earlier than" for date, time, and datetime columns without a separate command.
 
 All rules are numbered in evaluation order — saved rules first as the stable base, runtime rules layered on top — so the stacking hierarchy is visible.  ~h x~ removes rules: its prompt lists every rule — runtime and saved alike — and offers ~<<ALL>>~ (the default — remove every rule), ~<<UNSAVED>>~ (remove only the session's unsaved rules), and each individual rule.  Removing a saved rule only *hides* it in the current view — the schema is never mutated, so reopening the database brings every saved rule back.  ~h .~ persists one chosen runtime rule, ~h >~ persists the whole view state (runtime rules added, hidden rules dropped), and ~h X~ expunges every saved rule; these three are the only highlight commands that write the schema file.  Adding and removing rules is tracked by undo/redo.
 
-Highlight rules carry the same three scopes.  ~h a~ asks what to highlight — ~row(s)~, ~column(s)~, or ~value(s)~ — before the rule type, so one test can tint a whole row when its field matches (~[health] = Struggling~), a whole column when any of its cells match (~{light}~, optionally judged over chosen rows), or only the cells that matched (~<location> ≈ /Bedroom/~).  Pressing ~RET~ on a rule in either list buffer re-enters that workflow from the top, scope prompt included.
+Highlight rules carry the same three scopes.  ~h a~ asks what to highlight — ~row(s)~, ~column(s)~, or ~value(s)~ — before the rule type, so one test can tint a whole row when its column matches (~[health] = Struggling~), a whole column when any of its cells match (~{light}~, optionally judged over chosen rows), or only the cells that matched (~<location> ≈ /Bedroom/~).  Pressing ~RET~ on a rule in either list buffer re-enters that workflow from the top, scope prompt included.
 
 ~h l~ opens the *Highlight Rules List* buffer, an interactive list of every rule numbered in evaluation order with "Saved?" and "Format" columns — the latter naming the rule's face (~bg: Red~, ~fg: Green~, ~style: Bold~) and rendered in that face, so it is clear at a glance which rule produces which formatting.  The same swatch appears in the rule selectors, such as the one ~h x~ uses.  From it, ~I~ inserts a rule at point and ~A~ adds one at the end, ~m~/~u~/~U~/~t~ mark and unmark rules, ~x~ removes the marked rules (or the one at point), ~RET~ modifies a rule, ~M-p~/~M-n~ move a rule within its group and ~TAB~/~S-TAB~ navigate, ~.~ saves the marked rules, ~>~ saves all, and ~X~ expunges — rule management in one place.  The buffer refreshes automatically as the rules change.
 
@@ -455,15 +453,15 @@ Row rules use ~:test~, a function receiving the row alist:
    :face error))
 #+end_src
 
-Cell rules use ~:field~ to name the target column.  They can match with a ~:test~ function (receiving the cell value and row alist), a ~:value~ literal-equality shorthand, or a ~:builtin~ keyword naming one of the built-in rule types (~compare~, ~duplicates~, ~regexp~, ~all~) — the same types the interactive ~h~ commands generate.  A row-scoped ~:builtin rows~ rule, carrying ~:row-ids~, matches a fixed set of rows by primary key — this is what the quick ~h h~ command produces:
+Cell rules use ~:column~ to name the target column.  They can match with a ~:test~ function (receiving the cell value and row alist), a ~:value~ literal-equality shorthand, or a ~:builtin~ keyword naming one of the built-in rule types (~compare~, ~duplicates~, ~regexp~, ~all~) — the same types the interactive ~h~ commands generate.  A row-scoped ~:builtin rows~ rule, carrying ~:row-ids~, matches a fixed set of rows by primary key — this is what the quick ~h h~ command produces:
 
 #+begin_src elisp
 :highlight
-'((:scope cell :field status :value "Open"    :face success)
-  (:scope cell :field status :value "Closed"  :face shadow)
-  (:scope cell :field amount :builtin compare
+'((:scope cell :column status :value "Open"    :face success)
+  (:scope cell :column status :value "Closed"  :face shadow)
+  (:scope cell :column amount :builtin compare
    :op ">" :operand "10000" :face warning)
-  (:scope cell :field tags :builtin duplicates :face tabularium-highlight-bg-blue))
+  (:scope cell :column tags :builtin duplicates :face tabularium-highlight-bg-blue))
 #+end_src
 
 Cell rules can co-exist with row rules; cell faces are applied to the cell text, while row faces are applied via overlay.  Mark and freeze overlays sit on top of highlighting.
@@ -472,7 +470,7 @@ Cell rules can co-exist with row rules; cell faces are applied to the cell text,
 
 Columns can be added, deleted, or edited interactively from view mode.  These operations update both the SQLite database and the schema file.  The schema file can also be edited directly and reloaded without restarting.
 
-** Computed-field formulas
+** Computed-column formulas
 
 A computed column is written as a formula:
 
@@ -481,9 +479,9 @@ A computed column is written as a formula:
      :computed (tabularium-compute (* qty price)))
 #+end_src
 
-The formula is an ordinary Lisp form.  A symbol in head position names an operator from the table below; any other bare symbol is a column, resolved against the row.  In the field wizard, answering =y= to "Computed?" prompts for the formula and supplies the ~tabularium-compute~ wrapper.
+The formula is an ordinary Lisp form.  A symbol in head position names an operator from the table below; any other bare symbol is a column, resolved against the row.  In the column wizard, answering =y= to "Computed?" prompts for the formula and supplies the ~tabularium-compute~ wrapper.
 
-Two backends, chosen automatically.  When every operator in a formula has a SQL form, the expression goes into the ~SELECT~ and the column filters and sorts in the database like a stored one.  When some operator does not, the column is computed in Emacs after the fetch: it still filters and sorts, but must be visible to do so and is bounded by ~tabularium-post-fetch-row-cap~.  ~M-x tabularium-compute-describe~ reports which a formula uses, and names the operator responsible when it falls back.
+Two backends, chosen automatically.  When every operator in a formula has a SQL form, the expression goes into the ~SELECT~ and the column filters and sorts in the database like a stored one.  When some operator does not, the column is computed in Emacs after the fetch: it still filters and sorts, but must be visible to do so and is bounded by ~tabularium-post-fetch-row-cap~.  ~M-x tabularium-describe-sql~ reports which a formula uses, and names the operator responsible when it falls back.
 
 *** Operators
 
@@ -504,7 +502,7 @@ Three departures from Emacs Lisp, each deliberate.  ~=~ is polymorphic — ~(= s
 
 The aggregates take an equality predicate only, and cover the whole table rather than the current view — a group total that moved as you filtered would be a surprise rather than a total.  Anything more complex is a SQL view.
 
-** Computed-field helpers
+** Computed-column helpers
 
 Every operator also exists as a ~tabularium-fn-*~ function, so the older lambda form can do whatever a formula can:
 
@@ -518,7 +516,7 @@ Each helper is named for its operator, so knowing one is knowing the other.  The
 
 
 
-Fields defined with ~:computed~ derive their value from an SQL expression or an Elisp function evaluated against the row, conceptually similar to formulae in spreadsheet software.  Computed fields are not stored — they are evaluated on read.  Both kinds can be filtered, sorted, and highlighted.  A SQL-expression field is handled by the database, which substitutes the expression into the ~WHERE~ or ~ORDER BY~ clause.  An Elisp field has no SQL form, so its rows are fetched first and the filtering and sorting happen in Emacs; the page limit is therefore applied afterwards and the intermediate fetch is bounded by ~tabularium-post-fetch-row-cap~, which reports an error rather than silently returning a truncated — and so wrong — answer.  Such a column must be visible for this, since its values exist only once computed for display.  An Elisp ~:computed~ expression receives the current row as an alist.  Helpers are grouped into four categories: conditional logic, same-row aggregation, date arithmetic, and cross-row lookup.
+Columns defined with ~:computed~ derive their value from an SQL expression or an Elisp function evaluated against the row, conceptually similar to formulae in spreadsheet software.  Computed columns are not stored — they are evaluated on read.  Both kinds can be filtered, sorted, and highlighted.  A SQL-expression column is handled by the database, which substitutes the expression into the ~WHERE~ or ~ORDER BY~ clause.  An Elisp column has no SQL form, so its rows are fetched first and the filtering and sorting happen in Emacs; the page limit is therefore applied afterwards and the intermediate fetch is bounded by ~tabularium-post-fetch-row-cap~, which reports an error rather than silently returning a truncated — and so wrong — answer.  Such a column must be visible for this, since its values exist only once computed for display.  An Elisp ~:computed~ expression receives the current row as an alist.  Helpers are grouped into four categories: conditional logic, same-row aggregation, date arithmetic, and cross-row lookup.
 
 *** Conditional logic
 
@@ -531,8 +529,8 @@ Fields defined with ~:computed~ derive their value from an SQL expression or an 
 
 | Helper                                                  | Purpose                                                             |
 |---------------------------------------------------------+---------------------------------------------------------------------|
-| ~(tabularium-fn-sum-fields ROW FIELD1 FIELD2 ...)~        | Sum numeric values of named fields in ROW (non-numeric counts as 0) |
-| ~(tabularium-fn-concat-fields ROW SEP FIELD1 FIELD2 ...)~ | Concatenate string values, skipping empty/missing fields            |
+| ~(tabularium-fn-sum-columns ROW FIELD1 FIELD2 ...)~        | Sum numeric values of named columns in ROW (non-numeric counts as 0) |
+| ~(tabularium-fn-concat-columns ROW SEP FIELD1 FIELD2 ...)~ | Concatenate string values, skipping empty/missing columns            |
 
 *** Date, time, and datetime arithmetic
 
@@ -563,7 +561,7 @@ The =fn-*= helpers below cover three logically distinct kinds of value: =date= (
 | ~(tabularium-fn-count-where FIELD VALUE)~                       | Number of rows where FIELD = VALUE                         |
 | ~(tabularium-fn-sum-where SUM-FIELD FILTER-FIELD VALUE)~        | Sum of SUM-FIELD across rows where FILTER-FIELD = VALUE    |
 
-The cross-row helpers query the open database directly.  They are safe to call from inside ~:computed~ lambdas because computed fields are evaluated only when the database is active.  All values are escaped via ~tabularium-db-sql-quote~ before interpolation, so user-supplied strings cannot break the SQL.
+The cross-row helpers query the open database directly.  They are safe to call from inside ~:computed~ lambdas because computed columns are evaluated only when the database is active.  All values are escaped via ~tabularium-db-sql-quote~ before interpolation, so user-supplied strings cannot break the SQL.
 
 * Extending Tabularium
 
@@ -573,40 +571,40 @@ External packages can inject content and behavior into Tabularium through a smal
 
 | Hook                                      | When it fires                                                                                                                                                                                                                                                                                                                                                                      |
 |-------------------------------------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| ~tabularium-entry-pre-render-hook~          | Inside `tabularium-entry-render', before the buffer is laid out.  Use this to set buffer-local variables that the layout pass consults                                                                                                                                                                                                                                             |
+| ~tabularium-entry-pre-render-hook~          | Inside `tabularium-row-render', before the buffer is laid out.  Use this to set buffer-local variables that the layout pass consults                                                                                                                                                                                                                                             |
 | ~tabularium-entry-render-hook~              | At the end of form buffer rendering, after the standard hint lines but before cursor positioning.  Use to inject content such as cross-table data or schema-specific hints                                                                                                                                                                                                         |
 | ~tabularium-entry-new-hook~                 | After a new entry buffer is initialized (~tabularium-entry-editing-id~ is nil) and before the first render.  Use to populate plugin-specific defaults via ~tabularium-entry--values~                                                                                                                                                                                                   |
-| ~tabularium-entry-pre-submit-hook~          | Just before the form is submitted, in both new and edit paths.  Use to update bookkeeping fields (e.g., a date-modified timestamp) before they are written to the database                                                                                                                                                                                                          |
-| ~tabularium-entry-required-field-functions~ | List of predicates called with =(FIELD-NAME VALUES)= during render and submit.  Returning non-nil marks FIELD-NAME as dynamically required for the current entry's state — useful for type-specific required fields that cannot be expressed by a static `:required t'.  Marked fields display `+' (vs `*' for static `:required t'), and submission errors if such a field is empty |
-| ~tabularium-entry-field-changed-functions~  | Abnormal hook called with =(FIELD-NAME OLD-VALUE NEW-VALUE)= after each interactive field change (edit, clear, default, autofill).  Plugins may further mutate ~tabularium-entry--values~ in response (e.g., clearing dependent fields, eagerly computing derived values).  Mutations from this hook will themselves fire the hook, so guard against unbounded recursion                |
+| ~tabularium-entry-pre-submit-hook~          | Just before the form is submitted, in both new and edit paths.  Use to update bookkeeping columns (e.g. a date-modified timestamp) before they are written to the database                                                                                                                                                                                                          |
+| ~tabularium-entry-required-field-functions~ | List of predicates called with =(FIELD-NAME VALUES)= during render and submit.  Returning non-nil marks FIELD-NAME as dynamically required for the current row's state — useful for type-specific required columns that cannot be expressed by a static `:required t'.  Marked columns display `+' (vs `*' for static `:required t'), and submission errors if such a column is empty |
+| ~tabularium-entry-field-changed-functions~  | Abnormal hook called with =(FIELD-NAME OLD-VALUE NEW-VALUE)= after each interactive column change (edit, clear, default, autofill).  Plugins may further mutate ~tabularium-entry--values~ in response (e.g., clearing dependent columns, eagerly computing derived values).  Mutations from this hook will themselves fire the hook, so guard against unbounded recursion                |
 
 ** Header function
 
-A header function returns a string to be inserted between the title bar and the field list — useful for rendering a citation, summary, or other contextual content.  Two ways to install one:
+A header function returns a string to be inserted between the title bar and the column list — useful for rendering a citation, summary, or other contextual content.  Two ways to install one:
 
-- *Schema-level*: set ~:header-function~ in the schema definition.  This is the cleanest path when the header applies to every entry of that schema.
+- *Schema-level*: set ~:header-function~ in the schema definition.  This is the cleanest path when the header applies to every row of that schema.
 - *Buffer-local*: set ~tabularium-entry-header-function~ to a function in a buffer.  When set, this overrides the schema-level value.
 
 In either case the function takes no arguments and should return a string (with optional newlines) or nil for no header.
 
 ** Navigable text property
 
-The ~tabularium-navigable~ text property identifies lines (in addition to schema-field overlays) that should participate in field-by-field navigation.  Plugin-injected lines carrying this property are visited by the same navigation commands that move between schema fields.
+The ~tabularium-navigable~ text property identifies lines (in addition to schema-column overlays) that should participate in column-by-column navigation.  Plugin-injected lines carrying this property are visited by the same navigation commands that move between schema columns.
 
 ** Layout context
 
 During and after the render, plugin code may read these buffer-local variables for context:
 
 - ~tabularium-entry-schema-name~ — name of the schema for the current entry buffer (string)
-- ~tabularium-entry-editing-id~ — ID of the entry being edited, or nil for a new (unsaved) entry
-- ~tabularium-entry-first-field-line~ — line number of the first schema field in the form
+- ~tabularium-entry-editing-id~ — ID of the row being edited, or nil for a new (unsaved) row
+- ~tabularium-entry-first-field-line~ — line number of the first schema column in the form
 - ~tabularium-entry-footer-start~ — buffer position where the footer hint lines begin
 
-Plugins may also mutate ~tabularium-entry--values~ from within the new- and pre-submit-hooks to populate or update field values before render or save.
+Plugins may also mutate ~tabularium-entry--values~ from within the new- and pre-submit-hooks to populate or update column values before render or save.
 
 ** Helper functions
 
-- ~tabularium-entry-all-nav-positions~ returns a sorted list of navigable positions in the form, merging schema-field overlays and plugin-contributed navigable lines
+- ~tabularium-entry-all-nav-positions~ returns a sorted list of navigable positions in the form, merging schema-column overlays and plugin-contributed navigable lines
 - ~tabularium-entry-render~ re-renders the form buffer; plugins should call this after mutating data they have injected via the render hook
 - ~tabularium-entry-edited-p~ returns non-nil if the form has unsaved changes
 
@@ -616,7 +614,7 @@ Plugins may also mutate ~tabularium-entry--values~ from within the new- and pre-
 
 The importer automatically detects header rows, infers data types, sanitizes column names, identifies likely primary keys, and adds historical completion for repeated text values.
 
-There are two import modes.  ~tabularium-import~ always creates a *new* database from the file and registers it.  ~tabularium-import-append~ appends a file's rows to the database that is already open — columns are matched to schema fields by header name, trying field ids first and falling back to human-readable labels only if no id matches (matching is case-insensitive), and the primary-key column is never written, so the database assigns fresh IDs and appended rows cannot collide with existing ones.  In the menus and bare keymap the two live under an =i= prefix (=i i=, =i a=); =<= works as an alternative prefix (=< i=, =< a=).  Import precedes export in every menu.
+There are two import modes.  ~tabularium-import~ always creates a *new* database from the file and registers it.  ~tabularium-import-append~ appends a file's rows to the database that is already open — columns are matched to schema columns by header name, trying column ids first and falling back to human-readable labels only if no id matches (matching is case-insensitive), and the primary-key column is never written, so the database assigns fresh IDs and appended rows cannot collide with existing ones.  In the menus and bare keymap the two live under an =i= prefix (=i i=, =i a=); =<= works as an alternative prefix (=< i=, =< a=).  Import precedes export in every menu.
 
 | Command                              | Description                                      |
 |--------------------------------------+--------------------------------------------------|
@@ -649,23 +647,23 @@ Run ~M-x tabularium-customize~ to browse all settings in the Customize UI.  Sett
 
 | Variable                       | Default     | Description                                 |
 |--------------------------------+-------------+---------------------------------------------|
-| ~tabularium-entry-method~        | ~form~        | Default entry method (~form~ or ~minibuffer~)   |
-| ~tabularium-entry-display~       | ~side~        | Entry form display (~buffer~ or ~side~)         |
-| ~tabularium-long-field-mode~     | ~text-mode~   | Major mode for editing ~:long~ fields         |
-| ~tabularium-long-field-display~  | ~side~        | Long-field window position (~bottom~ or ~side~) |
+| ~tabularium-entry-method~        | ~form~        | Default row method (~form~ or ~minibuffer~)   |
+| ~tabularium-entry-display~       | ~side~        | Row form display (~buffer~ or ~side~)         |
+| ~tabularium-long-column-mode~     | ~text-mode~   | Major mode for editing ~:long~ columns         |
+| ~tabularium-long-column-display~  | ~side~        | Long-column window position (~bottom~ or ~side~) |
 | ~tabularium-export-format~       | ~tsv~         | Default export format (~tsv~ or ~csv~)          |
 | ~tabularium-view-page-size~      | ~500~         | Number of rows displayed per page           |
 | ~tabularium-view-sort-ascending~ | ~nil~         | Default sort direction                      |
-| ~tabularium-date-format~         | ~%Y-%m-%d~              | Format for ~date~ fields and ~today~ defaults     |
-| ~tabularium-time-format~         | ~%H:%M:%S~              | Format for ~time~ fields and ~now~ defaults       |
-| ~tabularium-datetime-format~     | ~%Y-%m-%d %H:%M:%S~     | Format for ~datetime~ fields and ~now~ defaults   |
-| ~tabularium-undo-limit~          | ~100~         | Maximum undo entries per database           |
+| ~tabularium-date-format~         | ~%Y-%m-%d~              | Format for ~date~ columns and ~today~ defaults     |
+| ~tabularium-time-format~         | ~%H:%M:%S~              | Format for ~time~ columns and ~now~ defaults       |
+| ~tabularium-datetime-format~     | ~%Y-%m-%d %H:%M:%S~     | Format for ~datetime~ columns and ~now~ defaults   |
+| ~tabularium-undo-limit~          | ~100~         | Maximum undo rows per database           |
 | ~tabularium-schema-file-suffix~  | ~.schema.el~  | Suffix for schema files                     |
 | ~tabularium-registry-file~       | =(varies)=    | Path to the registry file                   |
-| ~tabularium-registry-max-recent~ | ~100~         | Maximum tracked databases                   |
+| =$=   | ~tabularium-rename-database~          |
 | ~tabularium-auto-reindex~        | ~nil~         | Reindex automatically on delete             |
 | ~tabularium-case-sensitive~      | ~t~           | Case-sensitive marking and replacement      |
-| ~tabularium-entry-show-type-hints~ | ~nil~       | Show an inline field-type marker in forms   |
+| ~tabularium-entry-show-type-hints~ | ~nil~       | Show an inline column-type marker in forms   |
 | ~tabularium-kill-ring-max~       | ~10~          | Maximum batches kept in the kill ring       |
 | ~tabularium-cache-ttl~           | ~300~         | Completion cache lifetime, in seconds       |
 | ~tabularium-registry-auto-register-on-open~ | ~t~ | Register databases automatically on open    |
@@ -675,7 +673,7 @@ Two options change where data lives and are best set before a database is create
 
 | Variable              | Default  | Description                                       |
 |-----------------------+----------+---------------------------------------------------|
-| ~tabularium-schemata~    | ~nil~      | Alist of named schemata, one entry per database    |
+| ~tabularium-schemata~    | ~nil~      | Alist of named schemata, one row per database    |
 | ~tabularium-table-name~ | ~"data"~   | Name of the main table inside each database file  |
 
 ** Database connections
@@ -714,7 +712,7 @@ All faces are grouped under ~tabularium-faces~ and inherit from sensible default
 | ~tabularium-frozen-row-face~          | (theme-aware)        | Frozen rows and their leading ~∙~ indicator          |
 | ~tabularium-sort-indicator-face~      | ~font-lock-keyword-face~ | ~↑~/~↓~ arrows on actively-sorted column headers   |
 | ~tabularium-query-replace-face~       | ~isearch~              | Matches during query-replace                       |
-| ~tabularium-entry-current-field~      | (theme-aware)        | Highlighted field in entry mode                    |
+| ~tabularium-entry-current-field~      | (theme-aware)        | Highlighted column in entry mode                    |
 | ~tabularium-modeline-database~        | ~font-lock-constant-face~ | Database name in the modeline                   |
 | ~tabularium-modeline-schema~          | ~font-lock-type-face~  | Schema name in the modeline                        |
 | ~tabularium-modeline-icon-face~       | ~font-lock-keyword-face~ | Modeline icon                                    |
@@ -740,7 +738,7 @@ The full key table mirrors the main menu layout:
 | =r=   | ~tabularium-registry~                 |
 | =$=   | ~tabularium-rename-database~          |
 | =R=   | ~tabularium-register-database~        |
-| =N=   | ~tabularium-new-entry~                |
+| =N=   | ~tabularium-new-row~                |
 | =P=   | ~tabularium-prompt-entry~             |
 | =Q=   | ~tabularium-quick-entry~              |
 | =v=   | ~tabularium-view~                     |
@@ -762,16 +760,15 @@ The full key table mirrors the main menu layout:
 | =. v= | ~tabularium-schema-view~              |
 | =. == | ~tabularium-schema-reload~            |
 | =. w= | ~tabularium-schema-switch~            |
-| =. $= | ~tabularium-schema-rename-field~      |
+| =. $= | ~tabularium-schema-rename-column~      |
 | =. += | ~tabularium-view-column-add~          |
-| =# c= | ~tabularium-aggregate-count~          |
 | =# s= | ~tabularium-aggregate-sum~            |
 | =# m= | ~tabularium-aggregate-min-max~        |
 | =# d= | ~tabularium-aggregate-mean-sd~        |
 | =# i= | ~tabularium-aggregate-median-iqr~     |
-| =# #= | ~tabularium-aggregate-field-summary~ |
+| =# #= | ~tabularium-aggregate-column-summary~ |
 
-The =C=, =.=, and =#= entries are themselves prefix keymaps (~tabularium-create-command-map~, ~tabularium-schema-command-map~, and ~tabularium-aggregate-command-map~) and may be bound directly to a key if preferred.
+The =C=, =.=, and =#= rows are themselves prefix keymaps (~tabularium-create-command-map~, ~tabularium-schema-command-map~, and ~tabularium-aggregate-command-map~) and may be bound directly to a key if preferred.
 
 This map is independent of the menu system; users who prefer ~tabularium-menu~ can ignore it, and users who prefer a flat keymap need not load ~tabularium-menu~ at all.
 
@@ -801,7 +798,7 @@ TSV export provides human-readable diffs suitable for version control.
 
 ** Debugging
 
-~tabularium-completion-debug~ inspects the completion configuration and current candidates for any field.  ~tabularium-undo-history~ displays the recorded undo and redo stacks for the current database.  ~tabularium-completion-clear-cache~ forces a reload of vocabulary files on the next completion request.  Setting ~tabularium-debug~ to a non-nil value enables verbose diagnostic messages during completion and autofill operations.
+~tabularium-completion-debug~ inspects the completion configuration and current candidates for any column.  ~tabularium-undo-history~ displays the recorded undo and redo stacks for the current database.  ~tabularium-completion-clear-cache~ forces a reload of vocabulary files on the next completion request.  Setting ~tabularium-debug~ to a non-nil value enables verbose diagnostic messages during completion and autofill operations.
 
 * Contributing
 

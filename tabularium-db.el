@@ -1,10 +1,10 @@
-;;; tabularium-db.el --- Database backend layer -*- lexical-binding: t; -*-
+;;; tabularium-db.el --- Database backend abstraction for Tabularium -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2026 Paul H. McClelland
 
 ;; Author: Paul H. McClelland <paulhmcclelland@protonmail.com>
 ;; Maintainer: Paul H. McClelland <paulhmcclelland@protonmail.com>
-;; Version: 0.5.4
+;; Version: 0.6.0
 ;; Package-Requires: ((emacs "29.1"))
 ;; Keywords: data
 ;; URL: https://codeberg.org/phmcc/tabularium
@@ -87,7 +87,7 @@
 (cl-defgeneric tabularium-db-identifier (backend)
   "Return a unique identifier string for BACKEND's connection.")
 
-(cl-defgeneric tabularium-db-sql-type (backend field-type)
+(cl-defgeneric tabularium-db-sql-type (backend column-type)
   "Convert Tabularium FIELD-TYPE symbol to a SQL type string for BACKEND.")
 
 (cl-defgeneric tabularium-db-date-function (backend)
@@ -122,7 +122,7 @@ which case statements simply auto-commit as before.")
 ;; Transactions are a no-op by default, so a backend that has not
 ;; implemented them keeps its previous statement-at-a-time
 ;; auto-commit behavior with no change in semantics.  Backends that
-;; support transactions (e.g., SQLite) override the three methods
+;; support transactions (e.g. SQLite) override the three methods
 ;; below; `tabularium-db-with-transaction' then batches the writes.
 (cl-defmethod tabularium-db-begin-transaction ((_backend tabularium-db-backend))
   "Default: no transaction support, so do nothing."
@@ -187,6 +187,47 @@ Merges write-ahead log into the main file for clean syncing."
    (file :initarg :file :initform nil :type (or null string)))
   "SQLite backend using Emacs 29+ built-in sqlite.el.")
 
+(defcustom tabularium-db-foreign-keys t
+  "Whether to enforce foreign key constraints.
+On SQLite this issues `PRAGMA foreign_keys = ON\=' at connection time.
+The pragma is per-connection and is not stored in the database file,
+so every REFERENCES clause and every ON DELETE action is inert until
+it is issued -- which is why this defaults on.
+
+PostgreSQL enforces constraints unconditionally and ignores this."
+  :type 'boolean
+  :group 'tabularium-database)
+
+(cl-defgeneric tabularium-db-fk-enable (backend conn)
+  "Enable foreign key enforcement for CONN on BACKEND.
+Called once at connect time, before any transaction: the pragma is a
+no-op inside one."
+  (ignore backend conn))
+
+(cl-defmethod tabularium-db-fk-enable ((_backend tabularium-db-sqlite) conn)
+  "Issue the SQLite foreign-key pragma on CONN."
+  (when tabularium-db-foreign-keys
+    (ignore-errors (sqlite-execute conn "PRAGMA foreign_keys = ON"))))
+
+(cl-defgeneric tabularium-db-relation-writable-p (backend conn name)
+  "Return non-nil when NAME is a relation on CONN that can be written to.
+A schema may name a view, which reads like a table and refuses every
+insert -- so the commands that write are disabled rather than left to
+fail at the backend."
+  (ignore backend conn name)
+  t)
+
+(cl-defmethod tabularium-db-relation-writable-p ((_backend tabularium-db-sqlite) conn name)
+  "Return non-nil when NAME is a table rather than a view on CONN."
+  (let ((type (ignore-errors
+                (caar (sqlite-select
+                       conn "SELECT type FROM sqlite_master WHERE name = ?"
+                       (list name))))))
+    ;; Unknown relations are treated as writable: the table may not have
+    ;; been created yet, and refusing to write to it would prevent it
+    ;; ever being created.
+    (or (null type) (equal type "table"))))
+
 (cl-defmethod tabularium-db-connect ((backend tabularium-db-sqlite) config)
   "Connect BACKEND to the SQLite database specified by :file in CONFIG."
   (unless (and (fboundp 'sqlite-available-p) (sqlite-available-p))
@@ -203,6 +244,7 @@ Merges write-ahead log into the main file for clean syncing."
       (when tabularium-db-sqlite-wal-mode
         (sqlite-execute conn "PRAGMA journal_mode=WAL"))
       (sqlite-execute conn "PRAGMA busy_timeout=5000")
+      (tabularium-db-fk-enable backend conn)
       backend)))
 
 (cl-defmethod tabularium-db-disconnect ((backend tabularium-db-sqlite))
@@ -252,8 +294,22 @@ Merges write-ahead log into the main file for clean syncing."
                   :type (nth 2 row)
                   :notnull (= (nth 3 row) 1)
                   :default (nth 4 row)
-                  :primary-key (= (nth 5 row) 1)))
+                  :pk-key (= (nth 5 row) 1)))
           (tabularium-db-query backend (format "PRAGMA table_info(%s)" table-name))))
+
+(defun tabularium-db--references-clause (ref)
+  "Render REF, a (:table :column :on-delete) plist, as SQL.
+`no-action\=' emits no ON DELETE clause at all, which is what SQLite
+does by default -- naming it would be the same behavior spelled out,
+and the shorter DDL is easier to read against `.schema\=' output."
+  (let ((action (plist-get ref :on-delete)))
+    (concat (format " REFERENCES %s(%s)"
+                    (plist-get ref :table) (plist-get ref :column))
+            (pcase action
+              ('cascade " ON DELETE CASCADE")
+              ('set-null " ON DELETE SET NULL")
+              ('restrict " ON DELETE RESTRICT")
+              (_ "")))))
 
 (cl-defmethod tabularium-db-create-table ((backend tabularium-db-sqlite) table-name columns)
   "Create TABLE-NAME on BACKEND with COLUMNS."
@@ -261,11 +317,14 @@ Merges write-ahead log into the main file for clean syncing."
           (mapcar (lambda (col)
                     (let ((name (symbol-name (plist-get col :id)))
                           (type (plist-get col :sql-type))
-                          (primary (plist-get col :primary))
-                          (check (plist-get col :check)))
+                          (primary (plist-get col :pk))
+                          (check (plist-get col :check))
+                          (ref (plist-get col :references)))
                       (concat name " " type
                               (when primary " PRIMARY KEY")
-                              (when check (format " CHECK (%s)" check)))))
+                              (when check (format " CHECK (%s)" check))
+                              (when ref
+                                (tabularium-db--references-clause ref)))))
                   columns))
          (sql (format "CREATE TABLE IF NOT EXISTS %s (%s)"
                       table-name (string-join col-defs ", "))))
@@ -280,13 +339,13 @@ Merges write-ahead log into the main file for clean syncing."
 
 (cl-defmethod tabularium-db-insert ((backend tabularium-db-sqlite) table-name alist)
   "Insert a row into TABLE-NAME on BACKEND from ALIST."
-  (let* ((fields (mapcar #'car alist))
+  (let* ((columns (mapcar #'car alist))
          (values (mapcar #'cdr alist))
-         (placeholders (mapconcat (lambda (_) "?") fields ", "))
-         (field-names (mapconcat #'symbol-name fields ", ")))
+         (placeholders (mapconcat (lambda (_) "?") columns ", "))
+         (column-names (mapconcat #'symbol-name columns ", ")))
     (sqlite-execute (oref backend connection)
                     (format "INSERT INTO %s (%s) VALUES (%s)"
-                            table-name field-names placeholders)
+                            table-name column-names placeholders)
                     values)))
 
 (cl-defmethod tabularium-db-update ((backend tabularium-db-sqlite) table-name alist where-column where-value)
@@ -315,10 +374,10 @@ Merges write-ahead log into the main file for clean syncing."
   "Return BACKEND's database file path as its identifier."
   (oref backend file))
 
-(cl-defmethod tabularium-db-sql-type ((_backend tabularium-db-sqlite) field-type)
+(cl-defmethod tabularium-db-sql-type ((_backend tabularium-db-sqlite) column-type)
   "Convert FIELD-TYPE to SQLite type.
 Dates, times, and datetimes are stored as TEXT in ISO 8601 form."
-  (pcase field-type
+  (pcase column-type
     ('integer "INTEGER") ('number "REAL") (_ "TEXT")))
 
 (cl-defmethod tabularium-db-date-function ((_backend tabularium-db-sqlite))
@@ -359,50 +418,116 @@ Dates, times, and datetimes are stored as TEXT in ISO 8601 form."
 ;;; * 5 Connection Manager
 
 (defvar tabularium-db--connections (make-hash-table :test 'equal)
-  "Active backend objects keyed by schema name.")
+  "Active backend objects keyed by database file.
+See `tabularium-db--connection-key\='.  Keyed by file rather than by
+schema name so that several schemata naming one file share a handle:
+two handles on one file would mean two `PRAGMA foreign_keys\=' states,
+and a checkpoint that closed one and left the other live.")
 
 (defvar tabularium-db--hooks-registered nil
   "Whether cleanup hooks have been registered.")
 
+(defvar tabularium-db--refcounts (make-hash-table :test 'equal)
+  "How many schemata currently hold each connection, keyed as its cache key.
+One database file may back several schemata, each naming its own
+table, and they share a handle -- so a handle is closed when the last
+of them lets go, not the first.")
+
+(defvar tabularium-db--key-holders (make-hash-table :test 'equal)
+  "Cache keys currently held, keyed by schema name.
+Recorded so a schema can release what it took without recomputing the
+key from a configuration that may since have changed.")
+
+(defun tabularium-db--connection-key (config)
+  "Return the cache key for CONFIG.
+Keyed by the database file rather than by the schema name, so two
+schemata naming one file share one connection.  `file-truename\='
+collapses symlinks and `~\=', so the same file reached by two paths is
+still one connection -- which matters because two handles mean two
+`PRAGMA foreign_keys\=' states, and enforcement would then depend on
+which schema was opened first.
+
+A server backend has no file; its host, port, and database name serve
+the same purpose."
+  (let ((file (plist-get config :file)))
+    (if file
+        (file-truename (expand-file-name file))
+      (format "%s:%s:%s:%s"
+              (or (plist-get config :backend) 'sqlite)
+              (or (plist-get config :host) "")
+              (or (plist-get config :port) "")
+              (or (plist-get config :database) "")))))
+
 (defun tabularium-db-get-connection (schema-name config)
-  "Get or create backend for SCHEMA-NAME using CONFIG plist."
+  "Get or create a backend for SCHEMA-NAME using CONFIG plist.
+Connections are shared by file, and refcounted so that closing one
+schema does not disconnect another still using the same one."
   (let* ((backend-type (or (plist-get config :backend) 'sqlite))
-         (cached (gethash schema-name tabularium-db--connections)))
-    (if (and cached (tabularium-db-connected-p cached))
-        cached
-      (when cached
-        (ignore-errors (tabularium-db-disconnect cached)))
-      (let ((backend (tabularium-db-create-backend backend-type)))
-        (tabularium-db-connect backend config)
-        (puthash schema-name backend tabularium-db--connections)
-        (unless tabularium-db--hooks-registered
-          (add-hook 'suspend-hook #'tabularium-db--suspend-hook)
-          (add-hook 'kill-emacs-hook #'tabularium-db--kill-hook)
-          (setq tabularium-db--hooks-registered t))
-        backend))))
+         (key (tabularium-db--connection-key config))
+         (previous (gethash schema-name tabularium-db--key-holders))
+         (cached (gethash key tabularium-db--connections)))
+    ;; A schema that has moved to a different file releases the old one.
+    (when (and previous (not (equal previous key)))
+      (tabularium-db--release previous))
+    (unless (and cached (tabularium-db-connected-p cached))
+      (when cached (ignore-errors (tabularium-db-disconnect cached)))
+      (setq cached (tabularium-db-create-backend backend-type))
+      (tabularium-db-connect cached config)
+      (puthash key cached tabularium-db--connections)
+      (puthash key 0 tabularium-db--refcounts)
+      (unless tabularium-db--hooks-registered
+        (add-hook 'suspend-hook #'tabularium-db--suspend-hook)
+        (add-hook 'kill-emacs-hook #'tabularium-db--kill-hook)
+        (setq tabularium-db--hooks-registered t)))
+    ;; Count this schema as a holder, once.
+    (unless (equal previous key)
+      (puthash key (1+ (gethash key tabularium-db--refcounts 0))
+               tabularium-db--refcounts)
+      (puthash schema-name key tabularium-db--key-holders))
+    cached))
+
+(defun tabularium-db--release (key)
+  "Drop one hold on KEY, disconnecting when the last one goes."
+  (let ((n (1- (gethash key tabularium-db--refcounts 1))))
+    (if (> n 0)
+        (puthash key n tabularium-db--refcounts)
+      (when-let ((backend (gethash key tabularium-db--connections)))
+        (ignore-errors (tabularium-db-disconnect backend)))
+      (remhash key tabularium-db--connections)
+      (remhash key tabularium-db--refcounts))))
 
 (defun tabularium-db-close-connection (schema-name)
-  "Close connection for SCHEMA-NAME."
-  (when-let ((backend (gethash schema-name tabularium-db--connections)))
-    (ignore-errors (tabularium-db-disconnect backend))
-    (remhash schema-name tabularium-db--connections)))
+  "Release SCHEMA-NAME\='s hold on its connection.
+The connection itself closes only when no other schema is using it,
+so closing one table of a multi-table file leaves the others live."
+  (when-let ((key (gethash schema-name tabularium-db--key-holders)))
+    (remhash schema-name tabularium-db--key-holders)
+    (tabularium-db--release key)))
 
 (defun tabularium-db-close-all-connections ()
   "Close all active database connections."
-  (maphash (lambda (_name backend)
+  (maphash (lambda (_key backend)
              (ignore-errors (tabularium-db-disconnect backend)))
            tabularium-db--connections)
-  (clrhash tabularium-db--connections))
+  (clrhash tabularium-db--connections)
+  (clrhash tabularium-db--refcounts)
+  (clrhash tabularium-db--key-holders))
 
 ;;; * 6 SQL Helpers
 
+(defun tabularium-db-like-escape-clause (case-sensitive)
+  "Return the ESCAPE clause to follow a pattern, or the empty string.
+LIKE relies on the backslashes `tabularium-db-like-pattern\=' inserts,
+and they are meaningless without this clause.  GLOB escapes its
+wildcards inline with bracket expressions, so it needs none."
+  (if case-sensitive "" " ESCAPE '\\'"))
+
 (defun tabularium-db-build-like-clause (column pattern &optional case-sensitive)
   "Build a substring match clause for COLUMN matching PATTERN.
-PATTERN is a literal substring: single quotes are doubled and the
-operator's own wildcards are escaped, so a search for a literal % or _
-matches that character instead of acting as a wildcard.  When
-CASE-SENSITIVE is non-nil, uses GLOB; otherwise LIKE plus its ESCAPE
-clause."
+PATTERN is a literal substring: single quotes are doubled and wildcards
+are escaped, so a search for a wildcard finds that character rather
+than matching everything.  When CASE-SENSITIVE is non-nil, uses GLOB;
+otherwise LIKE, which then carries an ESCAPE clause."
   (let* ((col (if (symbolp column) (symbol-name column) column))
          (op (tabularium-db-like-op case-sensitive))
          (wrapped (tabularium-db-like-pattern (format "%s" pattern) case-sensitive))
@@ -453,17 +578,13 @@ Otherwise returns LIKE (case-insensitive)."
 
 (defun tabularium-db-like-pattern (value case-sensitive)
   "Wrap VALUE in a wildcard pattern for the current match operator.
-VALUE is a literal substring, so its own wildcard characters are
-escaped to match themselves.  GLOB escapes [ ] * ? inline by wrapping
-each in a bracket expression.  LIKE has no bracket syntax, so % and _
-\(and the escape character itself) are prefixed with a backslash; a
-caller building LIKE SQL must therefore also emit
-`tabularium-db-like-escape-clause', or the backslashes are matched
-literally instead of read as escapes.
+When CASE-SENSITIVE is non-nil, uses *value* for GLOB; otherwise
+%value% for LIKE.
 
-Commands that deliberately expose SQL wildcards to the user — the
-`*-pattern' family — pass their pattern through untouched rather than
-calling this function."
+Wildcards inside VALUE are escaped either way, so the pattern matches
+the character the user typed rather than treating it as a wildcard.
+The two operators escape differently: GLOB inline with brackets, LIKE
+with a backslash that `tabularium-db-like-escape-clause\=' declares."
   (if case-sensitive
       ;; GLOB: escape [ ] * ? by wrapping each in [c]
       (let ((escaped (replace-regexp-in-string
@@ -471,28 +592,14 @@ calling this function."
                       (lambda (m) (format "[%s]" m))
                       value t t)))
         (format "*%s*" escaped))
-    ;; LIKE: escape the backslash first (it is the escape character),
-    ;; then the two wildcards.  One pass over a character alternative
-    ;; does all three without re-escaping what it just inserted.
+    ;; LIKE: escape the wildcards with a backslash, and the backslash
+    ;; itself first so a search term containing one still matches it.
+    ;; Left live, a search for "50%" returned everything beginning "50".
     (let ((escaped (replace-regexp-in-string
-                    "[\\%_]"
+                    "[\\\\%_]"
                     (lambda (m) (concat "\\" m))
                     value t t)))
       (format "%%%s%%" escaped))))
-
-(defun tabularium-db-like-escape-clause (case-sensitive)
-  "Return the SQL ESCAPE clause pairing with `tabularium-db-like-pattern'.
-GLOB escapes wildcards inline and needs no clause, so this returns the
-empty string when CASE-SENSITIVE is non-nil.  LIKE needs the clause so
-the backslashes inserted by `tabularium-db-like-pattern' are read as
-escapes rather than matched literally, giving SQL of the shape
-
-  col LIKE ? ESCAPE BACKSLASH
-
-The clause belongs after the operand, not after the operator, so it is
-appended to the end of the comparison rather than folded into
-`tabularium-db-like-op'."
-  (if case-sensitive "" " ESCAPE '\\'"))
 
 (defun tabularium-db-update-schema-file-path (schema-file new-db-path)
   "Update the :file path in SCHEMA-FILE to NEW-DB-PATH.

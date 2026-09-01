@@ -4,12 +4,48 @@
 
 All notable changes to ~tabularium~ are documented in this file.
 
-* Unreleased (v0.5.4)
+* v0.6.0 (2026-08-31)
+
+** Added
+
+- A database file may hold several tables.  A schema names its relation with =:table=, connections are keyed by file and refcounted, and =PRAGMA foreign_keys= is set at connect.  The registry lists one row per database rather than one per table, with its own display name
+- =:fk= declares a foreign key, emitted as =REFERENCES= at =CREATE TABLE=.  Deletion follows the declared referential action — =restrict= refuses and names the table holding the children, =cascade= says how many will go and snapshots them so undo restores the lot
+- The =t= prefix moves between tables: =t t= switches, =t n= and =t p= step, =t l= lists them with their links, =t `= reorders, =t '= follows the key at point into the next table, =t ?= checks referential integrity, and =t == reports tables with no schema and schemata with no table
+- =l= opens the child rows of the row at point, filtered to it; =L= returns to the row you left.  The rule is marked =← PARENT= in the rules list and removable like any other; =C-c l= clears it outright
+- Formulas reach across tables: =(parent COLUMN)= and =(children TABLE)= are rewritten into the lookups the =:fk= already describes, and =(lookup-in TABLE KEY VALUE RESULT)= names a table explicitly — XLOOKUP with the sheet given, where =lookup= searches only its own
+- A schema may name a view.  Views and tables marked =:read-only= refuse every writing command with a message rather than a SQLite error; =v R= toggles the property and the mode line reads =Tabularium[RO]=
+- One import command on =i i=, asking where the data is going and then what is arriving.  =i N= and =i A= answer the first question in the key; =i a= appends to the open table
+- A data import offers five ways to settle the schema — Auto-generate, Locate, Wizard, Shorthand, Manual — and a schema import offers to fill the tables it declared.  Two halves of one feature, asked from whichever end you arrived at
+- Shorthand covers what the wizard covers, one line per table: =pk=, =req=, =long=, =hist=, =lab==, =w==, =d==, =c==, and a pipe-separated choice list.  Pre-filled from what was read, so the common case is reading it and pressing RET
+- Manual opens the schema in a draft buffer beside the table, org-capture style: =C-c C-c= saves, =C-c C-k= or =C-c q= abandons, and nothing reaches the file until it parses
+- =e T= exports several tables at once, one file per table; =e t= exports one without switching to it
+- =t $= names a table, =. $= a database, =t k= sets the column a database links on, and =t S= shows the SQL a formula compiles to
+
+** Changed
+
+- The package uses SQL's vocabulary throughout: a table has *rows* and *columns*, identified by a *primary key* and referring to others by a *foreign key*.  =:fields= is now =:columns=, =:primary= is =:pk=, and =:foreign-key= is =:fk=; a schema written before 0.6.0 still loads and migrates itself the first time it is saved
+- A schema has an internal key and a name.  The key is unique across the package, because that is what the schema list is keyed by; the name is unique within one database, which is the scope anyone thinks in
+- Importing into the open database *adds* to its schema file rather than regenerating it, so computed columns, links, and hand-written labels survive
+- Prompts that offer actions are capitalized single words; prompts that offer values stay lowercase.  Plurals read "1 table" rather than "1 table(s)", and tables are *deleted*, not dropped
+- One quoting convention: `like this' is written everywhere and rendered everywhere.  Messages and =y-or-n-p= already passed through ~substitute-command-keys~; minibuffer readers do not, so they go through ~tabularium--prompt~ and come out with the same curly quotes instead of a literal backtick
+- ~tabularium-compute-describe~ is ~tabularium-describe-sql~, named for the answer: the question is whether a column will be SQL-backed, which decides whether it sorts and filters
+- Duplicates suffix =_2= upward throughout — tables, columns, databases, and schema names.  The package used four conventions, so =foo_copy_copy= was a real outcome
+
+** Fixed
+
+- Every cross-table computed column rendered as =<<ERROR>>= while compiling to correct SQL.  The guard that keeps one bad column from failing the whole query knew only the open table, so it read the other table's name and columns as unknown ones
+- Saving a schema rewrote its file with a single definition, deleting every other table declared there — silently, since the tables stayed in the database with nothing naming them
+- Opening a database could open a different one: the loader returned the head of the schema list, which meant "most recently added" only while schemata were pushed rather than appended
+- Overwriting a database only asked; the file stayed with every table it held, so the import appended to rows that were already there
+- A database label was lost on restart, so a multi-table database went back to being called after whichever of its tables came first
+- Two docstrings ended early on unescaped quotes, which stopped the test suite loading and broke every cross-table column
+
+* 0.5.4 (2026-08-19)
 
 ** Added
 
 - Column formulas: ~tabularium-compute~ writes a computed column as an ordinary Lisp form, compiling to SQL where it can and to the existing post-fetch path where it cannot
-- The field wizard asks for a formula directly: answering =y= to "Computed?" prompts for it, checks it against the operator table, and writes the complete =:computed (tabularium-compute ...)= into the schema file.  It used to leave a commented stub to fill in by hand
+- The column wizard asks for a formula directly: answering =y= to "Computed?" prompts for it, checks it against the operator table, and writes the complete =:computed (tabularium-compute ...)= into the schema file.  It used to leave a commented stub to fill in by hand
 - =org= joins TSV and CSV as an export format, written pre-aligned and with pipes escaped as =\vert{}=
 - =e c= copies the current view to the clipboard rather than a file, in any of the three formats.  With rows marked it copies those; with a prefix argument, every visible row
 
@@ -31,20 +67,15 @@ All notable changes to ~tabularium~ are documented in this file.
 - Registry rows with a long path and a =(missing)= tag ran past the frame
 - Almost every computed column rendered as =<<ERROR>>=.  The guard that catches a formula naming a deleted column scanned *inside* string literals, so =bulk= in ~THEN 'bulk'~ read as an unknown column — and with it every formula producing text, every date function, and every aggregate.  It now reads only the parts outside string literals, and knows its own generated identifiers
 - A compiled formula was parenthesized twice: =((qty * price)) AS total=
-- A formula written in a schema file was never compiled.  `tabularium-define-schema' is a function, so its fields arrive quoted and the `tabularium-compute' macro inside them never runs — the literal form reached the query, which emitted =NULL= for the column.  Formulas are now compiled where they are read, so the quoted and expanded spellings behave alike
+- A formula written in a schema file was never compiled.  `tabularium-define-schema' is a function, so its columns arrive quoted and the `tabularium-compute' macro inside them never runs — the literal form reached the query, which emitted =NULL= for the column.  Formulas are now compiled where they are read, so the quoted and expanded spellings behave alike
 - A computed column added through the wizard also had a real column added to the table, and that column of nulls shadowed the formula
-- Rewriting a schema after an edit printed each field on one line, so a formula added through the wizard came out unreadable.  Both writers now render fields the same way, with `:computed' last and on its own line
+- Rewriting a schema after an edit printed each column on one line, so a formula added through the wizard came out unreadable.  Both writers now render columns the same way, with `:computed' last and on its own line
 - Importing an org file with several tables took the first one in silence when reached through =i i=; both entry points now offer the choice, and both reach unnamed tables
 - Importing a table into an existing database could query the previous schema's columns against the new table.  View buffers are keyed by schema name, so a reused buffer kept a stale buffer-local name that outranked the global one
 - Org cells arrived carrying the buffer's text properties, so a heading's =%= was consumed when used as a format string and =% Change= rendered as =Change=
 - Declining a registry confirmation cleared the marks anyway
 
 * 0.5.3 (2026-08-09)
-
-A hardening release: a full manual pass over every feature, with the
-defects it turned up fixed and the test suite grown from 277 to 488.
-No new subsystems.  Several interfaces changed name or key, which is
-free to do before the first public release and expensive afterwards.
 
 ** Fixed
 
@@ -81,7 +112,7 @@ free to do before the first public release and expensive afterwards.
 - The filter and highlight dispatchers ask rule type and operand first, then target and scope, matching the direct commands
 - Frozen rows are isolated from the view's filter, sort, and row limit, and are listed in freeze order
 - Column show/hide, column reordering, freezing, and appending a file are all undoable
-- New commands: =v= toggles a field summary between the common values and the whole list; =| $= / =. $= rename a field and =| l= / =. l= relabel one; =v X= expunges a saved view; =!= relocates a moved database
+- New commands: =v= toggles a column summary between the common values and the whole list; =| $= / =. $= rename a column and =| l= / =. l= relabel one; =v X= expunges a saved view; =!= relocates a moved database
 - =$= renames and =l= relabels under either prefix; =a= opens the action menu in a view and =A= in the registry, where =x= now closes
 - Docstrings name commands rather than keys, so the reference stays correct for readers who bind their own
 - The Emacs spelling =regexp= replaces =regex= throughout, including the schema property =:regex= → =:regexp=
@@ -95,7 +126,7 @@ free to do before the first public release and expensive afterwards.
 - Rules carry a scope — rows, whole columns, or individual values — adding column filters (=f |=) and row- and column-scoped highlights to the existing cell rules
 - The =f a= and =h a= dispatchers prompt for a row restriction and, for column rules, a column restriction (=<<ALL>>=, =<<RANGE>>=, or the marked rows); the direct keys stay restriction-free for speed
 - Filter and sort changes are undoable
-- Columns are added, inserted, and edited through the schema wizard's full field-definition prompts, and can be pasted from the kill ring (=| V= / =| A=)
+- Columns are added, inserted, and edited through the schema wizard's full column-definition prompts, and can be pasted from the kill ring (=| V= / =| A=)
 
 ** Changed
 
@@ -104,7 +135,7 @@ free to do before the first public release and expensive afterwards.
 - Highlight faces each set a single attribute under one naming convention, so stacked rules compose instead of the newest overriding the rest
 - A keybinding-consistency pass moves several commands: duplicate to =+=, schema-save to =.=, database registration to =R=, and the shared rule-type letters (=s=, =e=, =r=, =n=, =t=)
 - Column and rule commands default to the item at point, and the =f a= / =h a= target prompt defaults to the common case — =row(s)= for a filter, =value(s)= for a highlight
-- Saved views record and re-pin frozen rows
+- Saved views row and re-pin frozen rows
 
 ** Fixed
 
@@ -167,10 +198,10 @@ free to do before the first public release and expensive afterwards.
 ** Added
 
 - Highlighting (conditional formatting): a schema-level ~:highlight~ property and an interactive =h=-prefix command set that color rows and cells in view mode.  Rules are plists (~:scope~ ~row~/~cell~, a ~:face~, and a ~:test~ lambda, ~:value~ literal, or pure-data ~:builtin~ keyword); the three built-in cell types — ~compare~, ~duplicates~, ~regexp~ — round-trip through the schema file.  =h h= quick-highlights the marked rows, =h n= numeric/comparison, =h d= duplicates, =h r= regexp, =h a= the full new-rule dispatcher, =h l= an interactive Highlight Rules List buffer, =h x= remove, =h X= expunge, =h s= / =h S= save one/all.  Matching rules stack — background, foreground, and style faces compose — from the customizable ~tabularium-highlight-faces~ palette (ten WCAG-AAA hues × bg/fg, plus styles).  Add/remove is on the undo ring
-- New ~time~ and ~datetime~ field types (=HH:MM[:SS]= and ISO 8601 timestamps), with ~:default now~ resolving per type via ~tabularium-time-format~ / ~tabularium-date-format~ / ~tabularium-datetime-format~
+- New ~time~ and ~datetime~ column types (=HH:MM[:SS]= and ISO 8601 timestamps), with ~:default now~ resolving per type via ~tabularium-time-format~ / ~tabularium-date-format~ / ~tabularium-datetime-format~
 - Date/time arithmetic helpers for ~:computed~ lambdas, all nil-safe: ~tabularium-fn-time-now~, ~-datetime-now~, ~-time-add~, ~-time-diff~, ~-datetime-add~, ~-datetime-diff~, ~-datetime-date~, ~-datetime-time~, ~-datetime-combine~, ~-duration-format~
-- Field-level validation properties: ~:pattern~ (case-sensitive regexp), ~:pattern-help~, and ~:validate~ (predicate).  Validation runs type → pattern → custom on every prompted edit; the first failure shows inline and re-prompts with the rejected value
-- Three new database-creation paths alongside the wizard, under a =C= sub-menu and as ~tabularium-create-database-quick~ (one-line =id:type:flag= spec), ~-from-header~ (pasted header row), and ~-from-schema-file~ (a "Save As" mirroring an existing schema's fields, views, highlights, and backend)
+- Column-level validation properties: ~:pattern~ (case-sensitive regexp), ~:pattern-help~, and ~:validate~ (predicate).  Validation runs type → pattern → custom on every prompted edit; the first failure shows inline and re-prompts with the rejected value
+- Three new database-creation paths alongside the wizard, under a =C= sub-menu and as ~tabularium-create-database-quick~ (one-line =id:type:flag= spec), ~-from-header~ (pasted header row), and ~-from-schema-file~ (a "Save As" mirroring an existing schema's columns, views, highlights, and backend)
 - Registry-mode marking with marked-or-at-point operations: =m= / =u= / =U= / =t= mark, and =$= rename, =d= duplicate, =D= delete, =X= expunge, =e= export, =i= import act on the marked set or the database at point
 - Field-type hints in entry prompts and (optionally, via ~tabularium-entry-show-type-hints~) in the form buffer
 - Registry =/= opens the database's directory in Dired
@@ -178,12 +209,12 @@ free to do before the first public release and expensive afterwards.
 ** Changed
 
 - Export is a four-way =e= prefix: =e e= ~tabularium-export~ (marked rows or whole table), =e a= ~-export-all~ (whole table), =e v= ~-export-visible~ (the on-screen view), =e r= ~-export-range~ (an explicit =3-7,12= ID spec and a column selection).  All four resolve computed columns and honor the TSV/CSV choice; =e e= now prompts for columns
-- Import is split under an =i= prefix: ~tabularium-import~ (=i i=) always imports a file as a new, registered database; ~tabularium-import-append~ (=i a=) appends a file's rows to the open database, matching columns by field id then label and never writing the primary key
-- Filter, highlight, and mark commands share one ~completing-read-multiple~ field selector (with a =<<ALL>>= sentinel); multi-column filtering is now built in, so ~tabularium-view-filter-across~ is removed.  =f f= is a type dispatcher (substring/exact/numeric); the substring command is ~tabularium-view-filter-substring~.  Filter layers carry ~:fields~ and an optional ~:op~ on one code path
+- Import is split under an =i= prefix: ~tabularium-import~ (=i i=) always imports a file as a new, registered database; ~tabularium-import-append~ (=i a=) appends a file's rows to the open database, matching columns by column id then label and never writing the primary key
+- Filter, highlight, and mark commands share one ~completing-read-multiple~ column selector (with a =<<ALL>>= sentinel); multi-column filtering is now built in, so ~tabularium-view-filter-across~ is removed.  =f f= is a type dispatcher (substring/exact/numeric); the substring command is ~tabularium-view-filter-substring~.  Filter layers carry ~:columns~ and an optional ~:op~ on one code path
 - Logical-connective terminology replaces "join" throughout: ~tabularium-view-filter-cycle-connective~ (=f c=), the "Logical connective:" prompt, and the internal ~:connective~ key
 - Clicking a column header sorts by it (=mouse-1= adds/flips an ascending/descending layer, =mouse-3= removes it), layering into ~tabularium--sort-columns~; sorted columns show a ~↑~ / ~↓~ indicator
 - Saved views also capture the row restriction (~:rows~) alongside filters, columns, and sort; ~tabularium-view-show-range~ accepts the same =3-7,12= spec as ~-export-range~
-- The auto-prepended primary-key field is renamed ~row_id~ (label ~ID~) from ~rn~; the docs call the concept the *row ID*.  Pre-release, so no compatibility alias
+- The auto-prepended primary-key column is renamed ~row_id~ (label ~ID~) from ~rn~; the docs call the concept the *row ID*.  Pre-release, so no compatibility alias
 - ~tabularium-fn-now~ is renamed ~tabularium-fn-datetime-now~ and emits the space-separated form; pre-release breaking change with no alias
 - The rules-list buffer commands are renamed for discoverability (~tabularium-highlight-*~ / ~tabularium-filter-*~, modes ~tabularium-highlight-mode~ / ~tabularium-filter-mode~); a *Filter Rules List* buffer (=f l=) parallels the highlight one
 - ~tabularium-describe-database~ is reachable via =?= consistently (=SPC= stays the view menu), profiles an unopened database from disk, and gains the box ornament
@@ -214,7 +245,7 @@ free to do before the first public release and expensive afterwards.
 - =tabularium-view-show-all= (=v a=) now wipes all view constraints (filter, sort, hidden columns, saved-view label) in addition to removing the row limit and ID-range — useful when the goal is "show me everything in this table."  The previous behavior (expand row count while keeping the active view) is now =tabularium-view-show-all-in-view= (=v +=)
 - Search/replace history: ~tabularium-search-history~, ~tabularium-replace-history~, and ~tabularium-regexp-history~ are now wired into the find/replace prompts (mark-containing/equal/regexp, replace value/exact/regexp/query, count-value, all visible-scope variants, and the dynamic =Replace 'X' with:= prompts).  Press \\[previous-history-element] in any of these prompts to recall a previous value
 - ~:safe~ predicates on simple-typed defcustoms (~tabularium-case-sensitive~, ~tabularium-debug~, ~tabularium-auto-reindex~, ~tabularium-view-page-size~, ~tabularium-view-sort-ascending~) so they may be set in =.dir-locals.el= without prompting
-- Database creation wizard is now more walkthrough-style: each prompt explains what it's asking for, field names default to =fieldN= and are sluggified automatically, prompts default to a Title Case version of the field name, and the =boolean= field type is offered alongside text/integer/number/date/choice
+- Database creation wizard is now more walkthrough-style: each prompt explains what it's asking for, column names default to =fieldN= and are sluggified automatically, prompts default to a Title Case version of the column name, and the =boolean= column type is offered alongside text/integer/number/date/choice
 - Wizard prompts are now breadcrumb-prefixed so the user remains oriented inside nested sub-prompts.  Each prompt shows the path of already-known attributes followed by the currently-prompted attribute.  Schema attributes appear in CAPS with an optional bracketed hint (default value, =empty to finish=); yes/no questions appear in Title Case ending with =?= and rely on `y-or-n-p''s built-in =(y or n)= suffix.  Example sequence:
   - =FIELD #1 > LABEL [empty to finish]: Patient Name=
   - =FIELD #1 > "Patient Name" > ID [patient_name]:= (RET accepts the suggested slug)
@@ -236,7 +267,7 @@ free to do before the first public release and expensive afterwards.
 - Choice fields and fixed-completion text fields are now restricted to their declared candidate list when edited in entry mode (previously free text was accepted)
 - The registry buffer now positions the cursor at the first database entry on open
 - Boolean fields are now locked to a single canonical pair (Yes/No, True/False, 1/0, etc.) per column, optionally declared via a new ~:boolean-pair~ field property and otherwise inferred from existing column data.  The wizard prompts for the pair upfront when a boolean field is created.  Entry-mode restricts completion to the chosen pair (require-match) so the column cannot accumulate mixed conventions
-- Entry-mode now validates field input at edit time using a single per-type validator: integer fields reject decimals, number fields reject non-numeric strings, and date fields reject anything other than =YYYY-MM-DD=.  Empty input is always accepted (for clearing a field).  The wizard's default-value prompts use the same validator, so an integer field's default cannot be a decimal and a date default cannot be an arbitrary string.  Error messages follow a uniform format: =Invalid X: 'value'.  Please enter Y=
+- Entry-mode now validates field input at edit time using a single per-type validator: integer fields reject decimals, number fields reject non-numeric strings, and date fields reject anything other than =YYYY-MM-DD=.  Empty input is always accepted (for clearing a column).  The wizard's default-value prompts use the same validator, so an integer column's default cannot be a decimal and a date default cannot be an arbitrary string.  Error messages follow a uniform format: =Invalid X: 'value'.  Please enter Y=
 
 ** Changed
 
@@ -254,12 +285,12 @@ free to do before the first public release and expensive afterwards.
 
 ** Added
 
-- ~tabularium-entry-field-changed-functions~ — abnormal hook fired when a field value changes via direct edit, set-default, clear, clear-and-edit, long-edit commit, or autofill cascade.  Each function receives =(FIELD-NAME OLD-VALUE NEW-VALUE)= and may further mutate ~tabularium-entry--values~ (e.g., clearing dependent fields or eagerly computing derived values)
+- ~tabularium-entry-field-changed-functions~ — abnormal hook fired when a column value changes via direct edit, set-default, clear, clear-and-edit, long-edit commit, or autofill cascade.  Each function receives =(FIELD-NAME OLD-VALUE NEW-VALUE)= and may further mutate ~tabularium-entry--values~ (e.g., clearing dependent columns or eagerly computing derived values)
 - Schema-level ~:header-function~ property — declare a header function in the schema definition rather than installing one via ~tabularium-entry-pre-render-hook~.  The buffer-local ~tabularium-entry-header-function~ continues to override when set
 
 ** Changed
 
-- All interactive field-mutation paths (~tabularium-entry-edit-field~, ~-set-default~, ~-reset-field~, ~-clear-and-edit~, the long-edit commit, and autofill cascades) now route through a new internal helper ~tabularium-entry--set-field-value~ that fires the field-changed hook
+- All interactive column-mutation paths (~tabularium-entry-edit-field~, ~-set-default~, ~-reset-column~, ~-clear-and-edit~, the long-edit commit, and autofill cascades) now route through a new internal helper ~tabularium-entry--set-field-value~ that fires the column-changed hook
 - Completion sentinels (=<<ALL>>=, =<<FIRST>>=, =<<LAST>>=, =<<ROW>>=, =<<POINT>>=) now use double angle brackets to stand out more clearly from regular completion candidates
 
 * 0.4.6 (2026-04-30)
@@ -267,8 +298,8 @@ free to do before the first public release and expensive afterwards.
 ** Added
 
 - ~tabularium-customize~ — open the Customize buffer for the package
-- ~tabularium-describe-database~ — display a summary of the open database (backend, file path, size, modification time, schema fields with type and constraints, total row count); shown in a dedicated =*Tabularium Database*= buffer.  Bound to =?= in ~tabularium-command-map~
-- ~tabularium-schema-rename-field~ — focused single-property variant of ~tabularium-view-column-edit~ for renaming a field; updates both the database column and the schema file.  Bound to =. n= in ~tabularium-command-map~ and added to the schema sub-menus
+- ~tabularium-describe-database~ — display a summary of the open database (backend, file path, size, modification time, schema columns with type and constraints, total row count); shown in a dedicated =*Tabularium Database*= buffer.  Bound to =?= in ~tabularium-command-map~
+- ~tabularium-schema-rename-column~ — focused single-property variant of ~tabularium-view-column-edit~ for renaming a column; updates both the database column and the schema file.  Bound to =. n= in ~tabularium-command-map~ and added to the schema sub-menus
 - ~tabularium-entry-clear-and-edit~ bound to =X= in entry mode — clears the current field and immediately prompts for a new value, useful when overwriting an existing value with something unrelated
 
 ** Changed
@@ -291,33 +322,33 @@ free to do before the first public release and expensive afterwards.
 - ~tabularium-entry-edited-p~ — public predicate for plugins to detect unsaved form changes
 - ~tabularium--field-accepts-value-p~ — singular schema validator used by fill and replace
 - Plugin hooks for entry-mode lifecycle: ~tabularium-entry-pre-render-hook~ (set buffer-local variables before layout), ~tabularium-entry-new-hook~ (auto-populate fields on new entry creation), ~tabularium-entry-pre-submit-hook~ (mutate values just before save)
-- ~tabularium-entry-required-field-functions~ — abnormal hook for declaring dynamic required fields (e.g., type-specific requirements); marked fields display `+' alongside the static `*' marker for `:required t'
+- ~tabularium-entry-required-field-functions~ — abnormal hook for declaring dynamic required fields (e.g. type-specific requirements); marked fields display `+' alongside the static `*' marker for `:required t'
 - ~tabularium-entry-header-function~ — buffer-local function returning a header string inserted between the title bar and field list, for plugin-driven citations or summaries
 - ~tabularium-command-map~ — prefix keymap exposing top-level commands without depending on ~hydra~ or ~transient~; users may bind it to any prefix key (see README "Bare Keymap" section).  Sub-prefixes ~.~ and ~#~ lead to ~tabularium-schema-command-map~ and ~tabularium-aggregate-command-map~
 - Field highlighting in entry mode now follows point: clicking with the mouse or moving by ~goto-char~ updates the highlighted field, so =RET= always edits the field at the cursor
 - Discard prompt now fires when an active form buffer is about to be overwritten by another entry, or killed via =C-x k= or window cleanup, protecting partially-filled forms
-- Fill operations on `:choice` fields now offer the schema's choices as completion candidates and require a valid selection
-- Replace and fill operations report the number of fields skipped due to schema constraints in their summary message (e.g., "Replaced 5 (2 protected)")
+- Fill operations on `:choice` columns now offer the schema's choices as completion candidates and require a valid selection
+- Replace and fill operations report the number of columns skipped due to schema constraints in their summary message (e.g., "Replaced 5 (2 protected)")
 
 ** Changed
 
-- =:choices= field property renamed to =:choice= for consistency with the singular-keyword convention used throughout the schema vocabulary; existing schema files must be updated
+- =:choices= column property renamed to =:choice= for consistency with the singular-keyword convention used throughout the schema vocabulary; existing schema files must be updated
 - New namespaces:
-  - ~tabularium-fn-*~ for computed-field helpers (~tabularium-fn-if~, ~-case~, ~-sum-fields~, ~-concat-fields~, ~-today~, ~-now~, ~-date-add~, ~-date-diff~, ~-age~, ~-lookup~, ~-count-where~, ~-sum-where~)
+  - ~tabularium-fn-*~ for computed-column helpers (~tabularium-fn-if~, ~-case~, ~-sum-columns~, ~-concat-columns~, ~-today~, ~-now~, ~-date-add~, ~-date-diff~, ~-age~, ~-lookup~, ~-count-where~, ~-sum-where~)
   - ~tabularium-aggregate-*~ for interactive math/statistics commands (~tabularium-aggregate-count~, ~-sum~, ~-min-max~, ~-mean-sd~, ~-median-iqr~, ~-column-summary~, plus ~-visible-*~ variants)
   - ~tabularium-sync-*~ for sync-related operations (~tabularium-sync-prepare~, ~-checkpoint~, ~-fix-paths~, ~-cleanup-wal-files~)
 - ~tabularium-replace-*~ namespace consolidates visible-scoped variants (~tabularium-replace-visible-substring~, ~-visible-exact~, ~-visible-regexp~, ~-visible-query~) and renames ~tabularium-query-replace~ → ~tabularium-replace-query~
 - ~tabularium-view-clear~ (was ~tabularium-clear-view~) and ~tabularium-completion-clear-cache~ (was ~tabularium-clear-vocabulary-cache~) regrouped into their respective subsystems
-- ~tabularium--fields-accepting-value~ now returns =(ACCEPTED . REJECTED)= so callers can report protection counts in summary messages
+- ~tabularium--columns-accepting-value~ now returns =(ACCEPTED . REJECTED)= so callers can report protection counts in summary messages
 - ~tabularium-db-build-like-clause~ takes an optional ~CASE-SENSITIVE~ argument; values are properly escaped and the operator (LIKE vs GLOB) reflects ~tabularium-case-sensitive~
 - ~tabularium--paste-column-batch~ takes an optional ~POSITION~ argument; ='last skips the position prompt
-- ~tabularium-fn-sum-fields~ coerces non-numeric and missing values to 0 instead of erroring; ~tabularium-fn-concat-fields~ skips empty and missing fields cleanly
+- ~tabularium-fn-sum-columns~ coerces non-numeric and missing values to 0 instead of erroring; ~tabularium-fn-concat-columns~ skips empty and missing columns cleanly
 
 ** Fixed
 
 - ~tabularium-entry-submit~ no longer triggers a spurious "unsaved changes" prompt: after a successful save, the buffer's original-values reference is updated so the kill-buffer hook recognizes the buffer as clean
 - ~tabularium-entry-cancel~ no longer double-prompts: when the user has already confirmed "Discard changes?", the kill-buffer-query hook is bypassed for the actual quit
-- SQL injection vectors in filter values closed: substring filters (~tabularium-find~, ~tabularium-view-count-across~, ~tabularium-last~), exact and numeric filter operators in ~tabularium--filter-layer-sql~, aggregate functions (~tabularium-aggregate-sum~, ~-min-max~, ~--get-numeric-values~), and the choice-field CHECK constraint at table creation all now route through ~tabularium-db-sql-quote~ or ~tabularium-db-build-like-clause~
+- SQL injection vectors in filter values closed: substring filters (~tabularium-find~, ~tabularium-view-count-across~, ~tabularium-last~), exact and numeric filter operators in ~tabularium--filter-layer-sql~, aggregate functions (~tabularium-aggregate-sum~, ~-min-max~, ~--get-numeric-values~), and the choice-column CHECK constraint at table creation all now route through ~tabularium-db-sql-quote~ or ~tabularium-db-build-like-clause~
 - Substring filters honor ~tabularium-case-sensitive~ (previously always case-insensitive LIKE)
 
 * 0.4.4 (2026-04-24)
@@ -330,7 +361,7 @@ free to do before the first public release and expensive afterwards.
 - ~tabularium-replace-visible-exact~ bound to =R E=
 - ~tabularium-entry-current-field~ face (theme-aware light/dark variants)
 - Plugin API expanded: ~tabularium-entry-editing-id~, ~tabularium-entry-schema-name~, ~tabularium-entry-render~ promoted to public
-- README sections for the plugin API and computed-field helpers (~tabularium-fn-if~, ~tabularium-fn-case~, ~tabularium-fn-sum-fields~, ~tabularium-fn-concat-fields~)
+- README sections for the plugin API and computed-column helpers (~tabularium-fn-if~, ~tabularium-fn-case~, ~tabularium-fn-sum-columns~, ~tabularium-fn-concat-columns~)
 
 ** Changed
 
@@ -365,16 +396,16 @@ free to do before the first public release and expensive afterwards.
 
 ** Added
 
-*** Plugin Interface for Entry Mode
+*** Plugin Interface for Row Mode
 
 - ~tabularium-entry-render-hook~ — hook run after form rendering with ~inhibit-read-only~ bound, allowing external packages to inject content (cross-table data, schema-specific hints, custom actions)
-- ~tabularium-navigable~ text property — lines marked with this property participate in =TAB= / =S-TAB= navigation alongside schema fields, so plugin-injected content is keyboard-accessible
-- ~tabularium-entry--all-nav-positions~ — unified navigator that merges field overlays and plugin-contributed navigable lines
+- ~tabularium-navigable~ text property — lines marked with this property participate in =TAB= / =S-TAB= navigation alongside schema columns, so plugin-injected content is keyboard-accessible
+- ~tabularium-entry--all-nav-positions~ — unified navigator that merges column overlays and plugin-contributed navigable lines
 - Hook fires after hint lines but before cursor positioning; plugins can read ~tabularium-entry--first-field-line~ and ~tabularium-entry--footer-start~ for layout context
 
 ** Fixed
 
-*** Entry Buffer Rendering
+*** Row Buffer Rendering
 
 - Symmetric 2-space left/right indent in the ornamental box display
 - ~max-val-width~ set to 53 (80 − indent − label − separator − pad)
@@ -384,12 +415,12 @@ free to do before the first public release and expensive afterwards.
 
 ** Fixed
 
-- Entry side window no longer stacks; =M-n= / =M-p= reuse the existing window via ~display-buffer-reuse-window~
+- Row side window no longer stacks; =M-n= / =M-p= reuse the existing window via ~display-buffer-reuse-window~
 - Byte compilation warnings resolved in =tabularium.el= and =tabularium-modeline.el= (unused variables, scoping bugs, wide docstrings, missing declarations)
 
 ** Changed
 
-- Entry buffer inherits user's default cursor instead of forcing ~cursor-type~ (respects ~ryo-modal-mode~, ~evil-mode~, etc.)
+- Row buffer inherits user's default cursor instead of forcing ~cursor-type~ (respects ~ryo-modal-mode~, ~evil-mode~, etc.)
 
 * 0.4.1 (2026-03-17)
 
@@ -416,9 +447,9 @@ free to do before the first public release and expensive afterwards.
 - Layered filter system (=f= prefix) with AND/OR/NOT logic, exact-match (=f ==), and numeric comparison (=f #=)
 - View-scoped replace (=R R=, =R ==, =R X=, =R Q=) — find/replace restricted to visible rows
 - Side-window entry display (~tabularium-entry-display~ = ~side~)
-- Long-field editing (=:long t=) with dedicated buffer and ~tabularium-long-edit-mode~
+- Long-column editing (=:long t=) with dedicated buffer and ~tabularium-long-edit-mode~
 - Sort layer management (=s s= / =s d= / =s x= / =^=)
-- Entry mode position restoration on submit
+- Row mode position restoration on submit
 - View-scoped math (=# M=, =# D=, =# Q=)
 
 ** Changed
@@ -450,25 +481,25 @@ free to do before the first public release and expensive afterwards.
 - Smart fill without marks: auto-fills blanks from context
 - Across-columns operations unified under =@= suffix
 - Mark overlay improvements (explicit face, priority 100)
-- Entry mode =S-TAB= fix via ~minibuffer-setup-hook~
+- Row mode =S-TAB= fix via ~minibuffer-setup-hook~
 
 ** Changed
 
 - Sentinels standardized to =<CAPS>= format
 - =f @= for filter-across (was =a=), =# @= for count-across
-- ~tabularium-schema-add-field~ consolidated into ~tabularium-view-column-add~
+- ~tabularium-schema-add-column~ consolidated into ~tabularium-view-column-add~
 
 ** Fixed
 
 - Column editor scoping bug (~filled-ids~ in wrong ~let~ scope)
 - Statistics buffer read-only error on second invocation
-- Entry mode =S-TAB= conflict with ~outline-minor-mode~
+- Row mode =S-TAB= conflict with ~outline-minor-mode~
 
 * 0.2.0 (2026-02-04)
 
 ** Added
 
-- Filter system for all field types with =<clear>= sentinel
+- Filter system for all column types with =<clear>= sentinel
 - Export format selection (TSV/CSV) with overwrite confirmation
 - Interactive multi-sort with per-column direction
 - Smart fill dispatcher with automatic type detection
@@ -487,7 +518,7 @@ free to do before the first public release and expensive afterwards.
 
 - Keybinding updates across view, entry, and registry modes
 - View reset (=0=) properly restores schema default sort
-- Field selection via ~completing-read-multiple~
+- Column selection via ~completing-read-multiple~
 
 ** Fixed
 
@@ -500,12 +531,12 @@ free to do before the first public release and expensive afterwards.
 Initial release.
 
 - SQLite-backed storage via Emacs 29.1+ built-in ~sqlite.el~
-- Schema-driven field definitions with types, defaults, validation
-- Multiple entry modes: form-based, minibuffer, quick entry
-- Computed fields, CSV/TSV import/export, undo/redo
+- Schema-driven column definitions with types, defaults, validation
+- Multiple row modes: form-based, minibuffer, quick entry
+- Computed columns, CSV/TSV import/export, undo/redo
 - Copy/paste, dired-style marking, multi-column sort
 - Column visibility, reordering, fill down/series
-- Historical completion, choice fields, date defaults
+- Historical completion, choice columns, date defaults
 - Hydra and Transient menu support, modeline integration
 - Registry for multiple databases, creation wizard
 - PostgreSQL backend (optional, via emacsql)

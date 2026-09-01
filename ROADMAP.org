@@ -9,22 +9,22 @@ The following features are tentatively planned for future releases:
 ** v0.5.0
 
 - [X] Conditional Formatting
-  - [X] Row highlighting based on field values
+  - [X] Row highlighting based on column values
   - [X] Color-coded status indicators
 
-- [X] Field Validation
-  - [X] Reject invalid data on entry
+- [X] Column Validation
+  - [X] Reject invalid data on row
   - [X] Custom validation functions
-  - [X] Regex patterns for text fields
+  - [X] Regex patterns for text columns
 
-- [X] ~time~ and ~datetime~ field types
+- [X] ~time~ and ~datetime~ column types
   - [X] ~time~ stored as ISO 8601 HH:MM[:SS]
   - [X] ~datetime~ stored as ISO 8601 YYYY-MM-DD HH:MM[:SS] (accepts T or space separator)
   - [X] Validation and default-to-now option
   - [X] Date/time/datetime arithmetic helpers (=fn-time-add=, =fn-datetime-diff=, =fn-duration-format=, etc.)
 
 - [X] Quick-startup wizard
-  - [X] One-shot prompt for all fields at once (e.g., =name:text:required age:integer date:date=)
+  - [X] One-shot prompt for all columns at once (e.g., =name:text:required age:integer date:date=)
   - [X] Schema generation from a pasted header row
 
 - [X] Generate database from existing schema file
@@ -58,7 +58,7 @@ The following features are tentatively planned for future releases:
   - [X] Polymorphic ~=~
   - [X] Errors at macro expansion rather than blank cells at render
   - [X] ~sum-where~, ~count-where~, and ~lookup~, equality-only, as correlated subqueries
-- [X] The field wizard asks for a formula directly and supplies the wrapper
+- [X] The column wizard asks for a formula directly and supplies the wrapper
 - [X] =| F= edits a computed column's formula
 - [X] 44 operators, each with a matching ~tabularium-fn-*~ helper so the lambda form can do whatever a formula can
 - [X] Operator table documented in the README
@@ -66,15 +66,59 @@ The following features are tentatively planned for future releases:
 - [ ] Manual pass over the remaining sections (17-20)
 - [ ] Completion over the operator table at the formula prompt
 
-** v0.6.0 — first public release
+** v0.6.0 — relational databases [DONE, pending manual testing]
 
-- [ ] Modularization
-  - [ ] Split ~tabularium.el~ into a flat ~lisp/~ directory, Magit-style: 17 essential modules plus 3 opt-in (~tabularium-menu~, ~tabularium-modeline~, ~tabularium-postgresql~)
-  - [ ] Bottom-up extraction, byte-compiling and running the ERT suite after each module
-  - [ ] Modularization only — no behavior changes bundled in
-- [ ] Release preparation
-  - [ ] Resolve the remaining ELPA compliance items (see =AUDIT.org=)
-  - [ ] Submit to NonGNU ELPA, then MELPA
+Several tables in one database file, related by declared foreign keys.
+
+*** Storage seam
+- [X] =:table= schema property, with ~tabularium-table-name~ as the fallback
+- [X] Connections keyed by file and refcounted; =PRAGMA foreign_keys= at connect
+- [X] Read-only relations: a schema may name a view
+- [X] Registry lists one database per file, with its own display name
+
+*** Links
+- [X] =:foreign-key= with =REFERENCES= emission and delete policies
+- [X] Entry-time validation and completion from live parent keys
+- [X] Cascade snapshotting, so undo restores children
+
+*** Using them
+- [X] =t= table prefix: switch, step, list, reorder, follow a key
+- [X] =l= / =L= master–detail with a locked filter
+- [X] =(parent ...)=, =(children ...)=, =(lookup-in ...)= in formulas
+- [X] =t ?= link integrity, =t == ghost tables
+
+*** Getting data in and out
+- [X] =i= dispatcher; =i s=/=i S=, =i m=/=i M=, =i a=, =i .=
+- [X] =e t=, =e m=
+- [X] One ladder for a missing database and a missing schema
+- [X] Org-capture-style schema drafting
+
+** v0.6.1 — joins
+
+- [ ] A join is declared as a *view-like schema*: several tables, the columns to take from each, and the links to join on.  Reusing the read-only machinery means sorting, filtering, highlighting, and aggregating work on it the day it exists
+- [ ] Export a join to CSV/TSV/Org, which is the case a join is usually wanted for
+- [ ] Inner and left joins; the rest can wait for a case that needs them
+
+** v0.6.2 — completing the relational baseline
+
+Ordered by what blocks the most.
+
+- [ ] *Schema and data, offered together.*  =i .= should ask whether there are data files for the tables it just declared, and a data import should ask whether a schema exists for what it just read.  These are one feature seen from two ends, and the answer decides which of the five schema methods applies — worth designing as one prompt rather than bolting a question onto each end
+
+- [ ] *Schema migration.* Adding a =:foreign-key= to an existing table does nothing: SQLite adds constraints only at =CREATE TABLE=.  Today the only cure is to delete the database and rebuild, which makes the whole link feature usable on new databases only.  ~tabularium--rebuild-table-dropping~ already does the copy-and-swap dance for column deletion; generalizing it to "rebuild this table from its current schema" closes the gap and makes every constraint below retroactive
+- [ ] *=NOT NULL= and =UNIQUE= in the DDL.*  =:required= is checked at entry and =:unique= does not exist; neither reaches the database, so anything writing to the file another way can break what the schema promises
+- [ ] *=:on-update=.*  The delete policies are there; changing a parent key silently orphans its children
+- [ ] *Composite keys.*  =:primary t= marks one field, and =:foreign-key= names one column.  A key of (patient_id, visit_date) cannot be expressed, which rules out a large class of real data.  Touches the storage layer, so cheaper before modularization than after
+
+** v0.6.3 — repair
+
+- [ ] =t ?= reports orphans; nothing fixes them.  Reassign, null out, or delete, on the rows it found
+- [ ] Rebuild a table from its schema (the migration command above, exposed)
+
+** v0.7.0 — modularization
+
+Deferred until the relational work settles, since it moves the same code between files.
+
 
 ** Post-release
 
