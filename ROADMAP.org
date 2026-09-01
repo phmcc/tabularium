@@ -6,121 +6,53 @@
 
 The following features are tentatively planned for future releases:
 
-** v0.5.0
+** v0.6.0
 
-- [X] Conditional Formatting
-  - [X] Row highlighting based on column values
-  - [X] Color-coded status indicators
-
-- [X] Column Validation
-  - [X] Reject invalid data on row
-  - [X] Custom validation functions
-  - [X] Regex patterns for text columns
-
-- [X] ~time~ and ~datetime~ column types
-  - [X] ~time~ stored as ISO 8601 HH:MM[:SS]
-  - [X] ~datetime~ stored as ISO 8601 YYYY-MM-DD HH:MM[:SS] (accepts T or space separator)
-  - [X] Validation and default-to-now option
-  - [X] Date/time/datetime arithmetic helpers (=fn-time-add=, =fn-datetime-diff=, =fn-duration-format=, etc.)
-
-- [X] Quick-startup wizard
-  - [X] One-shot prompt for all columns at once (e.g., =name:text:required age:integer date:date=)
-  - [X] Schema generation from a pasted header row
-
-- [X] Generate database from existing schema file
-  - [X] Build the =.db= file by reading a hand-written or imported =.schema.el=
-  - [X] Useful when the schema is moved between machines or restored from version control
-
-- [X] Face customization via ~defface~ / ~defcustom~
-  - [X] Tabulated-list header face
-  - [X] Marked-row face
-  - [X] Frozen-row face
-  - [X] Sort-indicator face
-  - [X] Filter / view-status face in the modeline
-  - [X] Group all under a ~tabularium-faces~ customize group
-
-** v0.5.3
-
-- [X] Pre-release hardening pass
-  - [X] Extend the ERT suite to cover pure helpers (statistics, escaping, SQL clause construction, schema accessors, undo/redo and kill-ring mechanics)
-  - [X] Keymap audit test: every command bound in a mode map still exists, so a file split cannot silently orphan a binding
-  - [X] Escape =%= and =_= in substring searches so they match literally
-  - [X] Accept a dotted =:boolean-pair= from a hand-edited schema file
-  - [X] Naming, docstring, message, and header consistency pass
-- [ ] Full manual run-through (see =MANUAL-TESTING.org=)
-
-** v0.5.4 — computed-column formulas
-
-- [X] ~tabularium-compute~ macro, merged into ~tabularium.el~ (section 4.4.3) and its tests into ~tabularium-ert.el~ (sections 83-90)
-  - [X] Formulas are ordinary Lisp forms, so ~read~ is the parser
-  - [X] Dual backend: SQL when every operator has a SQL form, the existing post-fetch path otherwise
-  - [X] SQL is the specification — the Lisp side matches SQLite on rounding, modulo sign, 1-indexed substrings, and null propagation
-  - [X] Polymorphic ~=~
-  - [X] Errors at macro expansion rather than blank cells at render
-  - [X] ~sum-where~, ~count-where~, and ~lookup~, equality-only, as correlated subqueries
-- [X] The column wizard asks for a formula directly and supplies the wrapper
-- [X] =| F= edits a computed column's formula
-- [X] 44 operators, each with a matching ~tabularium-fn-*~ helper so the lambda form can do whatever a formula can
-- [X] Operator table documented in the README
-- [X] Manual pass over section 16 of =MANUAL-TESTING.org=
-- [ ] Manual pass over the remaining sections (17-20)
-- [ ] Completion over the operator table at the formula prompt
-
-** v0.6.0 — relational databases [DONE, pending manual testing]
-
-Several tables in one database file, related by declared foreign keys.
-
-*** Storage seam
 - [X] =:table= schema property, with ~tabularium-table-name~ as the fallback
 - [X] Connections keyed by file and refcounted; =PRAGMA foreign_keys= at connect
 - [X] Read-only relations: a schema may name a view
 - [X] Registry lists one database per file, with its own display name
-
-*** Links
-- [X] =:foreign-key= with =REFERENCES= emission and delete policies
+- [X] =:fk= with =REFERENCES= emission and delete policies
 - [X] Entry-time validation and completion from live parent keys
 - [X] Cascade snapshotting, so undo restores children
-
-*** Using them
 - [X] =t= table prefix: switch, step, list, reorder, follow a key
 - [X] =l= / =L= master–detail with a locked filter
 - [X] =(parent ...)=, =(children ...)=, =(lookup-in ...)= in formulas
 - [X] =t ?= link integrity, =t == ghost tables
-
-*** Getting data in and out
-- [X] =i= dispatcher; =i s=/=i S=, =i m=/=i M=, =i a=, =i .=
-- [X] =e t=, =e m=
+- [X] =i= dispatcher and associated import function variants
+- [X] =e= dispatcher and associated import function variants
 - [X] One ladder for a missing database and a missing schema
 - [X] Org-capture-style schema drafting
 
-** v0.6.1 — joins
+** v0.6.1
 
 - [ ] A join is declared as a *view-like schema*: several tables, the columns to take from each, and the links to join on.  Reusing the read-only machinery means sorting, filtering, highlighting, and aggregating work on it the day it exists
 - [ ] Export a join to CSV/TSV/Org, which is the case a join is usually wanted for
 - [ ] Inner and left joins; the rest can wait for a case that needs them
 
-** v0.6.2 — completing the relational baseline
+** v0.6.2
 
-Ordered by what blocks the most.
-
-- [ ] *Schema and data, offered together.*  =i .= should ask whether there are data files for the tables it just declared, and a data import should ask whether a schema exists for what it just read.  These are one feature seen from two ends, and the answer decides which of the five schema methods applies — worth designing as one prompt rather than bolting a question onto each end
-
-- [ ] *Schema migration.* Adding a =:foreign-key= to an existing table does nothing: SQLite adds constraints only at =CREATE TABLE=.  Today the only cure is to delete the database and rebuild, which makes the whole link feature usable on new databases only.  ~tabularium--rebuild-table-dropping~ already does the copy-and-swap dance for column deletion; generalizing it to "rebuild this table from its current schema" closes the gap and makes every constraint below retroactive
+- [ ] *Schema migration.* Adding a =:fk= to an existing table does nothing: SQLite adds constraints only at =CREATE TABLE=.  Today the only cure is to delete the database and rebuild, which makes the whole link feature usable on new databases only.  ~tabularium--rebuild-table-dropping~ already does the copy-and-swap dance for column deletion; generalizing it to "rebuild this table from its current schema" closes the gap and makes every constraint below retroactive
 - [ ] *=NOT NULL= and =UNIQUE= in the DDL.*  =:required= is checked at entry and =:unique= does not exist; neither reaches the database, so anything writing to the file another way can break what the schema promises
 - [ ] *=:on-update=.*  The delete policies are there; changing a parent key silently orphans its children
-- [ ] *Composite keys.*  =:primary t= marks one field, and =:foreign-key= names one column.  A key of (patient_id, visit_date) cannot be expressed, which rules out a large class of real data.  Touches the storage layer, so cheaper before modularization than after
+- [ ] *Composite keys.*  =:pk t= marks one field, and =:fk= names one column.  A key of (patient_id, visit_date) cannot be expressed, which rules out a large class of real data.  Touches the storage layer, so cheaper before modularization than after
 
-** v0.6.3 — repair
+** v0.6.3
 
 - [ ] =t ?= reports orphans; nothing fixes them.  Reassign, null out, or delete, on the rows it found
 - [ ] Rebuild a table from its schema (the migration command above, exposed)
 
-** v0.7.0 — modularization
+** v0.7.0
 
-Deferred until the relational work settles, since it moves the same code between files.
+- [ ] Modularization into smaller files for easier maintenance
 
 
 ** Post-release
+
+- [ ] Pivot Tables
+  - [ ] Aggregate summaries
+  - [ ] Cross-tabulation
+  - [ ] Dynamic grouping
 
 - [ ] Audit Log / Diff
   - [ ] Track all changes over time
@@ -137,11 +69,6 @@ Deferred until the relational work settles, since it moves the same code between
 - [ ] Frozen Columns
   - [ ] Pin leftmost columns so they stay visible while scrolling horizontally
   - [ ] Requires working around tabulated-list-mode's single-line-per-row rendering (no native frozen-column concept) — likely an hscroll/overlay approach or a side-by-side window arrangement
-
-- [ ] Pivot Tables
-  - [ ] Aggregate summaries
-  - [ ] Cross-tabulation
-  - [ ] Dynamic grouping
 
 - [ ] Charts
   - [ ] Integration with gnuplot/GraphViz
