@@ -1,10 +1,10 @@
-;;; tabularium-modeline.el --- Modeline integration -*- lexical-binding: t; -*-
+;;; tabularium-modeline.el --- Modeline integration for Tabularium -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2026 Paul H. McClelland
 
 ;; Author: Paul H. McClelland <paulhmcclelland@protonmail.com>
 ;; Maintainer: Paul H. McClelland <paulhmcclelland@protonmail.com>
-;; Version: 0.5.4
+;; Version: 0.6.0
 ;; Package-Requires: ((emacs "29.1"))
 ;; Keywords: data, faces
 ;; URL: https://codeberg.org/phmcc/tabularium
@@ -117,7 +117,7 @@ Nerd Font glyph if available).  When nil, displays the backend name."
 
 (defcustom tabularium-modeline-icon nil
   "Icon string for the modeline when `tabularium-modeline-use-icon' is t.
-Set to any string, e.g., a Nerd Font glyph or a short label like
+Set to any string, e.g. a Nerd Font glyph or a short label like
 \"T\" or \"DB\"."
   :type '(choice (string :tag "Icon string")
                  (const :tag "None" nil))
@@ -229,7 +229,7 @@ Returns nil if no database is active."
           (backend (tabularium-modeline--backend-name)))
       (pcase tabularium-modeline-format
         ('icon-only
-         (if-let ((icon (tabularium-modeline--icon)))
+         (if-let* ((icon (tabularium-modeline--icon)))
              (propertize icon 'help-echo (format "Tabularium: %s" db-name))
            ;; No icon configured; fall back to short database name
            (propertize db-name 'face 'tabularium-modeline-database
@@ -258,7 +258,7 @@ Returns nil if no database is active."
 
 (defun tabularium-modeline-string-with-props ()
   "Return modeline string with mouse properties."
-  (when-let ((str (tabularium-modeline-string)))
+  (when-let* ((str (tabularium-modeline-string)))
     (propertize str
                 'help-echo (format "Tabularium: %s\nmouse-1: Open menu"
                                    tabularium--current-schema-name)
@@ -313,7 +313,7 @@ Returns nil if no database is active."
 (defun tabularium-modeline--telephone-line-setup ()
   "Note: telephone-line setup is not automated due to load-order constraints.
 See the commentary in tabularium-modeline.el for inline setup instructions."
-  (message "Tabularium: define the telephone-line segment inline; see tabularium-modeline.el"))
+  (message "Tabularium: For telephone-line, define the segment inline in your config. See tabularium-modeline.el for example."))
 
 ;;; ** 4.3 Doom Modeline
 
@@ -352,7 +352,7 @@ See the commentary in tabularium-modeline.el for inline setup instructions."
                                          (propertize tabularium-table-name 'face 'tabularium-modeline-schema)))
                                       (doom-modeline-spc))))))
 
-    (message "Tabularium: doom-modeline segment defined; add `tabularium' to your format")))
+    (message "Tabularium: doom-modeline segment defined. Add `tabularium' to your doom-modeline format.")))
 
 ;;; ** 4.4 Powerline / Spaceline
 
@@ -361,7 +361,7 @@ See the commentary in tabularium-modeline.el for inline setup instructions."
   (with-eval-after-load 'powerline
     (defpowerline tabularium-modeline-powerline-segment
                   (tabularium-modeline-string))
-    (message "Tabularium: powerline segment defined")))
+    (message "Tabularium: powerline segment defined.")))
 
 (defun tabularium-modeline--spaceline-setup ()
   "Set up Tabularium segment for spaceline."
@@ -372,7 +372,7 @@ See the commentary in tabularium-modeline.el for inline setup instructions."
                                 "Display current Tabularium database."
                                 (tabularium-modeline-string)
                                 :when (tabularium-modeline--active-p)))
-    (message "Tabularium: spaceline segment defined; add `tabularium' to your format")))
+    (message "Tabularium: spaceline segment defined. Add `tabularium' to your spaceline.")))
 
 ;;; ** 4.5 Mood Line
 
@@ -383,7 +383,7 @@ See the commentary in tabularium-modeline.el for inline setup instructions."
       "Return Tabularium segment for mood-line."
       (when (tabularium-modeline--active-p)
         (concat " " (tabularium-modeline-string) " ")))
-    (message "Tabularium: mood-line segment defined; add `mood-line-segment-tabularium' to your format")))
+    (message "Tabularium: mood-line segment defined. Add `mood-line-segment-tabularium' to your format.")))
 
 ;;; ** 4.6 Simple Modeline
 
@@ -393,7 +393,7 @@ See the commentary in tabularium-modeline.el for inline setup instructions."
     (defun simple-modeline-segment-tabularium ()
       "Return Tabularium segment for simple-modeline."
       (tabularium-modeline-string-with-props))
-    (message "Tabularium: simple-modeline segment defined")))
+    (message "Tabularium: simple-modeline segment defined.")))
 
 ;;; ** 4.7 Awesome Tray
 
@@ -409,7 +409,7 @@ See the commentary in tabularium-modeline.el for inline setup instructions."
     (message "Tabularium: awesome-tray module defined. Add \"tabularium\" to `awesome-tray-active-modules'.")))
 
 (defun tabularium-modeline--awesome-tray-disable ()
-  "Remove Tabularium entry from awesome-tray's module alist."
+  "Remove Tabularium row from awesome-tray's module alist."
   (when (boundp 'awesome-tray-module-alist)
     (setq awesome-tray-module-alist
           (assoc-delete-all "tabularium" awesome-tray-module-alist))))

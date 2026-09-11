@@ -155,7 +155,7 @@
 └────────┘
   Main
  ────────────────────────────────────────────────────────────────────────────────
-  [_e_] Export
+  [_e_] Export   [_*_] Marked rows
   [_a_] All
   [_v_] Visible
   [_c_] Copy to clipboard
@@ -166,6 +166,7 @@
   [_q_] Quit
 "
     ("e" tabularium-export)
+    ("*" tabularium-export-marked)
     ("a" tabularium-export-all)
     ("v" tabularium-export-visible)
     ("c" tabularium-export-to-clipboard)
@@ -430,6 +431,7 @@
   [_`_] Reorder tables      [_'_] Follow key onward
   [_k_] Set linking key       [_$_] Name table
   [_R_] Toggle read-only      [_S_] Describe SQL
+  [_J_] New join              [_j_] Describe join
   [_n_] Next                [_?_] Check links
   [_p_] Previous
  ────────────────────────────────────────────────────────────────────────────────
@@ -451,6 +453,8 @@
     ("R" tabularium-toggle-read-only)
     ("?" tabularium-check-integrity)
     ("S" tabularium-describe-sql)
+    ("J" tabularium-join-new)
+    ("j" tabularium-join-describe)
     ("q" tabularium-view-hydra/body :color blue))
 
   ;; Filter sub-hydra
@@ -610,7 +614,7 @@
 └─────────┘
   Visibility              Ordering                  Schema
  ────────────────────────────────────────────────────────────────────────────────
-  [_*_] Toggle              [_r_] Reorder               [_N_] New
+  [_t_] Toggle              [_r_] Reorder               [_N_] New
   [_h_] Hide                [_<_] Move left             [_I_] Insert
   [_s_] Show                [_>_] Move right            [_D_] Delete
   [_o_] Show only           [_=_] Reset order           [_E_] Edit

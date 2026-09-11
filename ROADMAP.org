@@ -26,12 +26,12 @@ The following features are tentatively planned for future releases:
 
 ** v0.6.1
 
-- [ ] Joining
+- [X] Joining
   - Defined as a view-like schema
   - Several tables, the columns to take from each, and the links to join on.  Reusing the read-only machinery means sorting, filtering, highlighting, and aggregating work automatically
-- [ ] Export joins
+- [X] Export joins
   - CSV/TSV/Org formats
-- [ ] Inner and left joins (priority)
+- [X] Inner and left joins (priority)
 
 ** v0.6.2
 
@@ -45,24 +45,27 @@ The following features are tentatively planned for future releases:
   - The delete policies are there; changing a parent key silently orphans its children
 - [ ] Composite keys
   - =:pk t= marks one field, and =:fk= names one column.  A key of (patient_id, visit_date) cannot be expressed, which rules out a large class of real data
-
-** v0.6.3
-
 - [ ] =t ?= reports orphans; nothing fixes them.  Reassign, null out, or delete, on the rows it found
 - [ ] Rebuild a table from its schema (the migration command above, exposed)
+- [ ] Add a custom background face for the primary key, as well as user-toggleable zebra striping
 
 ** v0.7.0
 
 - [ ] Pivot Tables
+  - Defined as a view-like schema
 - [ ] Aggregate summaries
 - [ ] Cross-tabulation
 - [ ] Dynamic grouping
 
 ** v0.8.0
 
+- [ ] Modeline and menus revision/updates
+
+** v0.9.0
+
 - [ ] Modularization into smaller files for easier maintenance
 
-** Post-release
+** Near future
 
 - [ ] Audit Log / Diff
   - [ ] Track all changes over time
@@ -74,7 +77,7 @@ The following features are tentatively planned for future releases:
   - [ ] Customizable templates
   - [ ] Page layout options
 
-** Future
+** Long term
 
 - [ ] Frozen Columns
   - [ ] Pin leftmost columns so they stay visible while scrolling horizontally

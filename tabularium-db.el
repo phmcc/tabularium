@@ -491,7 +491,7 @@ schema does not disconnect another still using the same one."
   (let ((n (1- (gethash key tabularium-db--refcounts 1))))
     (if (> n 0)
         (puthash key n tabularium-db--refcounts)
-      (when-let ((backend (gethash key tabularium-db--connections)))
+      (when-let* ((backend (gethash key tabularium-db--connections)))
         (ignore-errors (tabularium-db-disconnect backend)))
       (remhash key tabularium-db--connections)
       (remhash key tabularium-db--refcounts))))
@@ -500,7 +500,7 @@ schema does not disconnect another still using the same one."
   "Release SCHEMA-NAME\='s hold on its connection.
 The connection itself closes only when no other schema is using it,
 so closing one table of a multi-table file leaves the others live."
-  (when-let ((key (gethash schema-name tabularium-db--key-holders)))
+  (when-let* ((key (gethash schema-name tabularium-db--key-holders)))
     (remhash schema-name tabularium-db--key-holders)
     (tabularium-db--release key)))
 

@@ -235,6 +235,7 @@ Counting and aggregating answer different questions — how many rows match a de
 | =i A= | Import into the active database           |
 | =i a= | Append a file to the current table        |
 | =e e= | Export marked rows, or all if none marked |
+| =e *=         | Export the marked rows                           |
 | =e t= | Export one table                          |
 | =e T= | Export several tables                     |
 | =e a= | Export all — whole table (ignores marks)  |
@@ -334,6 +335,8 @@ with that database at the top and under point.
 | =t p=         | Previous table                                   |
 | =t l=         | List tables and their links                      |
 | =t S=         | Describe the SQL a formula compiles to           |
+| =t J=         | Build a join from this database's tables         |
+| =t j=         | Describe the current join                        |
 | =t ?=         | Check referential integrity                         |
 | =t N=         | New table in this database                       |
 | =t D=         | Delete a table                                     |
