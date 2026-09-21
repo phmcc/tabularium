@@ -266,6 +266,8 @@ Sorting, filtering, and highlighting share one *rules* paradigm.  For sorting, ~
 
 Frozen rows always render at the top of the view, regardless of filter or sort.  A small dot (=∙=) marker in the leftmost indicator column distinguishes them from the regular rows beneath.
 
+*Undo scope.* Each table keeps its own undo history, so undoing in one table never reverses work done in another.  The exception is a delete that reaches other tables through a link.  Deleting a row also removes (~cascade~) or unlinks (~set-null~) the rows that point at it, and theirs in turn, as far as the links go.  That delete is a single operation in every table it touched: it is recorded in each of their histories, and undoing or redoing it from any one of them restores or removes the rows in all of them together.  Cutting a row with =X= is recorded the same way.  A new action in any of those tables ends the redo in all of them, since the others can no longer assume the state it would redo from.
+
 ** Schema access (from view mode)
 
 | Command                  | Description                                   |
@@ -657,7 +659,7 @@ Run ~M-x tabularium-customize~ to browse all settings in the Customize UI.  Sett
 | ~tabularium-date-format~         | ~%Y-%m-%d~              | Format for ~date~ columns and ~today~ defaults     |
 | ~tabularium-time-format~         | ~%H:%M:%S~              | Format for ~time~ columns and ~now~ defaults       |
 | ~tabularium-datetime-format~     | ~%Y-%m-%d %H:%M:%S~     | Format for ~datetime~ columns and ~now~ defaults   |
-| ~tabularium-undo-limit~          | ~100~         | Maximum undo rows per database           |
+| ~tabularium-undo-limit~          | ~100~         | Maximum undo operations per table        |
 | ~tabularium-schema-file-suffix~  | ~.schema.el~  | Suffix for schema files                     |
 | ~tabularium-registry-file~       | =(varies)=    | Path to the registry file                   |
 | =$=   | ~tabularium-rename-database~          |
@@ -798,7 +800,7 @@ TSV export provides human-readable diffs suitable for version control.
 
 ** Debugging
 
-~tabularium-completion-debug~ inspects the completion configuration and current candidates for any column.  ~tabularium-undo-history~ displays the recorded undo and redo stacks for the current database.  ~tabularium-completion-clear-cache~ forces a reload of vocabulary files on the next completion request.  Setting ~tabularium-debug~ to a non-nil value enables verbose diagnostic messages during completion and autofill operations.
+~tabularium-completion-debug~ inspects the completion configuration and current candidates for any column.  ~tabularium-undo-history~ displays the recorded undo and redo stacks for the current table.  ~tabularium-completion-clear-cache~ forces a reload of vocabulary files on the next completion request.  Setting ~tabularium-debug~ to a non-nil value enables verbose diagnostic messages during completion and autofill operations.
 
 * Contributing
 

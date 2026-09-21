@@ -4,6 +4,38 @@
 
 All notable changes to ~tabularium~ are documented in this file.
 
+* v0.6.2 (2026-09-21)
+
+** Added
+
+- Composite keys: marking several columns ~:pk~ declares one key, written as a table constraint, and a ~:fk~ may span several columns with ~:columns~ and ~:target~.  Rows are still identified by one value, SQLite's ~rowid~.  Composite links reach the formula operators, =t ?=, and =t O=, and are checked when the schema loads: every column named must exist on both sides, and the target must be the parent's whole key
+- =t B= rebuilds a table from its schema.  SQLite applies constraints only at ~CREATE TABLE~, so a ~:fk~, ~:required~, or ~:unique~ added to an existing table did nothing.  Foreign keys are suspended for the swap, dependent views are recreated, and ~rowid~ carries across
+- ~:required~ and ~:unique~ are written into the table definition, and a duplicate in a ~:unique~ column is refused at the prompt
+- ~:on-update~ on a foreign key, alongside ~:on-delete~
+- =t O= repairs the rows =t ?= reports: reassign them to another parent, clear the link, or delete them, all undoably
+- A linked column completes on its ~:display~ columns, of which there may be several, and stores the key, in the view and the entry form alike
+- Every table a schema file declares is created at connect, so a computed column counting children no longer queries a table that does not yet exist
+- A delete that reaches other tables is one operation in all of them.  It can be undone or redone from any table it touched, and the message names the action: "delete 1 row in ‘Visits’, cascade to 2 rows in ‘Labs’".  Cascades are followed through every generation, ~set-null~ links are restored, and a cut (=X=) is recorded the same way
+- =v k= draws the key column in its own face, =v z= stripes alternate rows in a shade derived from the theme's background, and =r= opens the registry from the view
+
+** Changed
+
+- Constraint failures are reported in the schema's terms rather than SQLite's: a duplicate names its column or key, a foreign-key refusal names the parent tables, and =foreign key mismatch= points to =t B=.  An import counts the rows it refuses, with the reason, and lists them in a warning buffer
+- The delete prompt counts rows in every table a delete reaches, naming each table once, and says "unlinking" for ~set-null~ rather than "orphaning", since a null link is not an orphan by =t ?=
+- Prompts and messages curl their quotes, join clauses with a period rather than a dash, and give a count past three names
+- The header color runs to the window edge and survives a change of focus
+- =t D= deletes a join, =t S= offers the formula of the column at point, and =. == names the file it reloaded
+
+** Fixed
+
+- Formulas over links: ~lookup-joined~ was never registered and put the current table where the result column belonged, ~(children TABLE)~ counted against ~rowid~, and ~(parent COLUMN)~ took the first link rather than the one declaring the column
+- Undo restores a row with its original ~rowid~ rather than as a new row sorted to the top, an insert records the row it actually made, and an undo that cannot be applied stays in the history.  Undo suspends foreign keys while it works, so an orphan deleted by =t O= can be brought back
+- An import file one column short no longer shifts every value one place left.  File prompts refuse directories, and a schema-first import opens each prompt where the last file was found
+- The entry form saves an edited primary key, a new row appears without a refresh, and a column without ~:label~ falls back to its id rather than failing the view
+- A column the schema declares but the table lacks renders blank rather than =<<ERROR>>= in every cell
+- Opening the already-open database from the registry goes to its view, from =RET= as well as =o=
+- Internal: a core ~tabulated-list~ function renamed by the 0.6.0 vocabulary pass, two read-only guards misplaced inside binding lists, and two variables read before their definitions
+
 * v0.6.1 (2026-09-10)
 
 ** Added

@@ -4,7 +4,7 @@
 
 ;; Author: Paul H. McClelland <paulhmcclelland@protonmail.com>
 ;; Maintainer: Paul H. McClelland <paulhmcclelland@protonmail.com>
-;; Version: 0.6.0
+;; Version: 0.6.2
 ;; Package-Requires: ((emacs "29.1"))
 ;; Keywords: data
 ;; URL: https://codeberg.org/phmcc/tabularium
@@ -270,7 +270,7 @@
                           [_F_] Fill…                                                             
   
  ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  [_q_] Quit   [_o_] Open   [_O_] Open + View   [_i_/_<_] Import…    [_e_/_>_] Export…    [_$_] Rename   [_._] Schema   [_?_] Describe
+  [_q_] Quit   [_o_] Open   [_O_] Open + View   [_i_/_<_] Import…    [_e_/_>_] Export…    [_$_] Rename   [_._] Schema   [_?_] Describe   [_r_] Registry
 "
     ("q" nil :color blue)
     ;; Navigate
@@ -353,6 +353,7 @@
     ("C-?" tabularium-redo)
     ;; Bottom row
     ("o" tabularium-open :color blue)
+    ("r" tabularium-registry :color blue)
     ("O" tabularium-open-and-view :color blue)
     ("i" tabularium-import-hydra/body :color blue)
     ("<" tabularium-import-hydra/body :color blue)
@@ -431,7 +432,9 @@
   [_`_] Reorder tables      [_'_] Follow key onward
   [_k_] Set linking key       [_$_] Name table
   [_R_] Toggle read-only      [_S_] Describe SQL
+  [_r_] Registry
   [_J_] New join              [_j_] Describe join
+  [_B_] Rebuild from schema   [_O_] Repair orphan rows
   [_n_] Next                [_?_] Check links
   [_p_] Previous
  ────────────────────────────────────────────────────────────────────────────────
@@ -451,9 +454,14 @@
     ("k" tabularium-set-link-key)
     ("$" tabularium-name-table)
     ("R" tabularium-toggle-read-only)
+    ("r" tabularium-registry)
+    ("z" tabularium-toggle-zebra-stripes)
+    ("k" tabularium-toggle-primary-key-face)
     ("?" tabularium-check-integrity)
     ("S" tabularium-describe-sql)
     ("J" tabularium-join-new)
+    ("B" tabularium-table-rebuild)
+    ("O" tabularium-repair-orphans)
     ("j" tabularium-join-describe)
     ("q" tabularium-view-hydra/body :color blue))
 

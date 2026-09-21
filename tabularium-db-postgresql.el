@@ -4,7 +4,7 @@
 
 ;; Author: Paul H. McClelland <paulhmcclelland@protonmail.com>
 ;; Maintainer: Paul H. McClelland <paulhmcclelland@protonmail.com>
-;; Version: 0.5.4
+;; Version: 0.6.2
 ;; Package-Requires: ((emacs "29.1") (emacsql "4.0") (emacsql-pg "1.0"))
 ;; Keywords: data
 ;; URL: https://codeberg.org/phmcc/tabularium
@@ -135,7 +135,7 @@
             (mapcar (lambda (col)
                       (let ((name (symbol-name (plist-get col :id)))
                             (type (plist-get col :sql-type))
-                            (primary (plist-get col :primary)))
+                            (primary (plist-get col :pk)))
                         (concat name " " type (when primary " PRIMARY KEY"))))
                     columns))
            (sql (format "CREATE TABLE IF NOT EXISTS %s (%s,
@@ -176,14 +176,14 @@ case-sensitively and =~*= case-insensitively."
 
   (cl-defmethod tabularium-db-insert ((backend tabularium-db-postgresql) table-name alist)
     "Insert row into PostgreSQL TABLE-NAME from ALIST."
-    (let* ((fields (mapcar #'car alist))
+    (let* ((columns (mapcar #'car alist))
            (values (mapcar #'cdr alist))
-           (placeholders (cl-loop for i from 1 to (length fields)
+           (placeholders (cl-loop for i from 1 to (length columns)
                                   collect (format "$%d" i)))
-           (field-names (mapconcat #'symbol-name fields ", ")))
+           (column-names (mapconcat #'symbol-name columns ", ")))
       (apply #'emacsql (oref backend connection)
              (vector :raw (format "INSERT INTO %s (%s) VALUES (%s)"
-                                  table-name field-names
+                                  table-name column-names
                                   (string-join placeholders ", ")))
              values)))
 
@@ -216,9 +216,9 @@ case-sensitively and =~*= case-insensitively."
     (format "postgresql://%s:%d/%s"
             (oref backend host) (oref backend port) (oref backend database)))
 
-  (cl-defmethod tabularium-db-sql-type ((_backend tabularium-db-postgresql) field-type)
+  (cl-defmethod tabularium-db-sql-type ((_backend tabularium-db-postgresql) column-type)
     "Convert FIELD-TYPE to PostgreSQL type."
-    (pcase field-type
+    (pcase column-type
       ('integer "INTEGER")
       ('number "DOUBLE PRECISION")
       ('date "DATE")

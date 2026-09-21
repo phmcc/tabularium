@@ -4,7 +4,7 @@
 
 ;; Author: Paul H. McClelland <paulhmcclelland@protonmail.com>
 ;; Maintainer: Paul H. McClelland <paulhmcclelland@protonmail.com>
-;; Version: 0.6.0
+;; Version: 0.6.2
 ;; Package-Requires: ((emacs "29.1"))
 ;; Keywords: data
 ;; URL: https://codeberg.org/phmcc/tabularium
@@ -297,19 +297,34 @@ fail at the backend."
                   :pk-key (= (nth 5 row) 1)))
           (tabularium-db-query backend (format "PRAGMA table_info(%s)" table-name))))
 
+(defun tabularium-db--actions-clause (ref)
+  "Render REF\='s ON DELETE and ON UPDATE actions, or nothing."
+  (concat
+   (pcase (plist-get ref :on-delete)
+     ('cascade " ON DELETE CASCADE")
+     ('set-null " ON DELETE SET NULL")
+     ('restrict " ON DELETE RESTRICT")
+     (_ ""))
+   (pcase (plist-get ref :on-update)
+     ('cascade " ON UPDATE CASCADE")
+     ('set-null " ON UPDATE SET NULL")
+     ('restrict " ON UPDATE RESTRICT")
+     (_ ""))))
+
 (defun tabularium-db--references-clause (ref)
-  "Render REF, a (:table :column :on-delete) plist, as SQL.
+  "Render REF, a (:table :column :on-delete :on-update) plist, as SQL.
 `no-action\=' emits no ON DELETE clause at all, which is what SQLite
 does by default -- naming it would be the same behavior spelled out,
 and the shorter DDL is easier to read against `.schema\=' output."
-  (let ((action (plist-get ref :on-delete)))
+  (let ((del (plist-get ref :on-delete))
+        (upd (plist-get ref :on-update)))
+    (ignore del upd)
     (concat (format " REFERENCES %s(%s)"
                     (plist-get ref :table) (plist-get ref :column))
-            (pcase action
-              ('cascade " ON DELETE CASCADE")
-              ('set-null " ON DELETE SET NULL")
-              ('restrict " ON DELETE RESTRICT")
-              (_ "")))))
+            ;; Changing a parent key silently orphaned its children: the
+            ;; delete policies were declared and the update ones were
+            ;; not, so SQLite applied its default of no action.
+            (tabularium-db--actions-clause ref))))
 
 (cl-defmethod tabularium-db-create-table ((backend tabularium-db-sqlite) table-name columns)
   "Create TABLE-NAME on BACKEND with COLUMNS."
@@ -321,13 +336,45 @@ and the shorter DDL is easier to read against `.schema\=' output."
                           (check (plist-get col :check))
                           (ref (plist-get col :references)))
                       (concat name " " type
-                              (when primary " PRIMARY KEY")
+                              (when (and primary (not (plist-get col :in-key)))
+                                " PRIMARY KEY")
+                              ;; A primary key is already NOT NULL, and
+                              ;; saying so twice is legal but noisy in
+                              ;; `.schema\=' output.
+                              (when (and (plist-get col :required)
+                                         (not primary))
+                                " NOT NULL")
+                              (when (and (plist-get col :unique)
+                                         (not primary))
+                                " UNIQUE")
                               (when check (format " CHECK (%s)" check))
                               (when ref
                                 (tabularium-db--references-clause ref)))))
                   columns))
+         ;; A composite key is a table constraint, not a column one:
+         ;; `PRIMARY KEY\=' beside a column means that column alone, and
+         ;; two of them is a syntax error rather than a pair.
+         (composite (cl-remove-if-not (lambda (c) (plist-get c :in-key)) columns))
+         (extras
+          (append
+           (when (cdr composite)
+             (list (format "PRIMARY KEY (%s)"
+                           (mapconcat (lambda (c) (symbol-name (plist-get c :id)))
+                                      composite ", "))))
+           ;; Same for a foreign key spanning more than one column.
+           (delq nil
+                 (mapcar (lambda (c)
+                           (let ((ref (plist-get c :composite-ref)))
+                             (when ref
+                               (format "FOREIGN KEY (%s) REFERENCES %s(%s)%s"
+                                       (plist-get ref :columns)
+                                       (plist-get ref :table)
+                                       (plist-get ref :target)
+                                       (tabularium-db--actions-clause ref)))))
+                         columns))))
          (sql (format "CREATE TABLE IF NOT EXISTS %s (%s)"
-                      table-name (string-join col-defs ", "))))
+                      table-name
+                      (string-join (append col-defs extras) ", "))))
     (tabularium-db-execute backend sql)))
 
 (cl-defmethod tabularium-db-create-index ((backend tabularium-db-sqlite) table-name column-name)

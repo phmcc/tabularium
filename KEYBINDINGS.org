@@ -8,24 +8,24 @@ This file documents the default keybindings for ~tabularium~.  All bindings can 
 
 ** Navigation
 
-| Key                  | Command                                       |
-|----------------------+-----------------------------------------------|
-| =n= / =p=                | Next / previous row                           |
-| =TAB= / =S-TAB=          | Next / previous cell                          |
-| ={= / =}=                | First / last row (same column)                |
-| =[= / =]=                | Line beginning / end                          |
-| =M-n= / =M-p=            | Jump to different value ↓ / ↑                 |
-| =M-}= / =M-{=            | Jump to different value ↓ / ↑                 |
-| =M-<down>= / =M-<up>=    | Jump to different value ↓ / ↑                 |
-| =M-]= / =M-[=            | Jump to different value → / ←                 |
-| =M-<right>= / =M-<left>= | Jump to different value → / ←                 |
-| =C-<down>= / =C-<up>=    | Scroll viewport down / up one row              |
-| =C-S-<down>= / =C-S-<up>= | Scroll down / up a screenful                   |
-| =C-S-<right>= / =C-S-<left>= | Scroll right / left a screenful             |
-| =C-<right>= / =C-<left>= | Scroll viewport one column right / left       |
-| =RET=                  | View entry details                            |
-| =/=                    | Fuzzy find                                    |
-| =g=                    | Refresh                                       |
+| Key                      | Command                                 |
+|--------------------------+-----------------------------------------|
+| =n= / =p=                    | Next / previous row                     |
+| =TAB= / =S-TAB=              | Next / previous cell                    |
+| ={= / =}=                    | First / last row (same column)          |
+| =[= / =]=                    | Line beginning / end                    |
+| =M-n= / =M-p=                | Jump to different value ↓ / ↑           |
+| =M-}= / =M-{=                | Jump to different value ↓ / ↑           |
+| =M-<down>= / =M-<up>=        | Jump to different value ↓ / ↑           |
+| =M-]= / =M-[=                | Jump to different value → / ←           |
+| =M-<right>= / =M-<left>=     | Jump to different value → / ←           |
+| =C-<down>= / =C-<up>=        | Scroll viewport down / up one row       |
+| =C-S-<down>= / =C-S-<up>=    | Scroll down / up a screenful            |
+| =C-S-<right>= / =C-S-<left>= | Scroll right / left a screenful         |
+| =C-<right>= / =C-<left>=     | Scroll viewport one column right / left |
+| =RET=                      | View entry details                      |
+| =/=                        | Fuzzy find                              |
+| =g=                        | Refresh                                 |
 
 Cell-jump navigation moves to the next cell with a different value, useful for grouped or sorted data: =M-]=/=M-[= step right/left, =M-}=/=M-{= step down/up, with =M-n=/=M-p= and the =M-<arrow>= variants kept as alternatives.  A prefix argument (e.g., =C-u 3 M-}=) jumps multiple value transitions.
 
@@ -33,22 +33,22 @@ The =C-= arrows scroll the viewport by one step on either axis: =C-<down>= / =C-
 
 ** Fill (=F= prefix)
 
-| Key | Command                                |
-|-----+----------------------------------------|
-| =F f= | Fill ↓ (context)                       |
-| =F F= | Fill ↑ (context)                       |
-| =F n= | Fill ↓ (prompted)                      |
-| =F p= | Fill ↑ (prompted)                      |
-| =F .= | Fill ↓ to point (source above)         |
-| =F ,= | Fill ↑ to point (source below)         |
-| =F s= | Series ↓ (number or date)              |
-| =F S= | Series ↑ (number or date)              |
-| =F d= | Delete run ↓ (same-value cells)        |
-| =F D= | Delete run ↑ (same-value cells)        |
-| =F r= | Replace run ↓ (same-value cells)       |
-| =F R= | Replace run ↑ (same-value cells)       |
-| =F x= | Clear down through a row (inclusive)  |
-| =F X= | Clear up through a row (inclusive)    |
+| Key | Command                              |
+|-----+--------------------------------------|
+| =F f= | Fill ↓ (context)                     |
+| =F F= | Fill ↑ (context)                     |
+| =F n= | Fill ↓ (prompted)                    |
+| =F p= | Fill ↑ (prompted)                    |
+| =F .= | Fill ↓ to point (source above)       |
+| =F ,= | Fill ↑ to point (source below)       |
+| =F s= | Series ↓ (number or date)            |
+| =F S= | Series ↑ (number or date)            |
+| =F d= | Delete run ↓ (same-value cells)      |
+| =F D= | Delete run ↑ (same-value cells)      |
+| =F r= | Replace run ↓ (same-value cells)     |
+| =F R= | Replace run ↑ (same-value cells)     |
+| =F x= | Clear down through a row (inclusive) |
+| =F X= | Clear up through a row (inclusive)   |
 
 Lowercase fill keys act downward from point and uppercase keys upward.  =F f= / =F F= are zero-prompt: they infer the column and fill value from context, propagating the value at point into the adjacent blank run.  =F n= / =F p= prompt for column and value.  =F .= / =F ,= are point-anchored: =F .= takes the nearest non-blank cell above and fills down to point, =F ,= takes the nearest non-blank cell below and fills up to point.  =F s= / =F S= fill a number or date series.  =F d= / =F D= clear the same-value run from point; =F r= / =F R= replace that run with a prompted value.  =F x= clears the current column downward from point through a prompted row, and =F X= clears upward; both include the row at point, so they differ in direction only, like the rest of the fill keys.
 
@@ -93,19 +93,22 @@ Without marks, fill operations auto-detect blank ranges from point.  With marks,
 
 ** View (=v= prefix)
 
-| Key       | Command                              |
-|-----------+--------------------------------------|
-| =v v=       | Select saved view                    |
-| =v .=       | Save current visible state           |
-| =v 0=       | Clear all (filter/sort/cols)         |
-| =v 1-9=     | Apply schema view by number          |
-| =v x=       | Clear all (filter/sort/cols)         |
-| =v X=       | Expunge saved view(s) from schema    |
-| =v >=       | Show more rows                       |
-| =v a=       | Show all rows (no constraints)       |
-| =v +=       | Show all rows in current view        |
-| =v r=       | Show ID range                        |
-| =v ==       | Reset row limit to default page size |
+| Key       | Command                                     |
+|-----------+---------------------------------------------|
+| =v v=       | Select saved view                           |
+| =v .=       | Save current visible state                  |
+| =v 0=       | Clear all (filter/sort/cols)                |
+| =v 1-9=     | Apply schema view by number                 |
+| =v x=       | Clear all (filter/sort/cols)                |
+| =v X=       | Expunge saved view(s) from schema           |
+| =v >=       | Show more rows                              |
+| =v a=       | Show all rows (no constraints)              |
+| =v +=       | Show all rows in current view               |
+| =v r=       | Show ID range                               |
+| =v ==       | Reset row limit to default page size        |
+| =v z=       | Shade alternate rows                        |
+| =v k=       | Draw the primary-key column in its own face |
+| =v R=       | Toggle read-only for this table             |
 
 =v 0= and =v x= both clear the active filter, column visibility, and sort back to defaults, leaving saved views alone; =v X= deletes saved view definitions from the schema file, the counterpart of =v .=; =v 1= through =v 9= apply the corresponding numbered view from the schema.  The row-expansion keys control how many rows are shown: =v >= reveals the next page, =v a= drops every constraint, =v += lifts only the page-size limit and ID range while keeping the active filter, =v r= restricts to an explicit ID range, and =v == restores the default page size.
 
@@ -123,13 +126,13 @@ Without marks, fill operations auto-detect blank ranges from point.  With marks,
 
 ** Marks (=*= prefix)
 
-| Key   | Command                              |
-|-------+--------------------------------------|
-| =m=     | Mark row at point (or active region) |
-| =u=     | Unmark row at point (or region)      |
-| =U=     | Unmark all                           |
-| =t=     | Toggle all marks                     |
-| =a=     | Action menu on marked rows           |
+| Key | Command                              |
+|-----+--------------------------------------|
+| =m=   | Mark row at point (or active region) |
+| =u=   | Unmark row at point (or region)      |
+| =U=   | Unmark all                           |
+| =* *= | Toggle all marks                     |
+| =a=   | Action menu on marked rows           |
 | =* s= | Mark by substring                    |
 | =* e= | Mark by exact value                  |
 | =* r= | Mark by regexp                       |
@@ -175,8 +178,8 @@ Note that bare =+= duplicates the *row* at point (see Other, below); the column-
 
 ** Count (=#= prefix)
 
-| Key   | Command                          |
-|-------+----------------------------------|
+| Key | Command                          |
+|-----+----------------------------------|
 | =# s= | Count rows containing a value    |
 | =# e= | Count rows equal to a value      |
 | =# r= | Count rows matching a regexp     |
@@ -192,8 +195,8 @@ Counting mirrors the filter and highlight rule types — the three families ask 
 
 ** Aggregate (=%= prefix)
 
-| Key   | Command                          |
-|-------+----------------------------------|
+| Key | Command                          |
+|-----+----------------------------------|
 | =% s= | Sum                              |
 | =% S= | Sum (visible rows only)          |
 | =% m= | Min / max                        |
@@ -202,7 +205,7 @@ Counting mirrors the filter and highlight rule types — the three families ask 
 | =% D= | Mean ± SD (visible rows only)    |
 | =% i= | Median [Q1–Q3] (IQR)             |
 | =% I= | Median [IQR] (visible rows only) |
-| =% %= | Column summary                    |
+| =% %= | Column summary                   |
 
 Counting and aggregating answer different questions — how many rows match a description, against what the values in a column come to — so they have separate prefixes rather than sharing one.  Within each, lowercase covers the whole table and uppercase the current view.  =% %= reports on a column as a whole: how many rows hold a value, how many distinct ones, the most frequent, and the numeric block when the column is numeric.
 
@@ -217,6 +220,36 @@ Counting and aggregating answer different questions — how many rows match a de
 | =. += | Add column (undoable) |
 | =| $= | Rename column          |
 | =. l= | Relabel column         |
+| =. $= | Name this database    |
+
+** Tables and links (=t= prefix)
+
+| Key         | Command                                           |
+|-------------+---------------------------------------------------|
+| =t t=         | Switch to another table in this file              |
+| =t n=         | Next table                                        |
+| =t p=         | Previous table                                    |
+| =t TAB=       | Next table (alias)                                |
+| =t <backtab>= | Previous table (alias)                            |
+| =t l=         | List tables and their links                       |
+| =t `=         | Reorder the tables of this database               |
+| =t '=         | Follow the key at point into the next table       |
+| =t "=         | Follow it into the previous table                 |
+| =l=           | Child rows for the row at point                   |
+| =L=           | Back to the parent row                            |
+| =C-c l=       | Drop the detail filter                            |
+| =t N=         | New table in this database                        |
+| =t +=         | Duplicate a table                                 |
+| =t D=         | Delete a table                                    |
+| =t $=         | Name this table                                   |
+| =t k=         | Set the column this database links on             |
+| =t B=         | Rebuild this table from its schema                |
+| =t ?=         | Check referential integrity                       |
+| =t O=         | Repair rows whose foreign key names no parent     |
+| =t ==         | Check for tables without schemata, and vice versa |
+| =t J=         | Build a join from this database's tables          |
+| =t j=         | Describe the current join                         |
+| =t S=         | Describe the SQL a formula compiles to            |
 
 ** Undo / redo
 
@@ -235,7 +268,7 @@ Counting and aggregating answer different questions — how many rows match a de
 | =i A= | Import into the active database           |
 | =i a= | Append a file to the current table        |
 | =e e= | Export marked rows, or all if none marked |
-| =e *=         | Export the marked rows                           |
+| =e *= | Export the marked rows                    |
 | =e t= | Export one table                          |
 | =e T= | Export several tables                     |
 | =e a= | Export all — whole table (ignores marks)  |
@@ -244,6 +277,7 @@ Counting and aggregating answer different questions — how many rows match a de
 | =e r= | Export range (row IDs / columns)          |
 | =o=   | Open another database                     |
 | =O=   | Open and view                             |
+| =r=   | Open the registry                         |
 | =$=   | Rename database                           |
 | =?=   | Describe database                         |
 | =SPC= | Open menu                                 |
@@ -255,19 +289,19 @@ The import and export prefixes have alternatives: =<= mirrors =i= and =>= mirror
 
 ** Column navigation
 
-| Key               | Command               |
-|-------------------+-----------------------|
+| Key               | Command                |
+|-------------------+------------------------|
 | =TAB= / =S-TAB=       | Next / previous column |
 | =M-]= / =M-[=         | Next / previous column |
 | =C-c C-n= / =C-c C-p= | Next / previous column |
-| =n= / =p=             | Next / previous line  |
-| =M-n= / =M-p=         | Next / previous entry |
-| ='=                 | Go to entry in view   |
+| =n= / =p=             | Next / previous line   |
+| =M-n= / =M-p=         | Next / previous entry  |
+| ='=                 | Go to entry in view    |
 
 ** Field editing
 
-| Key               | Command              |
-|-------------------+----------------------|
+| Key               | Command               |
+|-------------------+-----------------------|
 | =RET= / =C-c C-e=     | Edit column at point  |
 | === / =C-c C-d=       | Set column to default |
 | =DEL= / =x= / =C-c C-r= | Clear column          |
@@ -329,31 +363,7 @@ with that database at the top and under point.
 | =m=           | Mark database at point                           |
 | =u=           | Unmark database at point                         |
 | =U=           | Unmark all                                       |
-| =* *=         | Toggle all marks                                 |
-| =t t=         | Switch to another table in this file             |
-| =t n=         | Next table                                       |
-| =t p=         | Previous table                                   |
-| =t l=         | List tables and their links                      |
-| =t S=         | Describe the SQL a formula compiles to           |
-| =t J=         | Build a join from this database's tables         |
-| =t j=         | Describe the current join                        |
-| =t ?=         | Check referential integrity                         |
-| =t N=         | New table in this database                       |
-| =t D=         | Delete a table                                     |
-| =t +=         | Duplicate a table                                |
-| =t TAB=       | Next table (alias)                               |
-| =t <backtab>= | Previous table (alias)                           |
-| =t `=         | Reorder the tables of this database              |
-| =t '=         | Follow the key at point into the next table      |
-| =t "=         | Follow it into the previous table                |
-| =t ==         | Check for tables without schemata, and vice versa |
-| =t k=         | Set the column this database links on             |
-| =t $=         | Name this table                                  |
-| =. $=         | Name this database                               |
-| =v R=         | Toggle read-only for this table                  |
-| =l=           | Child rows for the row at point                  |
-| =L=           | Back to the parent row                           |
-| =C-c l=       | Drop the detail filter                           |
+| =*=           | Toggle all marks                                 |
 | =x=           | Close the open database                          |
 | =A=           | Action menu (rename/duplicate/delete/expunge)    |
 | =g= / ===       | Refresh listing                                  |
