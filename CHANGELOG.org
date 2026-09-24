@@ -4,6 +4,30 @@
 
 All notable changes to ~tabularium~ are documented in this file.
 
+* v0.6.3 (2026-09-23)
+
+** Added
+
+- ~(children TABLE :sum COLUMN)~, with ~:min~ and ~:max~, aggregates a column of the rows pointing at this one, over a link of one column or several: a case's worst Clavien grade, or the nodes its procedures retrieved.  A computed column, or a sum of anything but numbers, is refused with the reason
+- A row added in a detail view (=l=) starts with its link to the parent filled in; the prompted and quick entries no longer ask for it
+- ~tabularium-define-table-order~ sets the order a database's tables are offered in by naming them, reading the database from those schemas rather than from a path written again
+- =samples/v063/=: a case log whose complications link to one another, and the composite sample with an aggregate column
+
+** Changed
+
+- =w= widens a detail view, where =C-c l= did, and the command is ~tabularium-view-widen~: unlinking is what a delete does to a row whose parent goes
+- A question or an undo message naming more than three tables names three and counts the rest
+- Repairing orphans asks "Assign to:", and records one operation per answer rather than one per row and column
+
+** Fixed
+
+- Detail views over a link of several columns: =l= matched one column of the link against the parent's ~rowid~, and =L= went to a link's value as though it were a row id.  Both now follow every column of the link
+- =L= returns across a link a table makes to itself, widening past the filter that hides the row it returns to
+- A database opened after being closed opens on the first table of its order, rather than on whichever table its registry row was written under
+- Deleting a row from its form, or orphans with =t O=, records the children it reaches as =D= does, and says so before asking
+- A delete that removes rows of a table linking to itself no longer lists them as unlinked as well
+- =N= and =C-u I= refuse a read-only table, where the check sat where it never ran; nine commands that asked their questions before refusing now refuse first
+
 * v0.6.2 (2026-09-21)
 
 ** Added

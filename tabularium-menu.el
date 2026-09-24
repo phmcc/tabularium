@@ -4,7 +4,7 @@
 
 ;; Author: Paul H. McClelland <paulhmcclelland@protonmail.com>
 ;; Maintainer: Paul H. McClelland <paulhmcclelland@protonmail.com>
-;; Version: 0.6.2
+;; Version: 0.6.3
 ;; Package-Requires: ((emacs "29.1"))
 ;; Keywords: data
 ;; URL: https://codeberg.org/phmcc/tabularium
@@ -931,7 +931,7 @@
       (". $" "Name database" tabularium-name-database)
       ("l" "Child rows" tabularium-view-children)
       ("L" "Parent row" tabularium-view-parent)
-      ("C-c l" "Unlink the detail filter" tabularium-view-unlink)
+      ("w" "Widen view" tabularium-view-widen)
       ("a" "Action" tabularium-view-action)
       ("* s" "Mark substring" tabularium-view-mark-matching)
       ("* e" "Mark exact" tabularium-view-mark-exact)

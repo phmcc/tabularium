@@ -344,6 +344,16 @@ Each database is paired with a =.schema.el= file that defines its structure.  Th
      :default t)))
 #+end_src
 
+** Several tables
+
+A schema file may define more than one schema on the same =:file=, each a table of that database.  Naming them sets the order they are offered in:
+
+#+begin_src emacs-lisp
+(tabularium-define-table-order "cases" "procedures" "catalog")
+#+end_src
+
+That is the order =t t= offers and =t n= steps through, and the first name is the table the database opens on.  A table left unnamed keeps its declared place, after those that are named.  The call goes below the schemas it names, since the database is read from them rather than written again.
+
 ** Column types
 
 | Type     | Description                                            |
@@ -504,6 +514,23 @@ Three departures from Emacs Lisp, each deliberate.  ~=~ is polymorphic — ~(= s
 
 The aggregates take an equality predicate only, and cover the whole table rather than the current view — a group total that moved as you filtered would be a surprise rather than a total.  Anything more complex is a SQL view.
 
+*** Links
+
+A formula can reach across a ~:fk~ without naming the join, since the link already says it.  ~(parent COLUMN)~ reads a column of the row this one points at, and ~(parent LINK COLUMN)~ says which link when the table has several.  ~(children TABLE)~ counts the rows of TABLE that point at this one; ~(children TABLE :sum COLUMN)~, ~:min~, and ~:max~ aggregate one of their columns instead:
+
+#+begin_src emacs-lisp
+(:id n_complications :type integer
+     :computed (tabularium-compute (children "complications")))
+(:id worst :type text
+     :computed (tabularium-compute (children "complications" :max grade)))
+(:id nodes :type integer
+     :computed (tabularium-compute (children "procedures" :sum nodes_removed)))
+#+end_src
+
+A link over several columns is followed on all of them.  The column aggregated must be stored in the child table rather than computed, and ~:sum~ takes a number.  A sum over no rows is 0, and the least or greatest of none is empty.  Text compares as text, which suits a Clavien-Dindo grade: its greatest is its worst.  The forms compile to ~count-in~, ~sum-in~, ~min-in~, and ~max-in~, which the lambda form can also call as ~tabularium-fn-*~ helpers.
+
+In the view, =l= opens the rows of a child table that point at the row at point, =L= goes back to the parent, and =w= widens to the whole table again.  A row added in such a detail view starts with its link filled in, since it belongs to the parent being shown.
+
 ** Computed-column helpers
 
 Every operator also exists as a ~tabularium-fn-*~ function, so the older lambda form can do whatever a formula can:
@@ -518,7 +545,7 @@ Each helper is named for its operator, so knowing one is knowing the other.  The
 
 
 
-Columns defined with ~:computed~ derive their value from an SQL expression or an Elisp function evaluated against the row, conceptually similar to formulae in spreadsheet software.  Computed columns are not stored — they are evaluated on read.  Both kinds can be filtered, sorted, and highlighted.  A SQL-expression column is handled by the database, which substitutes the expression into the ~WHERE~ or ~ORDER BY~ clause.  An Elisp column has no SQL form, so its rows are fetched first and the filtering and sorting happen in Emacs; the page limit is therefore applied afterwards and the intermediate fetch is bounded by ~tabularium-post-fetch-row-cap~, which reports an error rather than silently returning a truncated — and so wrong — answer.  Such a column must be visible for this, since its values exist only once computed for display.  An Elisp ~:computed~ expression receives the current row as an alist.  Helpers are grouped into four categories: conditional logic, same-row aggregation, date arithmetic, and cross-row lookup.
+Columns defined with ~:computed~ derive their value from an SQL expression or an Elisp function evaluated against the row, conceptually similar to formulae in spreadsheet software.  Computed columns are not stored — they are evaluated on read.  Both kinds can be filtered, sorted, and highlighted.  A SQL-expression column is handled by the database, which substitutes the expression into the ~WHERE~ or ~ORDER BY~ clause.  An Elisp column has no SQL form, so its rows are fetched first and the filtering and sorting happen in Emacs; the page limit is therefore applied afterward and the intermediate fetch is bounded by ~tabularium-post-fetch-row-cap~, which reports an error rather than silently returning a truncated — and so wrong — answer.  Such a column must be visible for this, since its values exist only once computed for display.  An Elisp ~:computed~ expression receives the current row as an alist.  Helpers are grouped into four categories: conditional logic, same-row aggregation, date arithmetic, and cross-row lookup.
 
 *** Conditional logic
 

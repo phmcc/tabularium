@@ -4,7 +4,7 @@
 
 ;; Author: Paul H. McClelland <paulhmcclelland@protonmail.com>
 ;; Maintainer: Paul H. McClelland <paulhmcclelland@protonmail.com>
-;; Version: 0.6.2
+;; Version: 0.6.3
 ;; Package-Requires: ((emacs "29.1"))
 ;; Keywords: data, tools
 ;; URL: https://codeberg.org/phmcc/tabularium
@@ -622,6 +622,23 @@ always means and saves naming it twice."
                                 (plist-get parent :columns))))
             (plist-get pk :id))))))
 
+
+(defun tabularium--parent-row-id (parent pairs row)
+  "Return the id of the PARENT row that ROW links to through PAIRS, or nil.
+
+PAIRS is what `tabularium--fk-column-pairs\=' returns.  The parent row is
+found by its own columns and named by its row id -- its key, or `rowid\='
+for a key of several columns -- since that is what a view goes to.  A
+link value is not a row id: going to one landed on the wrong row, or on
+none, for any link but an ordinary one to a primary key."
+  (caar (tabularium-db-query
+         tabularium--db
+         (format "SELECT %s FROM %s WHERE %s LIMIT 1"
+                 (tabularium--key-name-of parent)
+                 (tabularium-schema-table parent)
+                 (mapconcat (lambda (p) (format "%s = ?" (cdr p))) pairs " AND "))
+         (mapcar (lambda (p) (alist-get (car p) row)) pairs))))
+
 (defun tabularium--fk-action (fk)
   "Return FK\='s delete action, `restrict\=' by default."
   (let ((a (plist-get fk :on-delete)))
@@ -888,6 +905,14 @@ then deleted by the wrong column."
                  (tabularium--current-schema-name ,s))
              ,@body)
          (progn ,@body)))))
+
+(defun tabularium--as-one-operation (ops)
+  "Return OPS as a single operation, or nil when there are none.
+One when there is one, a `multi\=' of them otherwise, so that one answer
+to one question is one `C-/\=' rather than one per row it touched."
+  (cond ((null ops) nil)
+        ((null (cdr ops)) (car ops))
+        (t (list :type 'multi :ops ops))))
 
 (defun tabularium--keep-via (op inverse)
   "Return INVERSE carrying OP\='s `:via\=', when OP has one.
@@ -1537,6 +1562,19 @@ from none, since that table may have built on the undone state."
         (message "Redo: %s" (tabularium--describe-op undo-op)))
     (message "Nothing to redo")))
 
+(defun tabularium--first-three (items)
+  "Return ITEMS, or the first three and a count of the rest.
+
+Three is where the rest of the package draws this line.  A delete
+reaching nine tables named all nine in the question, which is a line
+nobody reads to the end, and the number is the part that decides the
+answer."
+  (if (> (length items) 3)
+      (let ((rest (- (length items) 3)))
+        (append (seq-take items 3)
+                (list (format "%d more table%s" rest (if (= 1 rest) "" "s")))))
+    items))
+
 (defun tabularium--and-list (items)
   "Join the strings ITEMS as a series: a, a and b, a, b, and c."
   (pcase (length items)
@@ -1575,12 +1613,13 @@ records two changes for each row it sets null."
                         ('set-null "set null on ")
                         (_ "change "))
                       (tabularium--and-list
-                       (mapcar (lambda (g)
-                                 (let ((k (length (cdr g))))
-                                   (format "%d row%s in `%s'" k (if (= 1 k) "" "s")
-                                           (tabularium-schema-display-name (cdar g)))))
-                               (cl-remove-if-not (lambda (g) (eq (caar g) via))
-                                                 groups)))))
+                       (tabularium--first-three
+                        (mapcar (lambda (g)
+                                  (let ((k (length (cdr g))))
+                                    (format "%d row%s in `%s'" k (if (= 1 k) "" "s")
+                                            (tabularium-schema-display-name (cdar g)))))
+                                (cl-remove-if-not (lambda (g) (eq (caar g) via))
+                                                  groups))))))
             (delete-dups (mapcar #'caar groups)))))
       (substitute-command-keys
        (format "delete %d row%s in `%s'%s"
@@ -3845,6 +3884,24 @@ for a database opened from a schema file that was never registered."
             (equal (file-truename (expand-file-name theirs))
                    (file-truename (expand-file-name ours))))))))
 
+(defun tabularium-registry--table-to-open (name)
+  "Return the table to open for the database row NAME.
+
+The configured default, or the head of the configured order, when the
+file has one; NAME otherwise.  A row is registered under whichever
+table the import happened to fill, which is not where the schema says
+its database begins -- so a database closed and opened again came back
+on the reference list rather than on the first table of its order.
+
+Resolved when the database is opened rather than when the registry is
+listed: the row is shown under the name it was registered with, which
+is the name the user chose."
+  (let* ((plist (tabularium--get-schema name))
+         (file (or (plist-get plist :file)
+                   (plist-get (tabularium-registry--find-database name) :file)))
+         (wanted (and file (tabularium-default-table-for file))))
+    (if (and wanted (tabularium--get-schema wanted)) wanted name)))
+
 (cl-defun tabularium-registry-open-at-point ()
   "Open the database at point.
 If another database is already open, prompt to close it first."
@@ -3871,8 +3928,9 @@ If another database is already open, prompt to close it first."
         ;; check before handing it to SQLite, which would otherwise
         ;; create an empty database at the stale location.
         (tabularium-registry--ensure-file db-name)
-        (tabularium-open db-name)
-        (message "Opened `%s'" db-name))
+        (let ((table (tabularium-registry--table-to-open db-name)))
+          (tabularium-open table)
+          (message "Opened `%s'" table)))
     (user-error "No database at point")))
 
 (defun tabularium--list-step (n first last)
@@ -3964,7 +4022,7 @@ Prompts before switching if another database is open."
                   (kill-buffer old-buf))
                 (tabularium-close))
             (user-error "Canceled")))
-        (tabularium-open db-name)
+        (tabularium-open (tabularium-registry--table-to-open db-name))
         (funcall action))
     (user-error "No database at point")))
 
@@ -4495,12 +4553,16 @@ Returns having either loaded a schema or told the user what to do."
 (defun tabularium-open (name)
   "Open database NAME, loading its schema file if present."
   (interactive
-   (list (tabularium-registry--completion-key
-          (completing-read (tabularium--prompt "Open database: ")
-                           (tabularium-registry--completion-table)
-                           nil nil nil nil
-                           (tabularium-schema-display-name
-                            tabularium--current-schema-name)))))
+   ;; Resolved here rather than in the body: a database chosen by name
+   ;; opens where its order begins, while `tabularium-open\=' called with a
+   ;; table -- stepping between them, following a link -- opens that one.
+   (list (tabularium-registry--table-to-open
+          (tabularium-registry--completion-key
+           (completing-read (tabularium--prompt "Open database: ")
+                            (tabularium-registry--completion-table)
+                            nil nil nil nil
+                            (tabularium-schema-display-name
+                             tabularium--current-schema-name))))))
   (tabularium-registry--ensure-loaded)
   ;; Find the row
   (let ((row (tabularium-registry--find-database name))
@@ -5877,7 +5939,7 @@ HEADER is a single line of column names separated by tabs, pipes,
 or commas (auto-detected, in that priority order).  Every column
 becomes a `:type text' column; the standard `row_id' integer
 primary key is prepended automatically.  Refine column types
-afterwards either by editing the schema file or by accepting the
+afterward either by editing the schema file or by accepting the
 prompt that appears on success.
 
 This command is the fastest way to bootstrap a database from a
@@ -6272,7 +6334,7 @@ in the schema file and in the database, or delete both and re-import"
         ;; Appended, not pushed: `tabularium-schemata' is read in order
         ;; wherever tables are listed or stepped through, so a pushed
         ;; schema would put each new table *before* the ones already
-        ;; there and make `t n' walk backwards through the file.
+        ;; there and make `t n' walk backward through the file.
         (setq tabularium-schemata
               (append tabularium-schemata (list (cons name args))))))
     ;; Remember where this came from, so `tabularium-schema-edit' can
@@ -6285,6 +6347,48 @@ in the schema file and in the database, or delete both and re-import"
                           (gethash name tabularium--schema-source-files))
                tabularium--schema-source-files))
     name))
+
+(defun tabularium-define-table-order (&rest names)
+  "Set the order the tables NAMES are the schemas of are offered in.
+
+NAMES are schemas of one database, in the order their tables should be
+stepped through with `t n\=' and offered by `t t\='.  The first is also the
+table the database opens on.  A table not named keeps its declared
+place, after those that are.
+
+Written in a schema file, below the schemas it names:
+
+  (tabularium-define-table-order \"cases\" \"procedures\" \"catalog\")
+
+The database is read from those schemas rather than named again, so
+moving it, which rewrites every `:file\=', moves this with it.  What it
+writes is `tabularium-table-order\=', which can also be set directly."
+  (let ((missing (seq-remove #'tabularium--get-schema names)))
+    (when missing
+      (user-error "No schema named %s.  Order the tables below the schemas they name"
+                  (mapconcat (lambda (n) (format "`%s'" n)) missing ", ")))
+    (let ((files (delete-dups
+                  (delq nil (mapcar (lambda (n)
+                                      (plist-get (tabularium--get-schema n) :file))
+                                    names)))))
+      (cond
+       ((null files)
+        (user-error "`%s' names no database file" (car names)))
+       ((cdr files)
+        (user-error "An order belongs to one database; these name %d"
+                    (length files))))
+      (let ((file (car files)))
+        (setq tabularium-table-order
+              (cons (cons file names)
+                    ;; Whatever row this database had goes, however its
+                    ;; path was spelled: reloading a schema file should
+                    ;; leave one row for it, not one per spelling.
+                    (cl-remove-if
+                     (lambda (e)
+                       (equal (file-truename (expand-file-name (car e)))
+                              (file-truename file)))
+                     tabularium-table-order)))
+        names))))
 
 (defun tabularium--get-schema (name)
   "Get schema plist for NAME."
@@ -6485,7 +6589,7 @@ therefore cannot be filtered or sorted by the database."
   (let* ((sym (if (stringp column) (intern column) column))
          ;; The lookup needs a current schema; SQL-building callers may run
          ;; without one (and pure SQL tests do), so fall back to treating
-         ;; the column as a plain column name rather than signalling.
+         ;; the column as a plain column name rather than signaling.
          (plist (ignore-errors (tabularium--column-by-name sym))))
     (cond
      ((null plist) (format "%s" column))
@@ -7413,7 +7517,7 @@ Each visible column contributes exactly one SELECT item, in order:
     placeholder.  An elisp-computed column has no physical column,
     so referencing it by name would be a SQL error; the NULL holds
     the slot in the right position and `tabularium--apply-elisp-computed'
-    fills in the real value afterwards."
+    fills in the real value afterward."
   (let ((known
          ;; The columns the *table* actually has, asked of the database
          ;; rather than taken from the schema.  A formula naming a
@@ -8147,7 +8251,7 @@ as a condition is almost always being tested for emptiness."
 (defun tabularium-compute--div (a b)
   "Divide A by B with SQL coercion, as a real number.
 Returns nil when either is null or B is zero: SQLite yields NULL for
-division by zero rather than signalling, and a formula that errored
+division by zero rather than signaling, and a formula that errored
 would take the whole render down with it.
 
 Division is real on both sides.  SQLite divides two integers as
@@ -8539,7 +8643,7 @@ as nothing at all."
 (defun tabularium-compute--days-between (from to)
   "Return the whole days from FROM to TO, both ISO date strings.
 Nil when either is empty or unparseable, matching julianday(), which
-yields NULL rather than signalling."
+yields NULL rather than signaling."
   (let ((a (tabularium-compute--str from))
         (b (tabularium-compute--str to)))
     (when (and a b (not (string-empty-p a)) (not (string-empty-p b)))
@@ -8586,6 +8690,32 @@ TABLE, KEY, and RESULT are names; VALUE is the value to match."
                      result table key
                      (tabularium-db-sql-quote (format "%s" value))))))))
 
+(defun tabularium-compute--aggregate-in (aggregate table column value result)
+  "Return AGGREGATE of RESULT over the rows of TABLE whose COLUMN is VALUE.
+AGGREGATE is the SQL function, \"SUM\", \"MIN\" or \"MAX\".  A sum over no
+rows is 0, as in SQL; the least or greatest of none is nil."
+  (when (and tabularium--db value)
+    (caar (ignore-errors
+            (tabularium-db-query
+             tabularium--db
+             (format (if (equal aggregate "SUM")
+                         "SELECT COALESCE(SUM(%s), 0) FROM %s WHERE %s = %s"
+                       (concat "SELECT " aggregate "(%s) FROM %s WHERE %s = %s"))
+                     result table column
+                     (tabularium-db-sql-quote (format "%s" value))))))))
+
+(defun tabularium-compute--sum-in (table column value result)
+  "Sum RESULT over the rows of TABLE whose COLUMN equals VALUE."
+  (tabularium-compute--aggregate-in "SUM" table column value result))
+
+(defun tabularium-compute--min-in (table column value result)
+  "Return the least RESULT among the rows of TABLE whose COLUMN equals VALUE."
+  (tabularium-compute--aggregate-in "MIN" table column value result))
+
+(defun tabularium-compute--max-in (table column value result)
+  "Return the greatest RESULT among the rows of TABLE whose COLUMN equals VALUE."
+  (tabularium-compute--aggregate-in "MAX" table column value result))
+
 (defun tabularium-compute--count-in (table column value)
   "Count rows of TABLE whose COLUMN equals VALUE."
   (when (and tabularium--db value)
@@ -8611,20 +8741,18 @@ orphan either."
       (list (cons column (tabularium--fk-target fk))))))
 
 (defun tabularium--repair-set (id column value)
-  "Set COLUMN of row ID to VALUE, undoably."
+  "Set COLUMN of row ID to VALUE, returning what undoes it.
+
+Returned rather than recorded: a repair sets every column of a link on
+every row it names, and one answer to one question should be one undo
+rather than one per row and column."
   (let ((old (cdr (assq column (tabularium--get-row-by-id id)))))
     (tabularium-db-update tabularium--db (tabularium-schema-table)
                           (list (cons column value))
                           (tabularium--primary-key-name) id)
-    (tabularium--undo-push
-     (list :type 'update :row id :column column :old old :new value))))
+    (list :type 'update :row id :column column :old old :new value
+          :schema (tabularium--schema-name))))
 
-(defun tabularium--repair-delete (id)
-  "Delete row ID, undoably."
-  (let ((data (tabularium--get-row-by-id id)))
-    (tabularium-db-delete tabularium--db (tabularium-schema-table)
-                          (tabularium--primary-key-name) id)
-    (tabularium--undo-push (list :type 'delete :row id :data data))))
 
 (defun tabularium--orphan-rows (column fk)
   "Return the row ids whose COLUMN names no row through FK, with the value."
@@ -8716,27 +8844,37 @@ Undoable, so a wrong answer is one `C-/\=' away."
                                       r))
                               rowsp))
                     (pick (completing-read
-                           (tabularium--prompt "Point them at: ")
+                           (tabularium--prompt "Assign to: ")
                            (mapcar #'car choices) nil t))
                     (vals (cdr (assoc pick choices))))
-               (dolist (r rows)
-                 (cl-loop for p in pairs
-                          for v in vals
-                          do (tabularium--repair-set (car r) (car p) v))
-                 (cl-incf fixed))))
+               (let (ops)
+                 (dolist (r rows)
+                   (cl-loop for p in pairs
+                            for v in vals
+                            do (push (tabularium--repair-set (car r) (car p) v) ops))
+                   (cl-incf fixed))
+                 (tabularium--undo-push
+                  (tabularium--as-one-operation (nreverse ops))))))
             ("Clear"
-             (dolist (r rows)
-               (dolist (p (tabularium--fk-column-pairs fk column))
-                 (tabularium--repair-set (car r) (car p) nil))
-               (cl-incf fixed)))
-            ("Delete"
-             (when (yes-or-no-p
-                    (tabularium--prompt
-                     "Delete %d row%s?  This cannot be undone while the link holds. "
-                     (length rows) (if (= 1 (length rows)) "" "s")))
+             (let (ops)
                (dolist (r rows)
-                 (tabularium--repair-delete (car r))
-                 (cl-incf fixed))))
+                 (dolist (p (tabularium--fk-column-pairs fk column))
+                   (push (tabularium--repair-set (car r) (car p) nil) ops))
+                 (cl-incf fixed))
+               (tabularium--undo-push
+                (tabularium--as-one-operation (nreverse ops)))))
+            ("Delete"
+             ;; Through the same path as `D\=': these rows may have rows of
+             ;; their own, which SQLite would take with them unrecorded.
+             ;; The warning this question carried -- that the delete
+             ;; could not be undone while the link held -- stopped being
+             ;; true when undo began suspending the links.
+             (let* ((ids (mapcar #'car rows))
+                    (children (tabularium--dependent-rows-deep ids)))
+               (tabularium--check-delete-policy ids children)
+               (when (yes-or-no-p (tabularium--delete-prompt ids children))
+                 (tabularium--delete-rows ids children)
+                 (cl-incf fixed (length ids)))))
             (_ nil)))))
     (when (derived-mode-p 'tabularium-view-mode) (revert-buffer))
     (message "%s" (if (zerop fixed) "Nothing changed"
@@ -8810,7 +8948,7 @@ AND %s != '' AND %s NOT IN (SELECT %s FROM %s)"
                      (tabularium-schema-display-name me)
                      checked (if (= 1 checked) "" "s"))))))
 
-(defun tabularium-compute--lookup-joined (_table _condition _result &optional _row)
+(defun tabularium-compute--lookup-joined (_table _condition &optional _result _row)
   "Signal: a join over several columns has no post-fetch form.
 
 Every other operator has a SQL form and an Emacs Lisp one, so a
@@ -8831,6 +8969,12 @@ and both say so rather than guessing."
 
 (defalias 'tabularium-fn-lookup-joined 'tabularium-compute--lookup-joined
   "Public name for the `lookup-joined\=' operator, as every operator has.")
+(defalias 'tabularium-fn-sum-joined 'tabularium-compute--lookup-joined
+  "Public name for the `sum-joined\=' operator, which is SQL-only.")
+(defalias 'tabularium-fn-min-joined 'tabularium-compute--lookup-joined
+  "Public name for the `min-joined\=' operator, which is SQL-only.")
+(defalias 'tabularium-fn-max-joined 'tabularium-compute--lookup-joined
+  "Public name for the `max-joined\=' operator, which is SQL-only.")
 
 (defun tabularium-compute--link-holding (links column)
   "Return the link in LINKS whose parent declares COLUMN.
@@ -8900,6 +9044,85 @@ no error to say so.  LOCAL is the column holding the foreign key."
               local
               (format "%s" column))))))
 
+(defconst tabularium-compute--children-aggregates
+  '((:sum sum-in sum-joined)
+    (:min min-in min-joined)
+    (:max max-in max-joined))
+  "What each `(children TABLE AGGREGATE COLUMN)\=' becomes.
+The operator for a link over one column, then the one for a link over
+several.")
+
+(defun tabularium-compute--check-aggregated (child schema aggregate column)
+  "Signal unless COLUMN of CHILD, the schema SCHEMA, can take AGGREGATE."
+  (let ((c (and column (symbolp column)
+                (cl-find-if (lambda (f) (eq (plist-get f :id) column))
+                            (plist-get child :columns)))))
+    (cond
+     ((null c)
+      (user-error "`%s' has no column `%s' to aggregate" schema column))
+     ;; The subquery reads the child table itself, where a computed
+     ;; column is not stored.
+     ((tabularium--computed-column-p c)
+      (user-error "`%s' in `%s' is computed; `children' aggregates a stored column"
+                  column schema))
+     ((and (eq aggregate :sum)
+           (not (memq (plist-get c :type) '(integer number))))
+      (user-error "`:sum' needs a number; `%s' in `%s' is %s"
+                  column schema (or (plist-get c :type) 'text))))))
+
+(defun tabularium-compute--children (schema &optional aggregate column)
+  "Return the lookup `(children SCHEMA [AGGREGATE COLUMN])\=' stands for.
+
+Without AGGREGATE, how many rows of SCHEMA point at this one.  With it,
+their COLUMN summed, least, or greatest -- AGGREGATE is `:sum\=', `:min\='
+or `:max\=' -- over the same rows.  The case log wanted the worst
+Clavien grade of a case\='s complications, and the language could only
+count them.
+
+Not `count-where\=': that counts within *this* table, and the rows being
+counted are in another one.  The child table, its linking columns and
+COLUMN are resolved here and carried as literals, so the emitted
+subquery names them directly."
+  (let* ((me (tabularium--schema-name))
+         (dep (cl-find-if (lambda (d) (equal (car d) schema))
+                          (tabularium-schema-dependents me))))
+    (unless dep
+      (user-error "`%s' does not point at `%s'" schema me))
+    (let* ((child (tabularium--get-schema schema))
+           (ctable (tabularium-schema-table child))
+           (fk (tabularium-column-fk
+                (cl-find-if (lambda (c) (eq (plist-get c :id) (cadr dep)))
+                            (plist-get child :columns))))
+           (cols (and fk (plist-get fk :columns)))
+           (targets (and fk (plist-get fk :target)))
+           (ops (and aggregate
+                     (or (cdr (assq aggregate tabularium-compute--children-aggregates))
+                         (user-error "`children' takes :sum, :min or :max, not %S"
+                                     aggregate)))))
+      (when aggregate
+        (tabularium-compute--check-aggregated child schema aggregate column))
+      (if (and (consp cols) (consp targets) (> (length cols) 1)
+               (= (length cols) (length targets)))
+          ;; A link over several columns.  `count-in\=' compares one child
+          ;; column against this table's key -- and for a key of several
+          ;; columns that key is `rowid\=', which is not what the child
+          ;; points at.
+          (let ((condition
+                 (mapconcat (lambda (pair)
+                              (format "%s.%s = %s.%s"
+                                      ctable (car pair)
+                                      (tabularium-schema-table) (cdr pair)))
+                            (cl-mapcar #'cons cols targets)
+                            " AND ")))
+            (if ops
+                (list (cadr ops) ctable condition (symbol-name column))
+              (list 'count-joined ctable condition)))
+        (if ops
+            (list (car ops) ctable (symbol-name (cadr dep))
+                  (tabularium--primary-key-name) (symbol-name column))
+          (list 'count-in ctable (symbol-name (cadr dep))
+                (tabularium--primary-key-name)))))))
+
 (defun tabularium-compute--expand-link (form)
   "Rewrite a `parent\=' or `children\=' form into an equivalent lookup.
 
@@ -8908,7 +9131,9 @@ Both are shorthand: the join they need is already declared by a
 same thing twice and leaving two places to disagree.
 
   (parent primary_dx)   ->  (lookup-in \"cases\" \"case_id\" case_id \"primary_dx\")
-  (children \"procedures\") -> (count-where <child.case_id> <my key>)
+  (children \"procedures\") -> (count-in \"procedures\" \"case_id\" case_id)
+  (children \"procedures\" :sum nodes_removed)
+                        -> (sum-in \"procedures\" \"case_id\" case_id \"nodes_removed\")
 
 Returns FORM unchanged when it is neither, so the walker can call this
 on everything."
@@ -8937,40 +9162,11 @@ on everything."
              value
              (format "%s" result))))
     (`(children ,schema)
-     ;; Not `count-where\=': that counts within *this* table, and the rows
-     ;; being counted are in another one.  The child table and its
-     ;; linking column are resolved here and carried as literals, so
-     ;; the emitted subquery names them directly.
-     (let* ((me (tabularium--schema-name))
-            (dep (cl-find-if (lambda (d) (equal (car d) schema))
-                             (tabularium-schema-dependents me))))
-       (unless dep
-         (user-error "`%s' does not point at `%s'" schema me))
-       (let* ((child (tabularium--get-schema schema))
-              (ctable (tabularium-schema-table child))
-              (fk (tabularium-column-fk
-                   (cl-find-if (lambda (c) (eq (plist-get c :id) (cadr dep)))
-                               (plist-get child :columns))))
-              (cols (and fk (plist-get fk :columns)))
-              (targets (and fk (plist-get fk :target))))
-         (if (and (consp cols) (consp targets) (> (length cols) 1)
-                  (= (length cols) (length targets)))
-             ;; A link over several columns.  `count-in\=' compares one
-             ;; child column against this table\='s key -- and for a key
-             ;; of several columns that key is `rowid\=', which is not
-             ;; what the child points at.
-             (list 'count-joined
-                   ctable
-                   (mapconcat (lambda (pair)
-                                (format "%s.%s = %s.%s"
-                                        ctable (car pair)
-                                        (tabularium-schema-table) (cdr pair)))
-                              (cl-mapcar #'cons cols targets)
-                              " AND "))
-           (list 'count-in
-                 ctable
-                 (symbol-name (cadr dep))
-                 (tabularium--primary-key-name))))))
+     (tabularium-compute--children schema))
+    (`(children ,schema ,aggregate ,column)
+     (tabularium-compute--children schema aggregate column))
+    (`(children . ,_)
+     (user-error "`children' takes a table, or a table, :sum, :min or :max, and a column"))
     (_ form)))
 
 (defconst tabularium-compute-operators
@@ -9121,7 +9317,36 @@ on everything."
                    ;; lookup into `visits\=' from `labs\='.
                    :sql "(SELECT %1$s.%6$s FROM %1$s WHERE %2$s LIMIT 1)"
                    :sql-subselect t :sql-scopes (literal literal literal)
-                   :arity (3 . 3)))
+                   :arity (3 . 3))
+
+    ;; A column of the rows pointing at this one, aggregated: what
+    ;; `(children TABLE :sum COLUMN)' and its `:min' and `:max' become.
+    ;; The same slots as `lookup-in' and `lookup-joined', and a sum over
+    ;; no rows is 0 where a least or greatest of none is empty.
+    (sum-in      :elisp tabularium-compute--sum-in
+                 :sql "(SELECT COALESCE(SUM(%1$s.%6$s), 0) FROM %1$s WHERE %1$s.%2$s = %5$s)"
+                 :sql-subselect t :sql-scopes (literal literal outer literal)
+                 :arity (4 . 4))
+    (min-in      :elisp tabularium-compute--min-in
+                 :sql "(SELECT MIN(%1$s.%6$s) FROM %1$s WHERE %1$s.%2$s = %5$s)"
+                 :sql-subselect t :sql-scopes (literal literal outer literal)
+                 :arity (4 . 4))
+    (max-in      :elisp tabularium-compute--max-in
+                 :sql "(SELECT MAX(%1$s.%6$s) FROM %1$s WHERE %1$s.%2$s = %5$s)"
+                 :sql-subselect t :sql-scopes (literal literal outer literal)
+                 :arity (4 . 4))
+    (sum-joined  :elisp tabularium-compute--lookup-joined
+                 :sql "(SELECT COALESCE(SUM(%1$s.%6$s), 0) FROM %1$s WHERE %2$s)"
+                 :sql-subselect t :sql-scopes (literal literal literal)
+                 :arity (3 . 3))
+    (min-joined  :elisp tabularium-compute--lookup-joined
+                 :sql "(SELECT MIN(%1$s.%6$s) FROM %1$s WHERE %2$s)"
+                 :sql-subselect t :sql-scopes (literal literal literal)
+                 :arity (3 . 3))
+    (max-joined  :elisp tabularium-compute--lookup-joined
+                 :sql "(SELECT MAX(%1$s.%6$s) FROM %1$s WHERE %2$s)"
+                 :sql-subselect t :sql-scopes (literal literal literal)
+                 :arity (3 . 3)))
   "Every operator a formula may use.
 
 Each row is (NAME . PLIST) with these properties:
@@ -9252,6 +9477,12 @@ lookalike.")
   "Return a column from the row of a named table whose key matches.")
 (defalias 'tabularium-fn-count-in #'tabularium-compute--count-in
   "Count rows of a named table whose column equals a value.")
+(defalias 'tabularium-fn-sum-in #'tabularium-compute--sum-in
+  "Sum a column over the rows of a named table whose column equals a value.")
+(defalias 'tabularium-fn-min-in #'tabularium-compute--min-in
+  "Return a column's least value among matching rows of a named table.")
+(defalias 'tabularium-fn-max-in #'tabularium-compute--max-in
+  "Return a column's greatest value among matching rows of a named table.")
 (defalias 'tabularium-fn-count-where #'tabularium-compute--count-where
   "Count rows whose column equals a value.")
 (defalias 'tabularium-fn-lookup #'tabularium-compute--lookup
@@ -9301,6 +9532,7 @@ rather than the single inner/outer split, so it is refused instead."
     (abs . number) (round . number) (max . number) (min . number)
     (length . integer) (days-between . integer)
     (count-where . integer) (sum-where . number)
+    (sum-in . number) (sum-joined . number)
     (concat . text) (upper . text) (lower . text) (trim . text)
     (substr . text)
     (= . boolean) (/= . boolean) (< . boolean) (> . boolean)
@@ -9396,7 +9628,7 @@ is unknown is left alone."
                   (cdr form)))))
 
 (defun tabularium-compute--validate (form)
-  "Walk FORM, signalling on anything a formula may not contain.
+  "Walk FORM, signaling on anything a formula may not contain.
 Checked at macro-expansion time, so a bad formula is an error where it
 is written rather than a blank column at render."
   (cond
@@ -9838,7 +10070,7 @@ which no referential action covers because the policy is about rows."
                   name (mapconcat #'car deps ", "))))
   (let* ((schema (tabularium--get-schema name))
          (table (tabularium-schema-table schema))
-         ;; Captured before the schema goes: afterwards there is nothing
+         ;; Captured before the schema goes: afterward there is nothing
          ;; left to ask which file it belonged to.
          (db-file (plist-get schema :file))
          (rows (or (ignore-errors
@@ -10225,7 +10457,7 @@ command says so rather than opening an empty prompt."
 The child view opens filtered to that parent, and the filter is
 locked: it is what makes the view a detail view rather than the whole
 child table, so removing it would silently change what is being
-looked at.  Clear it with `tabularium-view-unlink\=' or by switching
+looked at.  Clear it with `tabularium-view-widen\=' or by switching
 tables."
   (interactive
    (let* ((me (tabularium--schema-name))
@@ -10246,27 +10478,65 @@ tables."
          (column (cadr dep)))
     (unless dep
       (user-error "`%s' does not point at `%s'" schema me))
-    (let ((tabularium--switch-confirmed t))
-      (tabularium-open schema))
-    (tabularium-view)
-    (with-current-buffer (get-buffer (format "*%s*" schema))
-      (setq-local tabularium--linked-from (cons me id))
-      (setq tabularium--filter-rules
-            (list (list :type 'column :columns (list column)
-                        :op '= :value (format "%s" id)
-                        ;; Marked, not locked: the rules list shows
-                        ;; where it came from, and removing it widens
-                        ;; the view -- which is a step, not a mistake.
-                        :from-link me)))
-      (revert-buffer))
-    (message "`%s' where %s = %s  (%s to return)"
-             schema column id
-             (substitute-command-keys "\\[tabularium-view-parent]"))))
+    ;; The values the child rows hold, read from this row before leaving
+    ;; it: one rule per column of the link.  The row id stood in for all
+    ;; of them, which is the key for an ordinary link -- but for a key of
+    ;; several columns the id is `rowid', so the one declared column was
+    ;; compared against it and the view showed rows of the wrong parent,
+    ;; or none.
+    (let* ((row (or (tabularium--get-row-by-id id)
+                    (user-error "No row at point")))
+           (rules (mapcar (lambda (pair)
+                            (list :type 'column :columns (list (car pair))
+                                  :op '= :value (format "%s" (alist-get (cdr pair) row))
+                                  ;; Marked, not locked: the rules list shows
+                                  ;; where it came from, and removing it widens
+                                  ;; the view -- which is a step, not a mistake.
+                                  :from-link me))
+                          (tabularium--fk-column-pairs (cddr dep) column))))
+      (let ((tabularium--switch-confirmed t))
+        (tabularium-open schema))
+      (tabularium-view)
+      (with-current-buffer (get-buffer (format "*%s*" schema))
+        (setq-local tabularium--linked-from (cons me id))
+        (setq tabularium--filter-rules rules)
+        (revert-buffer))
+      (message "`%s' where %s  (%s to return)"
+               schema
+               (mapconcat (lambda (r)
+                            (format "%s = %s" (car (plist-get r :columns))
+                                    (plist-get r :value)))
+                          rules " and ")
+               (substitute-command-keys "\\[tabularium-view-parent]")))))
 
 (defvar-local tabularium--linked-from nil
   "The (SCHEMA . ROW-ID) this detail view was reached from, if any.
 Set when a child view is opened from a parent row, so the way back is
 the row that was left rather than the top of the parent table.")
+
+(defvar tabularium-entry--source-buffer)
+
+(defun tabularium--link-seeds ()
+  "Return (COLUMN . VALUE) for each column of the link this view shows.
+
+A row added where one parent\='s rows are shown belongs to that parent,
+and the view\='s own filter already says which: its `:from-link\=' rules.
+Read from the filter rather than from the parent, so a view whose link
+rule was removed seeds nothing -- it is showing the whole table again.
+From a form, the answer is the view the form was opened from."
+  (cond
+   ((derived-mode-p 'tabularium-view-mode)
+    (delq nil
+          (mapcar (lambda (r)
+                    (when (and (plist-get r :from-link)
+                               (eq (plist-get r :op) '=))
+                      (cons (car (plist-get r :columns))
+                            (plist-get r :value))))
+                  tabularium--filter-rules)))
+   ((and (boundp 'tabularium-entry--source-buffer)
+         (buffer-live-p tabularium-entry--source-buffer))
+    (with-current-buffer tabularium-entry--source-buffer
+      (tabularium--link-seeds)))))
 
 ;;;###autoload
 (defun tabularium-view-parent ()
@@ -10278,46 +10548,64 @@ so `L\=' means \"up\" whether or not you arrived by `l\='."
    (tabularium--linked-from
     (let ((schema (car tabularium--linked-from))
           (id (cdr tabularium--linked-from)))
+      ;; A table that links to itself is its own parent, and the row to
+      ;; go back to is one this view's own filter hides.  The filter
+      ;; goes first, or `L' looked like it did nothing.
+      (when (equal schema (tabularium--schema-name))
+        (setq tabularium--filter-rules
+              (cl-remove-if (lambda (r) (plist-get r :from-link))
+                            tabularium--filter-rules))
+        (setq-local tabularium--linked-from nil))
       (let ((tabularium--switch-confirmed t))
         (tabularium-open schema))
       (tabularium-view)
       (tabularium-view--goto-position id nil)
       (message "Back in `%s'" schema)))
    (t
-    (let* ((links (tabularium-schema-fks))
-           (pair (cond
-                  ((null links) (user-error "This table points at nothing"))
-                  ((= 1 (length links)) (car links))
-                  (t (let ((n (completing-read
-                               "Follow: "
-                               (mapcar (lambda (l)
-                                         (format "%s" (car l)))
-                                       links)
-                               nil t)))
-                       (assq (intern n) links)))))
+    ;; The row first, then the question: asking which link to follow and
+    ;; then finding no row to follow it from was a prompt for nothing.
+    (let* ((links (or (tabularium-schema-fks)
+                      (user-error "This table points at nothing")))
            (row (tabularium--get-row-by-id
                  (or (tabulated-list-get-id)
                      (user-error "No row at point"))))
-           (value (alist-get (car pair) row)))
-      (unless (and value (not (string-empty-p (format "%s" value))))
-        (user-error "`%s' is empty on this row" (car pair)))
-      (let ((parent (plist-get (cdr pair) :schema))
-            (tabularium--switch-confirmed t))
+           (pair (if (= 1 (length links))
+                     (car links)
+                   (let ((n (completing-read
+                             "Follow: "
+                             (mapcar (lambda (l) (format "%s" (car l))) links)
+                             nil t)))
+                     (assq (intern n) links))))
+           (pairs (tabularium--fk-column-pairs (cdr pair) (car pair)))
+           (empty (cl-find-if (lambda (p)
+                                (let ((v (alist-get (car p) row)))
+                                  (or (null v) (string-empty-p (format "%s" v)))))
+                              pairs)))
+      (when empty
+        (user-error "`%s' is empty on this row" (car empty)))
+      (let* ((parent (plist-get (cdr pair) :schema))
+             (target (or (tabularium--parent-row-id parent pairs row)
+                         (user-error "No row in `%s' matches this one's link"
+                                     parent)))
+             (tabularium--switch-confirmed t))
         (tabularium-open parent)
         (tabularium-view)
-        (tabularium-view--goto-position value nil)
+        (tabularium-view--goto-position target nil)
         (message "In `%s'" parent))))))
 
 ;;;###autoload
-(defun tabularium-view-unlink ()
-  "Drop the locked filter a detail view was opened with."
+(defun tabularium-view-widen ()
+  "Widen the view: drop the locked filter a detail view was opened with.
+
+Widen rather than unlink, since `unlink\=' is what a delete does to a
+row whose parent goes -- one word, one meaning."
   (interactive)
   (setq tabularium--filter-rules
         (cl-remove-if (lambda (r) (plist-get r :from-link))
                       tabularium--filter-rules))
   (setq-local tabularium--linked-from nil)
   (revert-buffer)
-  (message "Showing the whole table"))
+  (message "Widen view"))
 
 ;;; ** 4.5 Completion
 
@@ -13099,7 +13387,7 @@ carries no meaning where a rule does."
          ;; Use custom limit or default page size
          (page-limit (or tabularium-view--limit tabularium-view-page-size))
          ;; Post-fetch work must see every candidate row, so the page limit
-         ;; is applied afterwards and the fetch is bounded by the cap.
+         ;; is applied afterward and the fetch is bounded by the cap.
          (limit (if post-fetch tabularium-post-fetch-row-cap page-limit))
          (sql (format "SELECT %s FROM %s %s ORDER BY %s LIMIT %d"
                       (string-join (append select-columns context-names) ", ")
@@ -13609,7 +13897,7 @@ can be customized without affecting unrelated buffers."
     (define-key map (kbd "L") #'tabularium-view-parent)
     ;; Beside `l' and `L', which is where the link commands are; `u' is
     ;; unmark and `U' unmark-all, both older and both about marks.
-    (define-key map (kbd "C-c l") #'tabularium-view-unlink)
+    (define-key map (kbd "w") #'tabularium-view-widen)
     (define-key map (kbd "a") #'tabularium-view-action)
     (define-key map (kbd "* s") #'tabularium-view-mark-matching)
     (define-key map (kbd "* e") #'tabularium-view-mark-exact)
@@ -16767,24 +17055,32 @@ WHAT names the operation, for the message."
       (message "Duplicated row - edit and submit to save as new"))))
 
 (defun tabularium-entry-delete ()
-  "Delete the current row being edited."
+  "Delete the row being edited, and what its links take with it.
+
+Through the same path as `D\=' in the view.  This one deleted the row
+alone and recorded nothing of its children, so SQLite cascaded them
+away unrecorded: undoing the delete brought back a case with none of
+its procedures, and the question had not said they would go."
   (interactive)
   (tabularium--ensure-writable "delete rows")
   (if (not tabularium-entry-editing-id)
       (message "Cannot delete: this is a new row (not yet saved)")
-    (when (yes-or-no-p (format "Delete row %s? " tabularium-entry-editing-id))
-      (let ((id tabularium-entry-editing-id)
-            (schema-name tabularium-entry-schema-name))
+    (let ((id tabularium-entry-editing-id)
+          (schema-name tabularium-entry-schema-name)
+          (deleted nil))
+      (tabularium--in-schema schema-name
         (tabularium--ensure-db)
-        ;; Row for undo
-        (let ((old-data (tabularium--get-row-by-id id)))
-          (tabularium--undo-push (list :type 'delete :row id :data old-data)))
-        ;; Delete
-        (tabularium-db-delete tabularium--db (tabularium-schema-table)
-                          (tabularium--primary-key-name) id)
-        (tabularium--invalidate-cache)
+        (let ((children (tabularium--dependent-rows-deep (list id))))
+          ;; Refused before it is asked, as in the view.
+          (tabularium--check-delete-policy (list id) children)
+          (when (yes-or-no-p (tabularium--delete-prompt (list id) children))
+            (tabularium-db-with-transaction tabularium--db
+              (tabularium--delete-rows (list id) children))
+            (tabularium--invalidate-cache)
+            (setq deleted t))))
+      ;; Outside the schema binding: closing the form kills its buffer.
+      (when deleted
         (message "Row %s deleted" id)
-        ;; Close form and refresh view
         (quit-window t)
         (when-let* ((view-buf (get-buffer (format "*%s*" schema-name))))
           (with-current-buffer view-buf
@@ -16893,12 +17189,18 @@ unsaved row (which has no row yet)."
   "Open a form for entering a new row, or edit row ID if provided.
 With prefix argument, prompts for ID to edit."
   (interactive
-   (list (when current-prefix-arg
-           (or (tabularium--id-at-point)
-  (tabularium--ensure-writable "add a row")
-               (read-number "Edit row ID: ")))))
+   ;; The guard first, and only then the question.  It sat inside the
+   ;; `or' below, so a plain `N' never ran it at all, and with a prefix
+   ;; it ran between two prompts.
+   (progn
+     (tabularium--ensure-writable (if current-prefix-arg "edit a row" "add a row"))
+     (list (when current-prefix-arg
+             (or (tabularium--id-at-point)
+                 (read-number "Edit row ID: "))))))
+  (tabularium--ensure-writable (if id "edit a row" "add a row"))
   (tabularium--ensure-db)
-  (let* ((source-buffer (when (derived-mode-p 'tabularium-view-mode)
+  (let* ((seeds (unless id (tabularium--link-seeds)))
+         (source-buffer (when (derived-mode-p 'tabularium-view-mode)
                           (current-buffer)))
          (source-column (when (derived-mode-p 'tabularium-view-mode)
                           (tabularium--column-name-at-point)))
@@ -16913,13 +17215,13 @@ With prefix argument, prompts for ID to edit."
          (initial-values
           (if id
               (tabularium--get-row-by-id id)
-            ;; New row: compute defaults
+            ;; New row: the link a detail view shows, then the defaults.
             (mapcar (lambda (f)
                       (let ((name (plist-get f :id)))
                         (cons name
-                              (if (eq name primary-name)
-                                  (tabularium--next-id)
-                                (or (tabularium--compute-default f) "")))))
+                              (cond ((eq name primary-name) (tabularium--next-id))
+                                    ((assq name seeds) (cdr (assq name seeds)))
+                                    (t (or (tabularium--compute-default f) ""))))))
                     columns))))
     (unless (tabularium-entry--maybe-discard buf)
       (user-error "Canceled"))
@@ -17228,18 +17530,24 @@ For form-based row, use `tabularium-new-row' instead."
   (tabularium--ensure-writable "add a row")
   (tabularium--ensure-db)
   (let ((values '())
-        (primary-name (tabularium--primary-key-name)))
+        (primary-name (tabularium--primary-key-name))
+        (seeds (tabularium--link-seeds)))
     ;; Collect all column values, passing accumulated values as context
     (dolist (column (cl-remove-if #'tabularium--computed-column-p
                                  (tabularium--schema-columns)))
       (let* ((name (plist-get column :id))
-             (default (if (and (eq name primary-name)
-                               (eq (plist-get column :type) 'integer))
-                          (tabularium--next-id)
-                        nil))
-             ;; Pass current values as context for related completion
-             (value (tabularium--read-column column default values)))
-        (push (cons name value) values)))
+             (seed (assq name seeds)))
+        (if seed
+            ;; The link this detail view shows: already known, so not
+            ;; asked for again.
+            (push (cons name (cdr seed)) values)
+          (let* ((default (if (and (eq name primary-name)
+                                   (eq (plist-get column :type) 'integer))
+                              (tabularium--next-id)
+                            nil))
+                 ;; Pass current values as context for related completion
+                 (value (tabularium--read-column column default values)))
+            (push (cons name value) values)))))
     ;; Insert
     (let ((data (nreverse values)))
       (tabularium-db-insert tabularium--db (tabularium-schema-table) data)
@@ -17272,7 +17580,8 @@ For form-based row, use `tabularium-new-row' instead."
         (all-columns (cl-remove-if #'tabularium--computed-column-p
                                   (tabularium--schema-columns)))
         (primary-name (tabularium--primary-key-name))
-        (recent-alist (tabularium--get-recent-row)))
+        (recent-alist (tabularium--get-recent-row))
+        (seeds (tabularium--link-seeds)))
     ;; Process each column, passing accumulated values as context
     (dolist (column all-columns)
       (let* ((name (plist-get column :id))
@@ -17283,6 +17592,10 @@ For form-based row, use `tabularium-new-row' instead."
          ;; Primary key: auto-increment
          ((eq name primary-name)
           (push (cons name (tabularium--next-id)) values))
+         ;; The link this detail view shows.  Ahead of the most recent
+         ;; row, which may well belong to another parent.
+         ((assq name seeds)
+          (push (cons name (cdr (assq name seeds))) values))
          ;; Quick column: prompt with smart default, pass context
          (in-quick
           (let ((smart-default (or recent-val default-val)))
@@ -17308,8 +17621,10 @@ With USE-ALT-METHOD non-nil, use the alternative row method."
 (defun tabularium--edit (id)
   "Edit row ID, prompting for each column."
   (interactive
-   (list (or (tabularium--id-at-point)
-             (read-number "Edit ID: "))))
+   (progn
+     (tabularium--ensure-writable "edit rows")
+     (list (or (tabularium--id-at-point)
+               (read-number "Edit ID: ")))))
   (tabularium--ensure-writable "edit rows")
   (tabularium--ensure-db)
   (let* ((primary-name (tabularium--primary-key-name))
@@ -18496,7 +18811,27 @@ plus a fifth element: the table whose rows each generation points at."
                                           (mapcar (lambda (r)
                                                     (tabularium--row-id-of child r))
                                                   fresh)))))))))))
-    (nreverse out)))
+    ;; A row this delete removes is not also unlinked by it.  A table
+    ;; that links to itself listed it twice: a case's complications go
+    ;; with the case, and each that followed another was also unlinked
+    ;; from it, so the question and the undo message read "deleting 3,
+    ;; unlinking 2" for three rows that simply go.  Filtered after the
+    ;; walk, since a longer cascade can reach a row after a shorter path
+    ;; has already unlinked it.
+    (delq nil
+          (mapcar (lambda (c)
+                    (if (not (eq (nth 2 c) 'set-null))
+                        c
+                      (let ((kept (cl-remove-if
+                                   (lambda (row)
+                                     (gethash (list (car c)
+                                                    (tabularium--row-id-of (car c) row)
+                                                    'cascade)
+                                              seen))
+                                   (nth 3 c))))
+                        (when kept
+                          (list (car c) (nth 1 c) 'set-null kept (nth 4 c))))))
+                  (nreverse out)))))
 
 (defun tabularium--check-delete-policy (ids children)
   "Signal when deleting IDS would violate a `restrict\=' link.
@@ -18534,13 +18869,13 @@ than discovered."
                         (+ (length (nth 3 c))
                            (alist-get k acc 0 nil #'equal))))))
             (nreverse acc)))
-         (extra
-          (mapconcat
+         (clauses
+          (mapcar
            (lambda (g)
              ;; Curled here: this whole string arrives as an argument,
              ;; and `tabularium--prompt\=' substitutes the template only.
              (substitute-command-keys
-              (format ", %s %d in `%s'"
+              (format "%s %d in `%s'"
                       (pcase (cdar g)
                         ('cascade "deleting")
                         ;; Not "orphaning": `t ?\=' calls a row an orphan
@@ -18550,8 +18885,19 @@ than discovered."
                         (_ "leaving"))
                       (cdr g)
                       (tabularium-schema-display-name (caar g)))))
-           groups
-           "")))
+           groups))
+         ;; Past three tables the question gives a count, as the rest of
+         ;; the package does, and the last clause takes an "and".
+         (shown (tabularium--first-three clauses))
+         (extra (mapconcat
+                 (lambda (c) (concat ", " c))
+                 ;; Counted by what came in, not by what is shown: three
+                 ;; clauses and a count of one more is four either way.
+                 (if (> (length clauses) 3)
+                     (append (butlast shown)
+                             (list (concat "and " (car (last shown)))))
+                   shown)
+                 "")))
     (format "Delete %d %s%s? "
             (length ids)
             (if (= 1 (length ids)) "row" "rows")
@@ -18654,9 +19000,7 @@ the question and the redisplay are the command\'s, the history is this."
                                 (tabularium--primary-key-name)
                                 id)))
       (when ops
-        (let* ((op (if (= 1 (length ops))
-                       (car ops)
-                     (list :type 'multi :ops (nreverse ops))))
+        (let* ((op (tabularium--as-one-operation (nreverse ops)))
                (tables (delete-dups
                         (cons (tabularium--schema-name)
                               (delq nil (mapcar (lambda (o) (plist-get o :schema))
@@ -18726,11 +19070,15 @@ Clears marks after deleting.  Undoable."
 By default, inserts at point.  With prefix arg, prompts for POSITION.
 Opens form for data entry."
   (interactive
-   (list (if current-prefix-arg
-             (read-number "Insert new row at position: ")
+   ;; The guard first.  It was the else branch's first form, so with a
+   ;; prefix it never ran, and `C-u I' renumbered a read-only table.
+   (progn
+     (tabularium--ensure-writable "insert a row")
+     (list (if current-prefix-arg
+               (read-number "Insert new row at position: ")
+             (or (tabularium--id-at-point)
+                 (read-number "Insert new row at position: "))))))
   (tabularium--ensure-writable "insert a row")
-           (or (tabularium--id-at-point)
-               (read-number "Insert new row at position: ")))))
   (tabularium--ensure-db)
   (let* ((primary-name (tabularium--primary-key-name))
          (primary-name-str (symbol-name primary-name))
@@ -18758,6 +19106,7 @@ Opens form for data entry."
          (list (1+ old-id) old-id))))
     ;; Open form with the specified position as ID
     (let* ((source-buffer (current-buffer))
+           (seeds (tabularium--link-seeds))
            (schema-name (tabularium--schema-name))
            (columns (tabularium--schema-columns))
            (buf (get-buffer-create (format "*%s Form*" schema-name)))
@@ -18765,9 +19114,9 @@ Opens form for data entry."
             (mapcar (lambda (f)
                       (let ((name (plist-get f :id)))
                         (cons name
-                              (if (eq name primary-name)
-                                  position
-                                (or (tabularium--compute-default f) "")))))
+                              (cond ((eq name primary-name) position)
+                                    ((assq name seeds) (cdr (assq name seeds)))
+                                    (t (or (tabularium--compute-default f) ""))))))
                     columns)))
       (unless (tabularium-entry--maybe-discard buf)
         (user-error "Canceled"))
@@ -19251,7 +19600,7 @@ This modifies both the database and the schema.  Undoable."
                                      (tabularium-schema-table) col-name sql-type
                                      default-clause)
                              nil)
-      ;; SQLite applies a DEFAULT to rows inserted afterwards, not to the
+      ;; SQLite applies a DEFAULT to rows inserted afterward, not to the
       ;; ones already there -- so a column added with a default came up
       ;; blank on every existing row, and the value had to be entered by
       ;; hand.  Fill them in, which is what "default" plainly means here.
@@ -19667,26 +20016,28 @@ Stores schema and data for each column as a column batch."
 Copies the column schema and all data.  The new column is placed
 immediately after the source column.  Undoable."
   (interactive
-   (let* ((columns (tabularium--schema-columns))
-          (col-names (mapcar (lambda (f) (symbol-name (plist-get f :id))) columns))
-          (at-point (when (derived-mode-p 'tabularium-view-mode)
-                      (tabularium--column-name-at-point)))
-          (candidates (append (when at-point
-                                (list (format "<<POINT>> %s" (symbol-name at-point))))
-                              col-names))
-          (default (if at-point
-                       (format "<<POINT>> %s" (symbol-name at-point))
-                     (car col-names)))
-          (choice (completing-read "Duplicate column: " candidates nil t nil nil default))
-          (source (if (string-prefix-p "<<POINT>> " choice)
-                      at-point
-                    (intern choice)))
-          (new (intern (read-string (format "New column name (copy of %s): " source)
-                                    (tabularium--next-free-name
-                                     source
-                                     (lambda (c)
-                                       (assoc c tabularium-schemata)))))))
-     (list source new)))
+   (progn
+     (tabularium--ensure-writable "duplicate columns")
+     (let* ((columns (tabularium--schema-columns))
+            (col-names (mapcar (lambda (f) (symbol-name (plist-get f :id))) columns))
+            (at-point (when (derived-mode-p 'tabularium-view-mode)
+                        (tabularium--column-name-at-point)))
+            (candidates (append (when at-point
+                                  (list (format "<<POINT>> %s" (symbol-name at-point))))
+                                col-names))
+            (default (if at-point
+                         (format "<<POINT>> %s" (symbol-name at-point))
+                       (car col-names)))
+            (choice (completing-read "Duplicate column: " candidates nil t nil nil default))
+            (source (if (string-prefix-p "<<POINT>> " choice)
+                        at-point
+                      (intern choice)))
+            (new (intern (read-string (format "New column name (copy of %s): " source)
+                                      (tabularium--next-free-name
+                                       source
+                                       (lambda (c)
+                                         (assoc c tabularium-schemata)))))))
+       (list source new))))
   (tabularium--ensure-writable "duplicate columns")
   (tabularium--ensure-db)
   (let* ((schema-name (tabularium--schema-name))
@@ -19745,30 +20096,32 @@ immediately after the source column.  Undoable."
   "Cut COLUMNS: copy to kill ring then delete from schema/database.
 The primary key column cannot be cut.  Undoable."
   (interactive
-   (let* ((columns (tabularium--schema-columns))
-          (primary (tabularium--primary-key-name))
-          (deletable (cl-remove-if
-                      (lambda (f) (eq (plist-get f :id) primary))
-                      columns))
-          (choices (mapcar (lambda (f) (symbol-name (plist-get f :id))) deletable))
-          (at-point-name (when (derived-mode-p 'tabularium-view-mode)
-                           (let ((col (tabularium--column-name-at-point)))
-                             (when (and col (not (eq col primary)))
-                               col))))
-          (candidates (append (when at-point-name
-                               (list (format "<<POINT>> %s"
-                                             (symbol-name at-point-name))))
-                             choices))
-          (selected (completing-read-multiple
-                     "Cut columns: " candidates nil t nil nil
-                     (when at-point-name
-                       (format "<<POINT>> %s" (symbol-name at-point-name)))))
-          (resolved (mapcar (lambda (s)
-                              (if (string-prefix-p "<<POINT>> " s)
-                                  at-point-name
-                                (intern s)))
-                            selected)))
-     (list (delete-dups resolved))))
+   (progn
+     (tabularium--ensure-writable "cut columns")
+     (let* ((columns (tabularium--schema-columns))
+            (primary (tabularium--primary-key-name))
+            (deletable (cl-remove-if
+                        (lambda (f) (eq (plist-get f :id) primary))
+                        columns))
+            (choices (mapcar (lambda (f) (symbol-name (plist-get f :id))) deletable))
+            (at-point-name (when (derived-mode-p 'tabularium-view-mode)
+                             (let ((col (tabularium--column-name-at-point)))
+                               (when (and col (not (eq col primary)))
+                                 col))))
+            (candidates (append (when at-point-name
+                                 (list (format "<<POINT>> %s"
+                                               (symbol-name at-point-name))))
+                               choices))
+            (selected (completing-read-multiple
+                       "Cut columns: " candidates nil t nil nil
+                       (when at-point-name
+                         (format "<<POINT>> %s" (symbol-name at-point-name)))))
+            (resolved (mapcar (lambda (s)
+                                (if (string-prefix-p "<<POINT>> " s)
+                                    at-point-name
+                                  (intern s)))
+                              selected)))
+       (list (delete-dups resolved)))))
   (tabularium--ensure-writable "cut columns")
   (tabularium--ensure-db)
   ;; Save the visible order and point's position BEFORE the cut: once the
@@ -20438,7 +20791,7 @@ a multi-column rule are handled by the same path.  A `:raw' rule
   "Maximum rows fetched when a filter or sort runs in Emacs Lisp.
 Filtering or sorting by an elisp `:computed\\=' column cannot be pushed
 into SQL, so the rows must be fetched first and processed here.  That
-means the page limit can only be applied afterwards; this cap bounds
+means the page limit can only be applied afterward; this cap bounds
 the intermediate fetch.  Exceeding it signals an error rather than
 silently truncating, which would show a wrong answer."
   :type 'integer
@@ -21853,7 +22206,7 @@ At the last rule, point stays on it rather than leaving the list."
          (view tabularium--filter-view))
     ;; A locked rule is what makes a detail view a detail view.  Removing
     ;; it would silently widen the table being looked at, so it is
-    ;; refused here and dropped deliberately with `tabularium-view-unlink'.
+    ;; refused here and dropped deliberately with `tabularium-view-widen'.
     (tabularium--check-locked-rules nums view)
     (unless nums (user-error "No filter rule marked or at point"))
     (with-current-buffer view
@@ -22186,10 +22539,12 @@ result is validated here, per cell, immediately before the write."
 FIELDS is a list of column name strings.  If nil, searches all columns.
 If rows are marked, only operates on marked rows; marks are cleared after."
   (interactive
-   (let* ((old-value (read-string "Replace value: " nil 'tabularium-search-history))
-          (new-value (read-string (tabularium--prompt "Replace `%s' with: " old-value) nil 'tabularium-replace-history))
-          (columns (tabularium--column-crm)))
-     (list old-value new-value columns)))
+   (progn
+     (tabularium--ensure-writable "replace in rows")
+     (let* ((old-value (read-string "Replace value: " nil 'tabularium-search-history))
+            (new-value (read-string (tabularium--prompt "Replace `%s' with: " old-value) nil 'tabularium-replace-history))
+            (columns (tabularium--column-crm)))
+       (list old-value new-value columns))))
   (tabularium--ensure-writable "replace in rows")
   (tabularium--ensure-db)
   (let* ((primary-name (symbol-name (tabularium--primary-key-name)))
@@ -22293,10 +22648,12 @@ Unlike `tabularium-replace-substring', matches the entire cell value.
 FIELDS is a list of column name strings.  If nil, searches all columns.
 If rows are marked, only operates on marked rows; marks are cleared after."
   (interactive
-   (let* ((old-value (read-string "Replace exact value: " nil 'tabularium-search-history))
-          (new-value (read-string (tabularium--prompt "Replace `%s' with: " old-value) nil 'tabularium-replace-history))
-          (columns (tabularium--column-crm)))
-     (list old-value new-value columns)))
+   (progn
+     (tabularium--ensure-writable "replace in rows")
+     (let* ((old-value (read-string "Replace exact value: " nil 'tabularium-search-history))
+            (new-value (read-string (tabularium--prompt "Replace `%s' with: " old-value) nil 'tabularium-replace-history))
+            (columns (tabularium--column-crm)))
+       (list old-value new-value columns))))
   (tabularium--ensure-writable "replace in rows")
   (tabularium--ensure-db)
   (let* ((primary-name (symbol-name (tabularium--primary-key-name)))
@@ -22387,10 +22744,12 @@ If rows are marked, only operates on marked rows; marks are cleared after."
   "Replace cells matching SQL PATTERN with REPLACEMENT across FIELDS.
 Uses GLOB or LIKE per `tabularium-case-sensitive'.  Nil FIELDS means all."
   (interactive
-   (let* ((pattern (read-string (format "SQL %s pattern: " (tabularium-db-like-op tabularium-case-sensitive))))
-          (replacement (read-string (tabularium--prompt "Replace matches of `%s' with: " pattern) nil 'tabularium-replace-history))
-          (columns (tabularium--column-crm)))
-     (list pattern replacement columns)))
+   (progn
+     (tabularium--ensure-writable "replace in rows")
+     (let* ((pattern (read-string (format "SQL %s pattern: " (tabularium-db-like-op tabularium-case-sensitive))))
+            (replacement (read-string (tabularium--prompt "Replace matches of `%s' with: " pattern) nil 'tabularium-replace-history))
+            (columns (tabularium--column-crm)))
+       (list pattern replacement columns))))
   (tabularium--ensure-writable "replace in rows")
   (tabularium--ensure-db)
   (let* ((primary-name (symbol-name (tabularium--primary-key-name)))
@@ -22483,10 +22842,12 @@ Uses GLOB or LIKE per `tabularium-case-sensitive'.  Nil FIELDS means all."
   "Replace cells matching Emacs REGEXP with REPLACEMENT across FIELDS.
 REPLACEMENT can include \\\\& and \\\\N.  Nil FIELDS means all."
   (interactive
-   (let* ((regexp (read-string "Replace regexp: " nil 'tabularium-regexp-history))
-          (replacement (read-string (tabularium--prompt "Replace matches of `%s' with: " regexp) nil 'tabularium-replace-history))
-          (columns (tabularium--column-crm)))
-     (list regexp replacement columns)))
+   (progn
+     (tabularium--ensure-writable "replace in rows")
+     (let* ((regexp (read-string "Replace regexp: " nil 'tabularium-regexp-history))
+            (replacement (read-string (tabularium--prompt "Replace matches of `%s' with: " regexp) nil 'tabularium-replace-history))
+            (columns (tabularium--column-crm)))
+       (list regexp replacement columns))))
   (tabularium--ensure-writable "replace in rows")
   (tabularium--ensure-db)
   (let* ((primary-name (symbol-name (tabularium--primary-key-name)))
@@ -22573,10 +22934,12 @@ REPLACEMENT can include \\\\& and \\\\N.  Nil FIELDS means all."
   "Interactive query-replace OLD-VALUE with NEW-VALUE across FIELDS.
 Prompt y/n/!/q at each match, like `query-replace'.  Nil FIELDS means all."
   (interactive
-   (let* ((old-value (read-string "Query replace: " nil 'tabularium-search-history))
-          (new-value (read-string (tabularium--prompt "Replace `%s' with: " old-value) nil 'tabularium-replace-history))
-          (columns (tabularium--column-crm)))
-     (list old-value new-value columns)))
+   (progn
+     (tabularium--ensure-writable "replace in rows")
+     (let* ((old-value (read-string "Query replace: " nil 'tabularium-search-history))
+            (new-value (read-string (tabularium--prompt "Replace `%s' with: " old-value) nil 'tabularium-replace-history))
+            (columns (tabularium--column-crm)))
+       (list old-value new-value columns))))
   (tabularium--ensure-writable "replace in rows")
   (tabularium--ensure-db)
   (let* ((primary-name (symbol-name (tabularium--primary-key-name)))
@@ -23532,7 +23895,7 @@ function so refreshing keeps whichever length is on screen.")
   "Bound while rendering to force the whole frequency table.
 The renderer builds the buffer from scratch and `tabularium-summary-mode\='
 clears buffer-local variables on the way, so the preference is carried
-in dynamically and written back to the fresh buffer afterwards.")
+in dynamically and written back to the fresh buffer afterward.")
 
 (defun tabularium-summary-values ()
   "Toggle between the abbreviated frequency table and the whole list.
@@ -24374,7 +24737,7 @@ delimited text."
 ;; One stem, two branches, per `import-paradigm.org'.  Where the data is
 ;; going is asked first, because it rules out half the answers; then what
 ;; is arriving.  Data and schema are the two things a database is made of,
-;; and each branch offers the other afterwards.
+;; and each branch offers the other afterward.
 
 (defvar tabularium-import--data-extensions
   "\\.\\(csv\\|tsv\\|org\\)\\'"
@@ -24473,7 +24836,7 @@ file three prompts later."
   "Read a file for PROMPT, asking again while the answer is a directory.
 
 Said where the answer is given rather than after the next question.
-A directory travelling on as a filename reached the overwrite check,
+A directory traveling on as a filename reached the overwrite check,
 which reported that a file of that name existed -- true, and about
 something the user had not meant to name."
   (let ((file nil))
@@ -24947,7 +25310,7 @@ the tables, so the two agree until it is loaded."
   "Import data files into DB-FILE.
 
 The schema is settled *before* any rows go in.  Creating the tables
-first and asking about the schema afterwards meant the wizard and the
+first and asking about the schema afterward meant the wizard and the
 other methods changed a schema whose table already existed with the
 old columns -- so the view queried names the table did not have, and
 every table read as empty."
@@ -25622,9 +25985,11 @@ collide with existing rows.
 Requires a database to be open; use `tabularium-import' to import
 a file as a new database instead."
   (interactive
-   (list (read-file-name "Append file to current table: " nil nil t nil
-                         (lambda (f) (or (file-directory-p f)
-                                         (string-match-p "\\.csv$\\|\\.tsv$\\|\\.org$" f))))))
+   (progn
+     (tabularium--ensure-writable "append rows")
+     (list (read-file-name "Append file to current table: " nil nil t nil
+                           (lambda (f) (or (file-directory-p f)
+                                           (string-match-p "\\.csv$\\|\\.tsv$\\|\\.org$" f)))))))
   (tabularium--ensure-writable "append rows")
   (unless (and tabularium--current-schema-name tabularium--db)
     (user-error "No database open.  Use `tabularium-import' to import as new"))
@@ -26085,7 +26450,7 @@ projected down to FIELDS in FIELDS order.  Computed values are
 whatever the expression or lambda yields, written literally."
   (tabularium--ensure-db)
   (let* (;; Compute over the entire schema so elisp lambdas see every
-         ;; column, then project to FIELDS afterwards.
+         ;; column, then project to FIELDS afterward.
          (all-columns (tabularium--schema-columns))
          (computed-select (tabularium--build-select-with-computed all-columns))
          (sql (format "SELECT %s FROM %s %s%s%s"
@@ -26200,7 +26565,7 @@ is sorted ascending with duplicates removed.  Signals a
         (let ((lo (string-to-number (match-string 1 item)))
               (hi (string-to-number (match-string 2 item))))
           (when (> lo hi)
-            (user-error "Range %s is backwards (low > high)" item))
+            (user-error "Range %s is backward (low > high)" item))
           (cl-loop for i from lo to hi do (push i ids))))
        (t
         (user-error "Bad id/range item: %s" item))))
@@ -26611,7 +26976,7 @@ what an INTEGER PRIMARY KEY does."
       ;; A warning rather than a message.  The count was the last thing
       ;; said and then the view opened over it, so an import that
       ;; refused half its rows looked like one that had worked -- and
-      ;; the rows were simply not there afterwards.
+      ;; the rows were simply not there afterward.
       (display-warning
        'tabularium
        (format "%d of %d rows were refused by `%s'.\n\n%s%s"

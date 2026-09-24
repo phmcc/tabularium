@@ -35,19 +35,25 @@ The following features are tentatively planned for future releases:
 
 ** v0.6.2
 
-- [ ] Schema migration
+- [X] Schema migration
   - Adding a =:fk= to an existing table does nothing: SQLite adds constraints only at =CREATE TABLE=
   - Currently can only delete the database and rebuild, which makes the whole link feature usable on new databases only
   - ~tabularium--rebuild-table-dropping~ already does the copy-and-swap dance for column deletion; generalizing it to "rebuild this table from its current schema" closes the gap and makes every constraint below retroactive
-- [ ] =NOT NULL= and =UNIQUE= in the DDL
+- [X] =NOT NULL= and =UNIQUE= in the DDL
   - =:required= is checked at entry and =:unique= does not exist; neither reaches the database, so anything writing to the file another way can break what the schema promises
-- [ ] =:on-update=
+- [X] =:on-update=
   - The delete policies are there; changing a parent key silently orphans its children
-- [ ] Composite keys
+- [X] Composite keys
   - =:pk t= marks one field, and =:fk= names one column.  A key of (patient_id, visit_date) cannot be expressed, which rules out a large class of real data
-- [ ] =t ?= reports orphans; nothing fixes them.  Reassign, null out, or delete, on the rows it found
-- [ ] Rebuild a table from its schema (the migration command above, exposed)
-- [ ] Add a custom background face for the primary key, as well as user-toggleable zebra striping
+- [X] =t ?= reports orphans; nothing fixes them.  Reassign, null out, or delete, on the rows it found
+- [X] Rebuild a table from its schema (the migration command above, exposed)
+- [X] Add a custom background face for the primary key, as well as user-toggleable zebra striping
+
+** v0.6.3
+
+- [X] Aggregate a child column in a formula: =(children TABLE :sum COLUMN)=, with =:min= and =:max=
+- [X] A row added in a detail view starts with its link to the parent filled in
+- [X] Detail views follow a link over several columns, on every column of it
 
 ** v0.7.0
 
