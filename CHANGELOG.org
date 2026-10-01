@@ -4,6 +4,44 @@
 
 All notable changes to ~tabularium~ are documented in this file.
 
+* v0.7.0 (2026-10-01)
+
+** Added
+
+- Pivot tables: a schema with a ~:pivot~ spec, compiled to a read-only view as a join is.  =t P= builds one from a table or join: row fields, an optional column field, and measures.  Dates group by ~year~ through ~day~, numbers into bins, and ~:totals~ adds a column per measure
+- Measures ~:count~, ~:sum~, ~:mean~, ~:median~, ~:mode~, ~:min~, and ~:max~; the median and mode, which SQLite lacks, come from window columns
+- =t ?= describes a table, join, or pivot with its SQL, and =t o= checks for orphans
+- ~:decimals~ fixes the places a number column shows, from the schema, the wizard, the shorthand, or =| .=
+- ~tabularium-reload-schema~ loads a database's schema file again and opens it
+- ~tabularium-column-gap~, ~tabularium-popup-width~, and ~tabularium-pivot-total-label~
+- =test/v0.7.0/=: a sample database
+
+** Changed
+
+- Prompts offer columns and tables as =Label [name]=, and every prompt's choices follow one standard: =<<SENTINELS>>= for stand-ins, Capitalized actions, lowercase values
+- Details buffers share one look: labels in the title, internal names below it, nothing past 80 columns
+- Hint lines show the keys as bound, and docstrings name commands rather than keys
+- A view's buffer is named for its table's label; a label in use takes =(2)=, a key =_2=
+- =t $= asks which table, and can rename its internal name with every reference to it
+- =| l= relabels the column at point and =| L= a chosen one; =| M= moves columns after the one named
+- Closing a database forgets its schemata until it reopens
+- Prompts and messages are formal throughout, in American spelling
+
+** Fixed
+
+- Deleting a column rebuilt its table without its key or constraints, and dropped the old one with links on, emptying every table cascading from it
+- Reindexing, swapping, and moving rows renumbered keys that links or joins use
+- Editing long text bound its keys in every Org or Markdown buffer, and the table-order buffer in every Emacs Lisp buffer
+- A database made from another's schema file, imported or duplicated, took over its tables and registry row; it now gets a renamed copy
+- A copy made by =t += lost its links, so its computed columns failed
+- =. == kept tables deleted from the schema file until the database reopened
+- =t $= named a table only until its schema file next loaded
+- Building the same pivot or join twice wrote the second over the first
+- A database first opened in a session skipped the head of its table order
+- Saving a schema file dropped its ~tabularium-define-table-order~, and Save As copied one schema of several
+- Inserting a row at a position renumbered keys that links held, outside a transaction
+- Docstrings showed a stray equals sign before closing quotes and possessives
+
 * v0.6.3 (2026-09-23)
 
 ** Added

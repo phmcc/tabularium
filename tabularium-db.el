@@ -4,7 +4,7 @@
 
 ;; Author: Paul H. McClelland <paulhmcclelland@protonmail.com>
 ;; Maintainer: Paul H. McClelland <paulhmcclelland@protonmail.com>
-;; Version: 0.6.3
+;; Version: 0.7.0
 ;; Package-Requires: ((emacs "29.1"))
 ;; Keywords: data
 ;; URL: https://codeberg.org/phmcc/tabularium
@@ -88,7 +88,7 @@
   "Return a unique identifier string for BACKEND's connection.")
 
 (cl-defgeneric tabularium-db-sql-type (backend column-type)
-  "Convert Tabularium FIELD-TYPE symbol to a SQL type string for BACKEND.")
+  "Convert Tabularium COLUMN-TYPE symbol to a SQL type string for BACKEND.")
 
 (cl-defgeneric tabularium-db-date-function (backend)
   "Return SQL expression for current date/time on BACKEND.")
@@ -189,7 +189,7 @@ Merges write-ahead log into the main file for clean syncing."
 
 (defcustom tabularium-db-foreign-keys t
   "Whether to enforce foreign key constraints.
-On SQLite this issues `PRAGMA foreign_keys = ON\=' at connection time.
+On SQLite this issues `PRAGMA foreign_keys = ON' at connection time.
 The pragma is per-connection and is not stored in the database file,
 so every REFERENCES clause and every ON DELETE action is inert until
 it is issued -- which is why this defaults on.
@@ -298,7 +298,7 @@ fail at the backend."
           (tabularium-db-query backend (format "PRAGMA table_info(%s)" table-name))))
 
 (defun tabularium-db--actions-clause (ref)
-  "Render REF\='s ON DELETE and ON UPDATE actions, or nothing."
+  "Render REF's ON DELETE and ON UPDATE actions, or nothing."
   (concat
    (pcase (plist-get ref :on-delete)
      ('cascade " ON DELETE CASCADE")
@@ -313,9 +313,9 @@ fail at the backend."
 
 (defun tabularium-db--references-clause (ref)
   "Render REF, a (:table :column :on-delete :on-update) plist, as SQL.
-`no-action\=' emits no ON DELETE clause at all, which is what SQLite
+`no-action' emits no ON DELETE clause at all, which is what SQLite
 does by default -- naming it would be the same behavior spelled out,
-and the shorter DDL is easier to read against `.schema\=' output."
+and the shorter DDL is easier to read against `.schema' output."
   (let ((del (plist-get ref :on-delete))
         (upd (plist-get ref :on-update)))
     (ignore del upd)
@@ -340,7 +340,7 @@ and the shorter DDL is easier to read against `.schema\=' output."
                                 " PRIMARY KEY")
                               ;; A primary key is already NOT NULL, and
                               ;; saying so twice is legal but noisy in
-                              ;; `.schema\=' output.
+                              ;; `.schema' output.
                               (when (and (plist-get col :required)
                                          (not primary))
                                 " NOT NULL")
@@ -352,7 +352,7 @@ and the shorter DDL is easier to read against `.schema\=' output."
                                 (tabularium-db--references-clause ref)))))
                   columns))
          ;; A composite key is a table constraint, not a column one:
-         ;; `PRIMARY KEY\=' beside a column means that column alone, and
+         ;; `PRIMARY KEY' beside a column means that column alone, and
          ;; two of them is a syntax error rather than a pair.
          (composite (cl-remove-if-not (lambda (c) (plist-get c :in-key)) columns))
          (extras
@@ -422,7 +422,7 @@ and the shorter DDL is easier to read against `.schema\=' output."
   (oref backend file))
 
 (cl-defmethod tabularium-db-sql-type ((_backend tabularium-db-sqlite) column-type)
-  "Convert FIELD-TYPE to SQLite type.
+  "Convert COLUMN-TYPE to SQLite type.
 Dates, times, and datetimes are stored as TEXT in ISO 8601 form."
   (pcase column-type
     ('integer "INTEGER") ('number "REAL") (_ "TEXT")))
@@ -466,9 +466,9 @@ Dates, times, and datetimes are stored as TEXT in ISO 8601 form."
 
 (defvar tabularium-db--connections (make-hash-table :test 'equal)
   "Active backend objects keyed by database file.
-See `tabularium-db--connection-key\='.  Keyed by file rather than by
+See `tabularium-db--connection-key'.  Keyed by file rather than by
 schema name so that several schemata naming one file share a handle:
-two handles on one file would mean two `PRAGMA foreign_keys\=' states,
+two handles on one file would mean two `PRAGMA foreign_keys' states,
 and a checkpoint that closed one and left the other live.")
 
 (defvar tabularium-db--hooks-registered nil
@@ -488,10 +488,10 @@ key from a configuration that may since have changed.")
 (defun tabularium-db--connection-key (config)
   "Return the cache key for CONFIG.
 Keyed by the database file rather than by the schema name, so two
-schemata naming one file share one connection.  `file-truename\='
-collapses symlinks and `~\=', so the same file reached by two paths is
+schemata naming one file share one connection.  `file-truename'
+collapses symlinks and `~', so the same file reached by two paths is
 still one connection -- which matters because two handles mean two
-`PRAGMA foreign_keys\=' states, and enforcement would then depend on
+`PRAGMA foreign_keys' states, and enforcement would then depend on
 which schema was opened first.
 
 A server backend has no file; its host, port, and database name serve
@@ -544,7 +544,7 @@ schema does not disconnect another still using the same one."
       (remhash key tabularium-db--refcounts))))
 
 (defun tabularium-db-close-connection (schema-name)
-  "Release SCHEMA-NAME\='s hold on its connection.
+  "Release SCHEMA-NAME's hold on its connection.
 The connection itself closes only when no other schema is using it,
 so closing one table of a multi-table file leaves the others live."
   (when-let* ((key (gethash schema-name tabularium-db--key-holders)))
@@ -564,7 +564,8 @@ so closing one table of a multi-table file leaves the others live."
 
 (defun tabularium-db-like-escape-clause (case-sensitive)
   "Return the ESCAPE clause to follow a pattern, or the empty string.
-LIKE relies on the backslashes `tabularium-db-like-pattern\=' inserts,
+CASE-SENSITIVE selects GLOB, which needs none, over LIKE.
+LIKE relies on the backslashes `tabularium-db-like-pattern' inserts,
 and they are meaningless without this clause.  GLOB escapes its
 wildcards inline with bracket expressions, so it needs none."
   (if case-sensitive "" " ESCAPE '\\'"))
@@ -600,12 +601,6 @@ selection is available as a highlight rule, which matches in Emacs."
   (user-error
    "Regexp filtering needs the PostgreSQL backend; SQLite has no REGEXP operator"))
 
-(defun tabularium-db-build-equals-clause (column value)
-  "Build an equality clause for COLUMN equal to VALUE.
-VALUE is escaped via `tabularium-db-sql-quote'."
-  (let ((col (if (symbolp column) (symbol-name column) column)))
-    (format "%s = %s" col (tabularium-db-sql-quote value))))
-
 (defun tabularium-db-sql-quote (value)
   "Quote VALUE for safe SQL insertion."
   (if (numberp value)
@@ -631,7 +626,7 @@ When CASE-SENSITIVE is non-nil, uses *value* for GLOB; otherwise
 Wildcards inside VALUE are escaped either way, so the pattern matches
 the character the user typed rather than treating it as a wildcard.
 The two operators escape differently: GLOB inline with brackets, LIKE
-with a backslash that `tabularium-db-like-escape-clause\=' declares."
+with a backslash that `tabularium-db-like-escape-clause' declares."
   (if case-sensitive
       ;; GLOB: escape [ ] * ? by wrapping each in [c]
       (let ((escaped (replace-regexp-in-string
@@ -690,8 +685,9 @@ Internal; called by `tabularium-sync-checkpoint'."
                              (oref backend file) (error-message-string err))))))
              tabularium-db--connections)
     (if (> errors 0)
-        (message "Checkpointed %d database(s), %d error(s)" count errors)
-      (message "Checkpointed %d database(s)" count))))
+        (message "Checkpointed %d database%s; %d error%s"
+                 count (if (= 1 count) "" "s") errors (if (= 1 errors) "" "s"))
+      (message "Checkpointed %d database%s" count (if (= 1 count) "" "s")))))
 
 (defun tabularium-db--prepare-for-sync ()
   "Close all connections for clean sync state.

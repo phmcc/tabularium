@@ -4,7 +4,7 @@
 
 ;; Author: Paul H. McClelland <paulhmcclelland@protonmail.com>
 ;; Maintainer: Paul H. McClelland <paulhmcclelland@protonmail.com>
-;; Version: 0.6.3
+;; Version: 0.7.0
 ;; Package-Requires: ((emacs "29.1"))
 ;; Keywords: data
 ;; URL: https://codeberg.org/phmcc/tabularium
@@ -37,7 +37,7 @@
 ;;   UPPERCASE = creating, modifying, destructive commands
 ;;
 ;; Usage:
-;;   Use `tabularium-menu' or `tabularium-view-menu' as row points.
+;;   Use `tabularium-menu' or `tabularium-view-menu' as entry points.
 ;;   These are autoloaded from tabularium.el and work regardless of
 ;;   whether hydra or transient is loaded.
 ;;
@@ -88,7 +88,7 @@
   Database              Row                   Browse/Query            External                Schema                  
  ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   [_o_] Open              [_N_] New (form)          [_v_] View all            [_i_/_<_] Import…           [_._] Schema…
-  [_O_] Open + View       [_P_] Prompt              [_/_] Fuzzy find          [_e_/_>_] Export…
+  [_O_] Open + View       [_P_] Prompt              [_/_] Fuzzy find          [_e_/_>_] Export…           [_=_] Reload
   [_x_] Close             [_Q_] Quick               [_l_] Last match          [_R_] Register
   [_C_] Create…                                   [_%_] Aggregate…          [_s_] Sync prep
   [_r_] Registry
@@ -106,6 +106,7 @@
     ("r" tabularium-registry)
     ("$" tabularium-rename-database)
     ("?" tabularium-describe-database)
+    ("=" tabularium-reload-schema)
     ;; Schema submenu
     ("." tabularium-schema-hydra/body)
     ;; Row
@@ -433,9 +434,10 @@
   [_k_] Set linking key       [_$_] Name table
   [_R_] Toggle read-only      [_S_] Describe SQL
   [_r_] Registry
-  [_J_] New join              [_j_] Describe join
+  [_J_] New join              [_?_] Describe table
+  [_P_] New pivot
   [_B_] Rebuild from schema   [_O_] Repair orphan rows
-  [_n_] Next                [_?_] Check links
+  [_n_] Next                [_o_] Check for orphans
   [_p_] Previous
  ────────────────────────────────────────────────────────────────────────────────
   [_q_] Quit
@@ -457,12 +459,13 @@
     ("r" tabularium-registry)
     ("z" tabularium-toggle-zebra-stripes)
     ("k" tabularium-toggle-primary-key-face)
-    ("?" tabularium-check-integrity)
+    ("o" tabularium-check-integrity)
     ("S" tabularium-describe-sql)
     ("J" tabularium-join-new)
+    ("P" tabularium-pivot-new)
     ("B" tabularium-table-rebuild)
     ("O" tabularium-repair-orphans)
-    ("j" tabularium-join-describe)
+    ("?" tabularium-describe-table)
     ("q" tabularium-view-hydra/body :color blue))
 
   ;; Filter sub-hydra
@@ -601,8 +604,8 @@
 └────────┘
   Main
  ────────────────────────────────────────────────────────────────────────────────
-  [_z_]   Freeze row(s)
-  [_u_/_x_] Unfreeze row(s)
+  [_z_]   Freeze rows
+  [_u_/_x_] Unfreeze rows
   [_U_/_X_] Unfreeze all
  ────────────────────────────────────────────────────────────────────────────────
   [_q_] Quit
@@ -628,7 +631,8 @@
   [_o_] Show only           [_=_] Reset order           [_E_] Edit
   [_a_] Show all            [_M_/_W_] Move/Swap           [_+_] Duplicate
                                                     [_$_] Rename
-                                                    [_l_] Relabel
+                                                    [_l_/_L_] Relabel here/any
+                                                    [_._] Decimal places
                                                     [_F_] Formula
   [_/_] Select by title
                                                     [_X_/_C_] Cut/Copy
@@ -656,7 +660,9 @@
     ("D" tabularium-view-column-delete)
     ("E" tabularium-view-column-edit)
     ("$" tabularium-schema-rename-column)
-    ("l" tabularium-view-column-relabel)
+    ("l" tabularium-view-column-relabel-at-point)
+    ("." tabularium-view-column-decimals)
+    ("L" tabularium-view-column-relabel)
     ("F" tabularium-view-column-formula)
     ("+" tabularium-view-column-duplicate)
     ("C" tabularium-view-column-copy)
@@ -810,6 +816,7 @@
                              ("$" "Rename" tabularium-rename-database)
                              ("?" "Describe" tabularium-describe-database)]
                             ["Schema"
+                             ("=" "Reload…" tabularium-reload-schema)
                              (". ." "Edit" tabularium-schema-edit)
                              (". v" "View" tabularium-schema-view)
                              (". =" "Reload" tabularium-schema-reload)
@@ -922,12 +929,16 @@
       ("t t" "Switch table" tabularium-table-switch)
       ("t l" "List tables" tabularium-table-list)
       ("t N" "New table" tabularium-table-new)
-      ("t D" "Drop table" tabularium-table-delete)
+      ("t D" "Delete table" tabularium-table-delete)
       ("t +" "Duplicate table" tabularium-table-duplicate)
       ("t `" "Reorder tables" tabularium-table-reorder)
       ("t =" "Check tables" tabularium-check-tables)
       ("t k" "Set linking key" tabularium-set-link-key)
       ("t $" "Name table" tabularium-name-table)
+      ("t J" "New join" tabularium-join-new)
+      ("t P" "New pivot" tabularium-pivot-new)
+      ("t ?" "Describe table" tabularium-describe-table)
+      ("t o" "Check for orphans" tabularium-check-integrity)
       (". $" "Name database" tabularium-name-database)
       ("l" "Child rows" tabularium-view-children)
       ("L" "Parent row" tabularium-view-parent)
@@ -1052,7 +1063,9 @@
       ("| D" "Delete col" tabularium-view-column-delete)
       ("| E" "Edit col" tabularium-view-column-edit)
       ("| $" "Rename col" tabularium-schema-rename-column)
-      ("| l" "Relabel col" tabularium-view-column-relabel)
+      ("| l" "Relabel col" tabularium-view-column-relabel-at-point)
+      ("| L" "Relabel col…" tabularium-view-column-relabel)
+      ("| ." "Decimal places" tabularium-view-column-decimals)
       ("| F" "Edit formula" tabularium-view-column-formula)
       ("| +" "Duplicate col" tabularium-view-column-duplicate)
       ("| M" "Move cols" tabularium-view-column-move)

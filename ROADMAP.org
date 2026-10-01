@@ -57,19 +57,37 @@ The following features are tentatively planned for future releases:
 
 ** v0.7.0
 
-- [ ] Pivot Tables
+- [X] Pivot Tables
   - Defined as a view-like schema
-- [ ] Aggregate summaries
-- [ ] Cross-tabulation
-- [ ] Dynamic grouping
+- [X] Aggregate summaries
+- [X] Cross-tabulation
+- [X] Dynamic grouping
 
 ** v0.8.0
 
+- [ ] Modularization into smaller files for easier maintenance, along the lines of magit, one file per section of =tabularium.el= as v0.7.0 numbers them:
+  | File                      | Sections                                                                |
+  |---------------------------+-------------------------------------------------------------------------|
+  | =tabularium.el=           | 0 Prerequisites, 1 Foundation, 11 UI Integration, 12 Provide            |
+  | =tabularium-core.el=      | 2.1 Database Connection, 2.2 Candidates, 2.3 Tables and Links           |
+  | =tabularium-undo.el=      | 2.4 Undo and Redo, 2.5 Kill Ring System                                 |
+  | =tabularium-details.el=   | 2.6 Key Hints, 2.7 Display Ornamentation, 2.8 Details Buffers           |
+  | =tabularium-registry.el=  | 3 Registry, less the wizard                                             |
+  | =tabularium-wizard.el=    | 3.9 Database Creation Wizard, 3.10 Copying a Database                   |
+  | =tabularium-schema.el=    | 4.1–4.3 Schema Definition, File Operations, Commands; 4.5 Linked Tables |
+  | =tabularium-compute.el=   | 4.4 Computed Columns                                                    |
+  | =tabularium-complete.el=  | 4.6 Completion, 4.7 Related Column Autofill                             |
+  | =tabularium-highlight.el= | 4.8 Highlight Rules                                                     |
+  | =tabularium-view.el=      | 5 View and Navigation                                                   |
+  | =tabularium-entry.el=     | 6 Data Row                                                              |
+  | =tabularium-edit.el=      | 7.1 Row Operations, 7.2 Column Operations, 7.6 Fill Operations          |
+  | =tabularium-filter.el=    | 7.3 Filter, 7.4 Find/Replace                                            |
+  | =tabularium-aggregate.el= | 7.5 Aggregate Operations                                                |
+  | =tabularium-import.el=    | 8 Import and Export                                                     |
+  | =tabularium-join.el=      | 9 Joins                                                                 |
+  | =tabularium-pivot.el=     | 10 Pivots                                                               |
+- [ ] Hydra menus and the PostgreSQL backend as packages of their own, so every file of =tabularium= byte-compiles without =no-byte-compile=
 - [ ] Modeline and menus revision/updates
-
-** v0.9.0
-
-- [ ] Modularization into smaller files for easier maintenance
 
 ** Near future
 

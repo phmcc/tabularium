@@ -4,7 +4,7 @@
 
 ;; Author: Paul H. McClelland <paulhmcclelland@protonmail.com>
 ;; Maintainer: Paul H. McClelland <paulhmcclelland@protonmail.com>
-;; Version: 0.6.3
+;; Version: 0.7.0
 ;; Package-Requires: ((emacs "29.1") (emacsql "4.0") (emacsql-pg "1.0"))
 ;; Keywords: data
 ;; URL: https://codeberg.org/phmcc/tabularium
@@ -160,8 +160,8 @@
                                              column pattern
                                              &optional case-sensitive)
     "Build a POSIX regexp match clause for COLUMN matching PATTERN.
-PostgreSQL provides the regexp operators directly: =~= matches
-case-sensitively and =~*= case-insensitively."
+PostgreSQL provides the regexp operators directly: \"~\" matches
+case-sensitively and \"~*\" case-insensitively."
     (let ((col (if (symbolp column) (symbol-name column) column))
           (op (if case-sensitive "~" "~*")))
       (format "%s %s '%s'" col op
@@ -217,7 +217,7 @@ case-sensitively and =~*= case-insensitively."
             (oref backend host) (oref backend port) (oref backend database)))
 
   (cl-defmethod tabularium-db-sql-type ((_backend tabularium-db-postgresql) column-type)
-    "Convert FIELD-TYPE to PostgreSQL type."
+    "Convert COLUMN-TYPE to PostgreSQL type."
     (pcase column-type
       ('integer "INTEGER")
       ('number "DOUBLE PRECISION")
