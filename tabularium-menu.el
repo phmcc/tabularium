@@ -4,7 +4,7 @@
 
 ;; Author: Paul H. McClelland <paulhmcclelland@protonmail.com>
 ;; Maintainer: Paul H. McClelland <paulhmcclelland@protonmail.com>
-;; Version: 0.7.0
+;; Version: 0.7.1
 ;; Package-Requires: ((emacs "29.1"))
 ;; Keywords: data
 ;; URL: https://codeberg.org/phmcc/tabularium
@@ -257,10 +257,10 @@
 
   Navigate                Modify                  Mark                      View                      Miscellaneous
  ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-  [_p_/_n_] Row ↑/↓           [_N_] New row           [_m_] Mark row              [_f_] Filter…               [_`_] Reindex
+  [_p_/_n_] Row ↑/↓           [_N_] New row             [_m_] Mark row              [_f_] Filter…               [_`_] Reindex
   [_S-TAB_/_TAB_] Cell ←/→    [_P_] Prompt entry        [_u_] Unmark row            [_v_] Views…                [_%_] Aggregate…
-  [_[_/_]_] Line ←/→          [_Q_] Quick entry         [_U_] Unmark all            [_|_] Columns…              [_#_] Count…
-  [_{_/_}_] Table ↑/↓         [_I_] Insert              [_t_] Tables…               [_s_] Sort…                 [_C-/_] Undo
+  [_[_/_]_] Line ←/→          [_Q_] Quick entry         [_U_] Unmark all            [_c_] Columns…              [_#_] Count…
+  [_{_/_}_] Top/Bottom ↑/↓    [_I_] Insert              [_t_] Tables…               [_s_] Sort…                 [_C-/_] Undo
   [_M-{_/_M-}_] Jump ↑/↓      [_E_] Edit                [_a_] Action                [_z_] Freeze…               [_C-?_] Redo
   [_M-[_/_M-]_] Jump ←/→      [_+_] Duplicate           [_*_] Mark menu…                                      [_y_] Kill ring
   [_g_/_=_] Refresh           [_D_] Delete              [_h_] Highlight…                          
@@ -339,7 +339,7 @@
     ;; View
     ("f" tabularium-view-filter-hydra/body :color blue)
     ("v" tabularium-view-views-hydra/body :color blue)
-    ("|" tabularium-view-columns-hydra/body :color blue)
+    ("c" tabularium-view-columns-hydra/body :color blue)
     ("s" tabularium-view-sort-hydra/body :color blue)
     ("z" tabularium-view-freeze-hydra/body :color blue)
     ("`" tabularium-reindex :color blue)
@@ -449,6 +449,7 @@
     ("N" tabularium-table-new)
     ("D" tabularium-table-delete)
     ("+" tabularium-table-duplicate)
+    ("_" tabularium-table-duplicate-data)
     ("`" tabularium-table-reorder)
     ("'" tabularium-table-follow-key-next)
     ("\"" tabularium-table-follow-key-previous)
@@ -476,9 +477,9 @@
 └────────┘
   Row                     Column                  Rules
  ────────────────────────────────────────────────────────────────────────────────
-  [_f_] At point            [_|_] By value            [_a_] Add rule…
+  [_f_] At point            [_c_] By value            [_a_] Add rule…
   [_s_] Substring                                   [_l_] Rules list
-  [_e_] Exact                                       [_c_] Cycle connective
+  [_e_] Exact                                       [_y_] Cycle connective
   [_r_] Regexp                                      [_x_] Remove
   [_n_] Numeric                                     [_X_] Remove all
   [_t_] Datetime
@@ -496,9 +497,9 @@
     ("t" tabularium-view-filter-datetime)
     ("u" tabularium-view-filter-unique)
     ("d" tabularium-view-filter-duplicates)
-    ("|" tabularium-view-filter-column)
+    ("c" tabularium-view-filter-column)
     ("l" tabularium-view-filter-buffer)
-    ("c" tabularium-view-filter-cycle-connective)
+    ("y" tabularium-view-filter-cycle-connective)
     ("x" tabularium-view-filter-remove)
     ("X" tabularium-view-filter-remove-all)
     ("q" tabularium-view-hydra/body :color blue))
@@ -568,7 +569,7 @@
   Row                     Column                  Rules
  ────────────────────────────────────────────────────────────────────────────────
   [_h_] At point            [_\\_] At point            [_a_] Add rule…
-  [_s_] Substring           [_|_] Columns…            [_l_] Rules list
+  [_s_] Substring           [_c_] Columns…            [_l_] Rules list
   [_e_] Exact match                                 [_x_] Remove
   [_r_] Regexp                                      [_X_] Expunge
   [_n_] Numeric                                     [_._] Save one
@@ -580,7 +581,7 @@
 "
     ("h" tabularium-view-highlight-rows)
     ("\\" tabularium-view-highlight-column)
-    ("|" tabularium-view-highlight-columns)
+    ("c" tabularium-view-highlight-columns)
     ("a" tabularium-view-highlight-new)
     ("s" tabularium-view-highlight-substring)
     ("e" tabularium-view-highlight-exact)
@@ -665,6 +666,7 @@
     ("L" tabularium-view-column-relabel)
     ("F" tabularium-view-column-formula)
     ("+" tabularium-view-column-duplicate)
+    ("_" tabularium-view-column-duplicate-data)
     ("C" tabularium-view-column-copy)
     ("X" tabularium-view-column-cut)
     ("V" tabularium-view-column-paste)
@@ -931,6 +933,7 @@
       ("t N" "New table" tabularium-table-new)
       ("t D" "Delete table" tabularium-table-delete)
       ("t +" "Duplicate table" tabularium-table-duplicate)
+      ("t _" "Copy table as text" tabularium-table-duplicate-data)
       ("t `" "Reorder tables" tabularium-table-reorder)
       ("t =" "Check tables" tabularium-check-tables)
       ("t k" "Set linking key" tabularium-set-link-key)
@@ -952,7 +955,7 @@
       ("* #" "Count marked" tabularium-view-count-marked)
       ("h h" "Highlight rows" tabularium-view-highlight-rows)
       ("h \\" "Highlight column" tabularium-view-highlight-column)
-      ("h |" "Highlight columns" tabularium-view-highlight-columns)
+      ("h c" "Highlight columns" tabularium-view-highlight-columns)
       ("h a" "Add highlight rule" tabularium-view-highlight-new)
       ("h n" "Highlight numeric" tabularium-view-highlight-numeric)
       ("h d" "Highlight duplicates" tabularium-view-highlight-duplicates)
@@ -969,7 +972,8 @@
       ("f e" "Exact match" tabularium-view-filter-exact)
       ("f n" "Numeric" tabularium-view-filter-numeric)
       ("f l" "Rules list" tabularium-view-filter-buffer)
-      ("f c" "Cycle connective" tabularium-view-filter-cycle-connective)
+      ("f c" "Filter columns" tabularium-view-filter-column)
+      ("f y" "Cycle connective" tabularium-view-filter-cycle-connective)
       ("f x" "Remove filter" tabularium-view-filter-remove)
       ("f X" "Remove all filters" tabularium-view-filter-remove-all)
       ("v v" "Select view" tabularium-select-view)
@@ -1048,32 +1052,33 @@
       ("% i" "Median[IQR]" tabularium-aggregate-median-iqr)
       ("% I" "Visible: Med[IQR]" tabularium-aggregate-visible-median-iqr)
       ("% %" "Column summary" tabularium-aggregate-column-summary)]
-     ["Columns (| prefix)" :pad-keys t
-      ("| t" "Toggle" tabularium-view-toggle-column)
-      ("| h" "Hide" tabularium-view-hide-columns)
-      ("| s" "Show" tabularium-view-show-columns)
-      ("| o" "Show only" tabularium-view-show-only-columns)
-      ("| a" "Show all" tabularium-view-show-all-columns)
-      ("| r" "Reorder" tabularium-view-reorder-columns)
-      ("| <" "Move left" tabularium-view-move-column-left)
-      ("| >" "Move right" tabularium-view-move-column-right)
-      ("| =" "Reset order" tabularium-view-reset-column-order)
-      ("| N" "New column" tabularium-view-column-add)
-      ("| I" "Insert col" tabularium-view-column-insert)
-      ("| D" "Delete col" tabularium-view-column-delete)
-      ("| E" "Edit col" tabularium-view-column-edit)
-      ("| $" "Rename col" tabularium-schema-rename-column)
-      ("| l" "Relabel col" tabularium-view-column-relabel-at-point)
-      ("| L" "Relabel col…" tabularium-view-column-relabel)
-      ("| ." "Decimal places" tabularium-view-column-decimals)
-      ("| F" "Edit formula" tabularium-view-column-formula)
-      ("| +" "Duplicate col" tabularium-view-column-duplicate)
-      ("| M" "Move cols" tabularium-view-column-move)
-      ("| W" "Swap cols" tabularium-view-column-swap)
-      ("| C" "Copy cols" tabularium-view-column-copy)
-      ("| X" "Cut cols" tabularium-view-column-cut)
-      ("| V" "Paste cols" tabularium-view-column-paste)
-      ("| A" "Append cols" tabularium-view-column-paste-append)]
+     ["Columns (c prefix)" :pad-keys t
+      ("c t" "Toggle" tabularium-view-toggle-column)
+      ("c h" "Hide" tabularium-view-hide-columns)
+      ("c s" "Show" tabularium-view-show-columns)
+      ("c o" "Show only" tabularium-view-show-only-columns)
+      ("c a" "Show all" tabularium-view-show-all-columns)
+      ("c r" "Reorder" tabularium-view-reorder-columns)
+      ("c <" "Move left" tabularium-view-move-column-left)
+      ("c >" "Move right" tabularium-view-move-column-right)
+      ("c =" "Reset order" tabularium-view-reset-column-order)
+      ("c N" "New column" tabularium-view-column-add)
+      ("c I" "Insert col" tabularium-view-column-insert)
+      ("c D" "Delete col" tabularium-view-column-delete)
+      ("c E" "Edit col" tabularium-view-column-edit)
+      ("c $" "Rename col" tabularium-schema-rename-column)
+      ("c l" "Relabel col" tabularium-view-column-relabel-at-point)
+      ("c L" "Relabel col…" tabularium-view-column-relabel)
+      ("c ." "Decimal places" tabularium-view-column-decimals)
+      ("c F" "Edit formula" tabularium-view-column-formula)
+      ("c +" "Duplicate col" tabularium-view-column-duplicate)
+      ("c _" "Copy col as text" tabularium-view-column-duplicate-data)
+      ("c M" "Move cols" tabularium-view-column-move)
+      ("c W" "Swap cols" tabularium-view-column-swap)
+      ("c C" "Copy cols" tabularium-view-column-copy)
+      ("c X" "Cut cols" tabularium-view-column-cut)
+      ("c V" "Paste cols" tabularium-view-column-paste)
+      ("c A" "Append cols" tabularium-view-column-paste-append)]
      ["Database"
       ("o" "Open" tabularium-open)
       ("O" "Open + View" tabularium-open-and-view)

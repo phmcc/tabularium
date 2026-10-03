@@ -4,6 +4,32 @@
 
 All notable changes to ~tabularium~ are documented in this file.
 
+* v0.7.1 (2026-10-02)
+
+** Added
+
+- =_= copies data alone, as text: =t _= a table into a new one, =c _= a column into a new text column, and =_= in the registry a database, every table, join, and pivot becoming a text table.  Computed values copy as shown
+- ~tabularium-entry-label-max-width~, the widest a form's labels run
+
+** Changed
+
+- Shorthand takes several columns at once, separated by commas or semicolons, with spaces as wanted
+- A new database is offered as =New Database=, numbered as a label is, and its first table keyed by an identifier made from its name
+- =N= in the registry creates a database, as =C= does, and its hint lines fit 76 columns
+- The column prefix is =c=, beside =t= for tables, rather than =|=; =f c= and =h c= filter and highlight by column, and the filter connective cycles on =f y=
+- A label in use takes =<2>=, as Emacs numbers a buffer whose name is taken, and an automatic key's label is =<id>=, as Org writes its table cookies
+- A copy made by =t += or =t _= opens in view, and =t D= offers the table in view
+- Duplication copies the scaffold, then asks about the data: =c += asks where the copy goes and whether its values follow, and =+= in the registry whether the rows do
+- A form is titled by its table's label, opens in =*Tabularium Form Entry*=, and lines its values up after the longest label, a required marker set off by a space, cutting labels and values short with an ellipsis past the box
+
+** Fixed
+
+- =Manual= refused to make a table or database; it now opens a draft for a new table, and the schema file of a new database
+- =c += signaled =wrong-type-argument= before asking anything, and copied a key column's =:pk= to its copy
+- A hint named keys bound to a command that another keymap remaps, as keys of the command it was remapped to
+- A box title too long for its box broke the box
+- =t _= closed the view it was called from
+
 * v0.7.0 (2026-10-01)
 
 ** Added
@@ -14,7 +40,6 @@ All notable changes to ~tabularium~ are documented in this file.
 - ~:decimals~ fixes the places a number column shows, from the schema, the wizard, the shorthand, or =| .=
 - ~tabularium-reload-schema~ loads a database's schema file again and opens it
 - ~tabularium-column-gap~, ~tabularium-popup-width~, and ~tabularium-pivot-total-label~
-- =test/v0.7.0/=: a sample database
 
 ** Changed
 

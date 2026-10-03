@@ -210,28 +210,29 @@ Sorting, filtering, and highlighting share one *rules* paradigm.  For sorting, ~
 
 ** Column operations
 
-| Command                               | Description                                                 |
-|---------------------------------------+-------------------------------------------------------------|
-| ~tabularium-view-column-add~          | Add a new column at the end (full schema wizard prompts)    |
-| ~tabularium-view-column-delete~       | Delete one or more columns                                  |
-| ~tabularium-view-column-edit~         | Edit column properties through the full wizard (pre-filled) |
-| ~tabularium-view-column-insert~       | Insert a new column at a chosen position (full wizard)      |
-| ~tabularium-view-column-duplicate~    | Duplicate a column with its data                            |
-| ~tabularium-view-column-move~         | Move columns to follow a chosen column                      |
-| ~tabularium-view-column-swap~         | Swap two columns                                            |
-| ~tabularium-view-column-copy~         | Copy columns to the column kill ring                        |
-| ~tabularium-view-column-cut~          | Cut columns (copy then delete)                              |
-| ~tabularium-view-column-paste~        | Paste columns before a chosen column (defaults to point)    |
-| ~tabularium-view-column-paste-append~ | Append columns at the end                                   |
-| ~tabularium-view-toggle-column~       | Toggle visibility of a column                               |
-| ~tabularium-view-hide-columns~        | Hide multiple columns                                       |
-| ~tabularium-view-show-columns~        | Show selected hidden columns (inverse of hide)              |
-| ~tabularium-view-show-only-columns~   | Show only selected columns, hiding all others               |
-| ~tabularium-view-show-all-columns~    | Show all columns                                            |
-| ~tabularium-view-reorder-columns~     | Interactively reorder columns                               |
-| ~tabularium-view-reset-column-order~  | Reset to schema-defined order                               |
-| ~tabularium-view-move-column-left~    | Move the current column one position left (undoable)        |
-| ~tabularium-view-move-column-right~   | Move the current column one position right (undoable)       |
+| Command                                 | Description                                                 |
+|-----------------------------------------+-------------------------------------------------------------|
+| ~tabularium-view-column-add~            | Add a new column at the end (full schema wizard prompts)    |
+| ~tabularium-view-column-delete~         | Delete one or more columns                                  |
+| ~tabularium-view-column-edit~           | Edit column properties through the full wizard (pre-filled) |
+| ~tabularium-view-column-insert~         | Insert a new column at a chosen position (full wizard)      |
+| ~tabularium-view-column-duplicate~      | Copy a column's definition, and its values if wanted        |
+| ~tabularium-view-column-duplicate-data~ | Copy a column's values alone, into a text column            |
+| ~tabularium-view-column-move~           | Move columns to follow a chosen column                      |
+| ~tabularium-view-column-swap~           | Swap two columns                                            |
+| ~tabularium-view-column-copy~           | Copy columns to the column kill ring                        |
+| ~tabularium-view-column-cut~            | Cut columns (copy then delete)                              |
+| ~tabularium-view-column-paste~          | Paste columns before a chosen column (defaults to point)    |
+| ~tabularium-view-column-paste-append~   | Append columns at the end                                   |
+| ~tabularium-view-toggle-column~         | Toggle visibility of a column                               |
+| ~tabularium-view-hide-columns~          | Hide multiple columns                                       |
+| ~tabularium-view-show-columns~          | Show selected hidden columns (inverse of hide)              |
+| ~tabularium-view-show-only-columns~     | Show only selected columns, hiding all others               |
+| ~tabularium-view-show-all-columns~      | Show all columns                                            |
+| ~tabularium-view-reorder-columns~       | Interactively reorder columns                               |
+| ~tabularium-view-reset-column-order~    | Reset to schema-defined order                               |
+| ~tabularium-view-move-column-left~      | Move the current column one position left (undoable)        |
+| ~tabularium-view-move-column-right~     | Move the current column one position right (undoable)       |
 
 ** Math and statistics
 
@@ -287,13 +288,15 @@ Frozen rows always render at the top of the view, regardless of filter or sort. 
 
 Entry mode provides a form-based interface for creating and editing individual rows.  Each column is displayed on its own line with its prompt label, and completion is available where configured in the schema.
 
-Three row methods are available:
+Three entry methods are available:
 
-- *Form row* — opens a dedicated buffer with all columns laid out vertically; best for complex schemas and careful data entry.
-- *Prompt row* — prompts for each column sequentially in the minibuffer; suitable for quick keyboard-driven row.
-- *Quick row* — prompts only for columns listed in ~:quick-entry-fields~; ideal for high-volume row with consistent defaults.
+- *Form entry* — opens a dedicated buffer with all columns laid out vertically; best for complex schemas and careful data entry.
+- *Prompt entry* — prompts for each column sequentially in the minibuffer; suitable for quick keyboard-driven entry.
+- *Quick entry* — prompts only for columns listed in ~:quick-entry-fields~; ideal for high-volume entry with consistent defaults.
 
-The ~tabularium-entry-method~ variable controls the default method; a prefix argument before any row command invokes the alternative.
+The ~tabularium-entry-method~ variable controls the default method; a prefix argument before any entry command invokes the alternative.
+
+The form opens in =*Tabularium Form Entry*=, titled by the table's label.  Its labels take the width of the longest, up to ~tabularium-entry-label-max-width~; a longer label, and a value that runs past the box, is cut short with an ellipsis.
 
 ** Commands
 
@@ -359,6 +362,12 @@ A schema file may define more than one schema on the same =:file=, each a table 
 #+end_src
 
 That is the order =t t= offers and =t n= steps through, and the first name is the table the database opens on.  A table left unnamed keeps its declared place, after those that are named.  The call goes below the schemas it names, since the database is read from them rather than written again.
+
+** Copying databases, tables, and columns
+
+Duplication copies the scaffold first, then asks whether the data comes along.  =+= in the registry copies a database's tables, joins, and pivots under new names, then asks whether their rows follow; =t += copies a table and asks the same; =c += copies a column's definition, asks where the copy goes, and asks whether its values come too.  A copy is named as its original is, its key numbered on (=cases_2=) and its label numbered as Emacs numbers a buffer whose name is taken (=Cases<2>=).
+
+=_= copies the data alone, as text.  =_= in the registry makes a new database with a table for every table, join, and pivot of the original; =t _= makes a table of one, and =c _= a column.  Every value is copied as the table shows it, computed ones included, into text columns with no links, formulas, types, or constraints, and each table copied has a key of its own.
 
 ** Joins and pivots
 
@@ -480,20 +489,20 @@ Tabularium can highlight matching rows or cells in view mode.  There are two way
 
 The ~h~ prefix in view mode applies highlight rules to the current table, additively — each new rule stacks on top of the previous ones.  When several rules match the same cell their faces *stack*: the palette is grouped into three independent categories — a background color, a foreground color, and a style attribute — and each face sets only its own attribute, so a cell can carry one of each at once and a later rule never wipes out an earlier one.  The faces are named for their category: ~tabularium-highlight-bg-*~, ~tabularium-highlight-fg-*~, and ~tabularium-highlight-style-*~.  Each rule command prompts for the columns it should target.
 
-| Key     | Command                                | Effect                                                   |
-|---------+----------------------------------------+----------------------------------------------------------|
-| ~h h~   | ~tabularium-view-highlight-rows~       | quick-highlight marked rows (or the row at point)        |
-| ~h \~   | ~tabularium-view-highlight-column~     | quick-highlight the column at point                      |
-| h \vert | ~tabularium-view-highlight-columns~    | quick-highlight chosen columns                           |
-| ~h a~   | ~tabularium-view-highlight-new~        | new rule — prompts for the rule type                     |
-| ~h n~   | ~tabularium-view-highlight-numeric~    | cells matching a comparison (~>~ ~<~ ~>=~ ~<=~ ~=~ ~!=~) |
-| ~h d~   | ~tabularium-view-highlight-duplicates~ | cells whose value is duplicated in a column              |
-| ~h r~   | ~tabularium-view-highlight-regexp~     | cells whose text matches a regexp                        |
-| ~h l~   | ~tabularium-view-highlight-buffer~     | opens the Highlight Rules List buffer                    |
-| ~h x~   | ~tabularium-view-highlight-remove~     | removes rules (all, unsaved, or one)                     |
-| ~h X~   | ~tabularium-view-highlight-expunge~    | expunges saved rules from the schema                     |
-| ~h .~   | ~tabularium-view-highlight-save~       | saves one runtime rule into the schema file              |
-| ~h >~   | ~tabularium-view-highlight-save-all~   | saves the whole view's highlight state                   |
+| Key   | Command                                | Effect                                                   |
+|-------+----------------------------------------+----------------------------------------------------------|
+| ~h h~ | ~tabularium-view-highlight-rows~       | quick-highlight marked rows (or the row at point)        |
+| ~h \~ | ~tabularium-view-highlight-column~     | quick-highlight the column at point                      |
+| ~h c~ | ~tabularium-view-highlight-columns~    | quick-highlight chosen columns                           |
+| ~h a~ | ~tabularium-view-highlight-new~        | new rule — prompts for the rule type                     |
+| ~h n~ | ~tabularium-view-highlight-numeric~    | cells matching a comparison (~>~ ~<~ ~>=~ ~<=~ ~=~ ~!=~) |
+| ~h d~ | ~tabularium-view-highlight-duplicates~ | cells whose value is duplicated in a column              |
+| ~h r~ | ~tabularium-view-highlight-regexp~     | cells whose text matches a regexp                        |
+| ~h l~ | ~tabularium-view-highlight-buffer~     | opens the Highlight Rules List buffer                    |
+| ~h x~ | ~tabularium-view-highlight-remove~     | removes rules (all, unsaved, or one)                     |
+| ~h X~ | ~tabularium-view-highlight-expunge~    | expunges saved rules from the schema                     |
+| ~h .~ | ~tabularium-view-highlight-save~       | saves one runtime rule into the schema file              |
+| ~h >~ | ~tabularium-view-highlight-save-all~   | saves the whole view's highlight state                   |
 
 For quick on-the-fly work, three commands need only a face: ~h h~ tints the marked rows (or the row at point), ~h \~ tints the column under point, and ~h |~ tints columns chosen from the selector.  Each adds a real rule to the list, so it can be removed, reordered, modified, or saved like any other.  ~h a~ is the full dispatcher: it prompts for the rule type and runs the matching command.  As with the filter dispatcher, it can scope a rule — a column rule to particular columns (tinting only those), a row or value rule to particular rows.  The typed rule commands (~h s~, ~h e~, ~h r~, ~h n~, ~h t~, ~h d~) each prompt for the target columns with a comma-separated ~completing-read-multiple~ selector — the ~<<ALL>>~ sentinel, or an empty answer, targets every visible column — and echo the chosen columns back in a ~[...]~ hint.  This is the same column-selection paradigm the filter and mark commands use: pick one column, several, or all.  Each command then prompts for a face, chosen from ~tabularium-highlight-faces~ — a customizable palette whose default rows are grouped ~bg:~, ~fg:~, and ~style:~, with the same ten WCAG-AAA hues offered for both color categories.
 
@@ -752,6 +761,7 @@ Every key Tabularium binds lives in a named keymap: ~tabularium-view-mode-map~, 
 | ~tabularium-auto-reindex~                   | ~nil~                        | Reindex automatically on delete                                                                                                          |
 | ~tabularium-case-sensitive~                 | ~t~                          | Case-sensitive marking and replacement                                                                                                   |
 | ~tabularium-entry-show-type-hints~          | ~nil~                        | Show an inline column-type marker in forms                                                                                               |
+| ~tabularium-entry-label-max-width~          | ~32~                         | Widest a form's labels run before they are cut short                                                                                     |
 | ~tabularium-kill-ring-max~                  | ~10~                         | Maximum batches kept in the kill ring                                                                                                    |
 | ~tabularium-cache-ttl~                      | ~300~                        | Completion cache lifetime, in seconds                                                                                                    |
 | ~tabularium-registry-auto-register-on-open~ | ~t~                          | Register databases automatically on open                                                                                                 |
